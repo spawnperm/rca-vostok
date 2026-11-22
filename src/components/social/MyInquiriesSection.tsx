@@ -56,13 +56,32 @@ function formatDate(iso: string): string {
  * Ownership is resolved server-side from the session; the client never sends a
  * user id, so one account cannot read another's requests.
  */
-export function MyInquiriesSection({ canView }: { canView: boolean }) {
-  const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+export interface MyInquiriesSectionProps {
+  canView: boolean;
+  inquiries?: InquiryRecord[];
+  loading?: boolean;
+  error?: string | null;
+  onRefresh?: () => void;
+}
+
+export function MyInquiriesSection({
+  canView,
+  inquiries: externalInquiries,
+  loading: externalLoading,
+  error: externalError,
+  onRefresh,
+}: MyInquiriesSectionProps) {
+  const isControlled = externalInquiries !== undefined;
+  const [internalInquiries, setInternalInquiries] = useState<InquiryRecord[]>([]);
+  const [internalLoading, setInternalLoading] = useState<boolean>(true);
+  const [internalError, setInternalError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    if (onRefresh) {
+      onRefresh();
+      return;
+    }
+    setInternalLoading(true);
     try {
       const res = await fetch('/api/account/inquiries', {
         credentials: 'same-origin',
@@ -72,21 +91,26 @@ export function MyInquiriesSection({ canView }: { canView: boolean }) {
       if (!res.ok) {
         throw new SocialApiError(data.error || 'Не удалось загрузить заявки.', res.status);
       }
-      setInquiries(data.inquiries ?? []);
-      setError(null);
+      setInternalInquiries(data.inquiries ?? []);
+      setInternalError(null);
     } catch (err) {
-      setError(err instanceof SocialApiError ? err.message : 'Не удалось загрузить заявки.');
+      setInternalError(err instanceof SocialApiError ? err.message : 'Не удалось загрузить заявки.');
     } finally {
-      setLoading(false);
+      setInternalLoading(false);
     }
-  }, []);
+  }, [onRefresh]);
 
   useEffect(() => {
+    if (isControlled) return;
     if (canView) void load();
-    else setLoading(false);
-  }, [canView, load]);
+    else setInternalLoading(false);
+  }, [canView, isControlled, load]);
 
   if (!canView) return null;
+
+  const inquiries = isControlled ? externalInquiries : internalInquiries;
+  const loading = isControlled ? Boolean(externalLoading) : internalLoading;
+  const error = isControlled ? (externalError ?? null) : internalError;
 
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">

@@ -13,8 +13,12 @@ import {
 } from 'lucide-react';
 import { tracker } from '../utils/tracker';
 import { SocialProfileSection } from './social/SocialProfileSection';
-import { MyInquiriesSection } from './social/MyInquiriesSection';
+import { MyInquiriesSection, type InquiryRecord } from './social/MyInquiriesSection';
 import { ForgotPasswordForm, ResetPasswordForm } from './social/PasswordRecovery';
+import {
+  AttestationProgressWidget,
+  computeUserAttestationSummary,
+} from './AttestationProgressWidget';
 import {
   ApiError,
   ROLE_LABELS,
@@ -22,6 +26,7 @@ import {
   type Role,
   type SessionUser,
 } from '../utils/identityApi';
+import type { SiteTabId } from '../utils/seo';
 
 type AuthMode = 'login' | 'register';
 
@@ -40,13 +45,16 @@ function hasPermission(user: SessionUser | null, permission: string): boolean {
   return Boolean(user?.permissions?.includes(permission));
 }
 
-export function AccountSection() {
+export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) => void } = {}) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   /** Password recovery views: null = normal auth, 'forgot' = request, string = reset token. */
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [showForgot, setShowForgot] = useState<boolean>(false);
+  const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
+  const [inquiriesLoading, setInquiriesLoading] = useState<boolean>(false);
+  const [inquiriesError, setInquiriesError] = useState<string | null>(null);
 
   // A reset link lands on ?tab=account&reset=<token>, so the cabinet opens
   // straight into the "set a new password" step.
@@ -78,6 +86,37 @@ export function AccountSection() {
     };
   }, []);
 
+  const loadInquiries = useCallback(async () => {
+    setInquiriesLoading(true);
+    try {
+      const res = await fetch('/api/account/inquiries', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+      });
+      const data = (await res.json()) as { inquiries?: InquiryRecord[]; error?: string };
+      if (!res.ok) {
+        setInquiriesError(data.error || 'Не удалось загрузить заявки.');
+        return;
+      }
+      setInquiries(data.inquiries ?? []);
+      setInquiriesError(null);
+    } catch {
+      setInquiriesError('Не удалось загрузить заявки.');
+    } finally {
+      setInquiriesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user && hasPermission(user, 'inquiries:view_own')) {
+      void loadInquiries();
+    } else {
+      setInquiries([]);
+      setInquiriesError(null);
+      setInquiriesLoading(false);
+    }
+  }, [user, loadInquiries]);
+
   const handleAuthenticated = useCallback((next: SessionUser) => {
     setUser(next);
     setLoading(false);
@@ -88,6 +127,7 @@ export function AccountSection() {
       await identityApi.logout();
     } finally {
       setUser(null);
+      setInquiries([]);
       tracker.trackCustomInteraction('Выход из личного кабинета', 'account');
     }
   }, []);
@@ -133,10 +173,25 @@ export function AccountSection() {
   return (
     <div className="space-y-6">
       <CabinetHeader user={user} onLogout={handleLogout} />
+      <AttestationProgressWidget
+        user={user}
+        inquiries={inquiries}
+        inquiriesLoading={inquiriesLoading}
+        onRefreshInquiries={
+          hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
+        }
+        onOpenApplication={onNavigate ? () => onNavigate('overview') : undefined}
+      />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <ProfileCard user={user} onUpdated={handleAuthenticated} />
-          <MyInquiriesSection canView={hasPermission(user, 'inquiries:view_own')} />
+          <MyInquiriesSection
+            canView={hasPermission(user, 'inquiries:view_own')}
+            inquiries={inquiries}
+            loading={inquiriesLoading}
+            error={inquiriesError}
+            onRefresh={() => void loadInquiries()}
+          />
           <PasswordCard onChanged={() => setUser(null)} />
         </div>
         <div className="space-y-6">
@@ -729,8 +784,9 @@ function UserAdminCard({ currentUserId }: { currentUserId: string }) {
         <ul className="divide-y divide-slate-200">
           {users.map((u) => {
             const isSelf = u.id === currentUserId;
+            const userProgress = computeUserAttestationSummary(u);
             return (
-              <li key={u.id} className="py-3 space-y-2">
+              <li key={u.id} className="py-3 space-y-2.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900 truncate">{u.fullName}</p>
@@ -745,6 +801,35 @@ function UserAdminCard({ currentUserId }: { currentUserId: string }) {
                   >
                     {u.isActive ? 'активен' : 'заблокирован'}
                   </span>
+                </div>
+
+                {/* Compact per-user attestation progress bar */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-600">
+                    <span className="truncate">
+                      {userProgress.percent === 100
+                        ? 'Свидетельство получено'
+                        : `Этап ${userProgress.activeStage.stepNumber}: ${userProgress.activeStage.title}`}
+                    </span>
+                    <span className="font-mono font-semibold text-slate-800 tabular-nums shrink-0 ml-2">
+                      {userProgress.percent}%
+                    </span>
+                  </div>
+                  <div
+                    role="progressbar"
+                    aria-label={`Прогресс аттестации: ${u.fullName}`}
+                    aria-valuenow={userProgress.percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden"
+                  >
+                    <div
+                      className={`h-full transition-all duration-200 ${
+                        userProgress.percent === 100 ? 'bg-emerald-600' : 'bg-teal-700'
+                      }`}
+                      style={{ width: `${userProgress.percent}%` }}
+                    />
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">

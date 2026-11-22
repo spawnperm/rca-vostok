@@ -281,7 +281,7 @@ export default function App() {
               {activeTab === 'dissertation' && <DissertationSection />}
               {activeTab === 'presentations' && <PresentationsSection />}
               {activeTab === 'analytics' && <AnalyticsSection />}
-              {activeTab === 'account' && <AccountSection />}
+              {activeTab === 'account' && <AccountSection onNavigate={navigateTo} />}
             </Suspense>
           </ErrorBoundary>
         </main>
