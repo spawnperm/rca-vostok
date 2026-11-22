@@ -3,6 +3,7 @@ import { RotateCcw } from 'lucide-react';
 import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
 import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
 import { DfoRegionalForecastModule } from './DfoRegionalForecastModule';
+import { TrainingAndAttestationCostEstimator } from './TrainingAndAttestationCostEstimator';
 
 export const CalculatorSection: React.FC = () => {
   const [activePresetId, setActivePresetId] = useState<string>(DEMAND_PRESETS[0].id);
@@ -565,6 +566,9 @@ export const CalculatorSection: React.FC = () => {
 
       {/* Regional DFO 2030 Forecast Module with Tourist Flow */}
       <DfoRegionalForecastModule onApplyRegionToCalculator={applyRegionToMainCalculator} />
+
+      {/* Training & Attestation Cost Estimator by Guide Category and DFO Region */}
+      <TrainingAndAttestationCostEstimator />
     </div>
   );
 };

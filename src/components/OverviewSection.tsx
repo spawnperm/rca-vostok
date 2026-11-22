@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { ActiveInquiriesDashboardWidget } from './ActiveInquiriesDashboardWidget';
+import { AttestationCommissionWidget } from './AttestationCommissionWidget';
 import { AttestationCostCalculator } from './AttestationCostCalculator';
 import { AttestationNewsFeed } from './AttestationNewsFeed';
 import { AttestationReadinessCheck } from './AttestationReadinessCheck';
@@ -625,6 +626,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           </div>
         </div>
       </section>
+
+      {/* Attestation Commission Experts Widget */}
+      <AttestationCommissionWidget onContactCurator={openCuratorModal} />
 
       {/* Candidate Attestation Roadmap */}
       <AttestationRoadmap onContactCurator={openCuratorModal} />
