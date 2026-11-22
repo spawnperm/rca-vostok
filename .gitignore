@@ -16,3 +16,13 @@ coverage/
 package-lock.json
 yarn.lock
 bun.lock
+
+# Agent/runtime state written into the working directory (Mnemon memory store).
+# It is per-machine data, not source.
+.mnemon/
+
+# Operational secrets generated on a deployment host (Forgejo API password and
+# access token used by maintenance scripts). They live beside the compose file
+# and must never be committed: `git add -A` would otherwise publish them.
+.forgejo-api-pass
+.forgejo-token
