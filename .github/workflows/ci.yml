@@ -18,7 +18,7 @@ jobs:
       # pnpm must be set up before setup-node so the latter can use it as the
       # cache key and report the resolved version.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -72,7 +72,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
