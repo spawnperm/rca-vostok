@@ -48,7 +48,98 @@ export function createPool(config: DatabaseConfig = {}): pg.Pool | null {
  * Minimal forward-only migration runner. Statements are idempotent so the
  * server can safely configure schema at boot.
  */
+/**
+ * Applied migration steps, in order. Each name is recorded in
+ * `schema_migrations` after its step succeeds, so the schema of any deployment
+ * can be inspected with a single query and a new step is never re-run.
+ *
+ * The individual steps remain idempotent (`CREATE TABLE IF NOT EXISTS`), which
+ * also protects the case where a step succeeds but recording its version fails.
+ */
+const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> }[] = [
+  { version: '001_analytics_and_content', run: (p) => migrateAnalyticsAndContent(p) },
+  { version: '002_identity', run: (p) => migrateIdentity(p) },
+  { version: '003_social', run: (p) => migrateSocial(p) },
+  { version: '004_chat', run: (p) => migrateChat(p) },
+  { version: '005_media', run: (p) => migrateMedia(p) },
+];
+
+/**
+ * Number of migration steps this build knows about.
+ *
+ * Exported so the health endpoint can tell whether a running container has
+ * applied the schema its code expects — a mismatch is a deployment problem that
+ * otherwise surfaces only as a runtime query failure.
+ */
+export const MIGRATION_STEP_COUNT = MIGRATION_STEPS.length;
+
+/**
+ * Runs every pending migration step and records its version.
+ *
+ * Pending work happens under a PostgreSQL advisory lock so two containers
+ * starting at once cannot apply the same step twice. Each step is its own
+ * transaction: a failure rolls that step back and stops the run rather than
+ * leaving a half-applied schema.
+ */
 export async function runMigrations(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version     TEXT PRIMARY KEY,
+      applied_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  const client = await pool.connect();
+  try {
+    // Arbitrary constant identifying this application's migration lock.
+    await client.query('SELECT pg_advisory_lock(730485921)');
+    try {
+      const applied = await client.query<{ version: string }>(
+        'SELECT version FROM schema_migrations'
+      );
+      const done = new Set(applied.rows.map((r) => r.version));
+
+      for (const step of MIGRATION_STEPS) {
+        if (done.has(step.version)) continue;
+
+        await client.query('BEGIN');
+        try {
+          await step.run(client as unknown as pg.Pool);
+          await client.query(
+            'INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING',
+            [step.version]
+          );
+          await client.query('COMMIT');
+          console.info(`[migrations] applied ${step.version}`);
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw new Error(
+            `migration ${step.version} failed: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    } finally {
+      await client.query('SELECT pg_advisory_unlock(730485921)');
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/** Reports which migrations a database has, for diagnostics. */
+export async function readAppliedMigrations(pool: pg.Pool): Promise<string[]> {
+  try {
+    const res = await pool.query<{ version: string }>(
+      'SELECT version FROM schema_migrations ORDER BY version'
+    );
+    return res.rows.map((r) => r.version);
+  } catch {
+    return [];
+  }
+}
+
+/** Analytics, inquiries and feedback — the original tables. */
+async function migrateAnalyticsAndContent(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS analytics_sessions (
       session_id       TEXT PRIMARY KEY,
@@ -164,7 +255,10 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
       ON platform_feedback (created_at DESC);
   `);
 
-  // ── Identity bounded context ──────────────────────────────────────────────
+}
+
+/** Accounts, sessions and password-reset tokens. */
+async function migrateIdentity(pool: pg.Pool): Promise<void> {
   // Accounts for the personal cabinet. Email is the login key, so it carries a
   // unique constraint; the role drives all RBAC decisions.
   await pool.query(`

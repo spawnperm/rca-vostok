@@ -1,5 +1,6 @@
 import express from 'express';
 import { PERMISSIONS } from '../../domain/identity/Rbac.ts';
+import type { ObjectStorage } from '../../domain/media/MediaRepository.ts';
 import { requireAuth, requirePermission } from './AuthMiddleware.ts';
 import { sendDomainError } from './SocialRouter.ts';
 import type {
@@ -20,7 +21,7 @@ export interface MediaRouterDeps {
   deleteAlbum: DeleteAlbumUseCase;
   findAsset: { execute(assetId: string): Promise<{ id: string; objectKey: string; albumId: string | null; mimeType: string; title: string } | null> };
   findAlbum: { execute(albumId: string): Promise<{ visibility: 'public' | 'private'; ownerId: string } | null> };
-  storage: { get(key: string): Promise<{ body: Buffer; contentType: string } | null> } | null;
+  storage: ObjectStorage | null;
 }
 
 /**
@@ -153,21 +154,123 @@ export function createMediaRouter(deps: MediaRouterDeps): express.Router {
         return;
       }
 
-      const object = await deps.storage.get(asset.objectKey);
+      // Streaming, not buffering: a 300 MB video would otherwise have to fit in
+      // the process heap on a 3.8 GB host. The stream is piped straight to the
+      // response and `destroy()`ed if the client disconnects early.
+      const object = await deps.storage.getStream(asset.objectKey);
       if (!object) {
         res.status(404).json({ error: 'Файл отсутствует в хранилище.' });
         return;
       }
 
+      const contentType = object.contentType || asset.mimeType;
+      const total = object.sizeBytes;
+
       // Content-addressed keys never change, so caching is safe and long.
-      res.setHeader('Content-Type', object.contentType || asset.mimeType);
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.send(object.body);
+      // Advertise range support so video and audio can seek instead of
+      // downloading the whole file first.
+      res.setHeader('Accept-Ranges', 'bytes');
+
+      const range = req.headers.range;
+      if (range && typeof total === 'number' && total > 0) {
+        const parsed = parseByteRange(range, total);
+        if (!parsed) {
+          res.status(416).setHeader('Content-Range', `bytes */${total}`);
+          res.end();
+          return;
+        }
+        const { start, end } = parsed;
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
+        res.setHeader('Content-Length', String(end - start + 1));
+
+        // S3 cannot seek, so a ranged read discards the leading bytes. This is
+        // acceptable for the current volumes; a presigned URL would avoid it.
+        let skipped = 0;
+        const slice = end - start + 1;
+        let sent = 0;
+        object.stream.on('data', (chunk: Buffer) => {
+          if (skipped < start) {
+            const drop = Math.min(chunk.length, start - skipped);
+            skipped += drop;
+            const rest = chunk.subarray(drop);
+            if (rest.length === 0) return;
+            const take = rest.subarray(0, slice - sent);
+            sent += take.length;
+            res.write(take);
+            if (sent >= slice) res.end();
+            return;
+          }
+          const take = chunk.subarray(0, slice - sent);
+          sent += take.length;
+          res.write(take);
+          if (sent >= slice) res.end();
+        });
+        object.stream.on('end', () => res.end());
+        object.stream.on('error', () => res.end());
+
+        res.on('close', () => {
+          const destroyable = object.stream as unknown as { destroy?: () => void };
+          destroyable.destroy?.();
+        });
+        return;
+      }
+
+      if (typeof total === 'number' && total > 0) {
+        res.setHeader('Content-Length', String(total));
+      }
+
+      // Abort the upstream stream when the client goes away, rather than
+      // draining an S3 response into a closed socket.
+      res.on('close', () => {
+        const destroyable = object.stream as unknown as { destroy?: () => void };
+        destroyable.destroy?.();
+      });
+
+      object.stream.pipe(res);
     } catch (err) {
       sendDomainError(err, res);
     }
   });
 
   return router;
+}
+
+/**
+ * Parses a single `bytes=start-end` range.
+ *
+ * Returns null for anything malformed or unsatisfiable, which the caller turns
+ * into a 416. Multi-range requests are not supported: browsers only use them
+ * for exotic media and the complexity is not worth it here.
+ */
+export function parseByteRange(
+  header: string,
+  total: number
+): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return null;
+
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === '' && rawEnd === '') return null;
+
+  let start: number;
+  let end: number;
+
+  if (rawStart === '') {
+    // Suffix range: last N bytes.
+    const suffix = Number(rawEnd);
+    if (!Number.isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, total - suffix);
+    end = total - 1;
+  } else {
+    start = Number(rawStart);
+    end = rawEnd === '' ? total - 1 : Number(rawEnd);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  }
+
+  if (start < 0 || end < start || start >= total) return null;
+  return { start, end: Math.min(end, total - 1) };
 }

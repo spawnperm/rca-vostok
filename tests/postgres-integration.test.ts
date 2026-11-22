@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPool, runMigrations } from '../src/infrastructure/persistence/pg/PostgresPool.ts';
+import { AnalyticsAggregationService } from '../src/domain/analytics/AnalyticsAggregationService.ts';
 import { PostgresUserRepository } from '../src/infrastructure/persistence/pg/PostgresUserRepository.ts';
 import { PostgresSessionRepository } from '../src/infrastructure/persistence/pg/PostgresSessionRepository.ts';
 import { PostgresPasswordResetRepository } from '../src/infrastructure/persistence/pg/PostgresPasswordResetRepository.ts';
@@ -426,6 +427,96 @@ maybe('Postgres chat: channel, thread and reaction', async () => {
   const removed = await repo.findMessage(root.id);
   assert.equal(removed?.removed, true);
 
+  await cleanup();
+  await p.end();
+  pool = null;
+});
+
+maybe('Postgres analytics: SQL summary matches the in-memory aggregation', async () => {
+  await cleanup();
+  const p = await ensureMigrated();
+  const { user } = await seedUser('summary@example.ru');
+  const repo = new PostgresAnalyticsRepository(p);
+
+  const now = new Date().toISOString();
+  const store = await repo.loadStore();
+
+  // Two sessions so averages are meaningful, with device/referrer variety.
+  store.sessions['s1'] = {
+    sessionId: 's1',
+    visitorId: 'v1',
+    startedAt: now,
+    lastSeenAt: now,
+    deviceType: 'Desktop',
+    browser: 'Chrome',
+    viewport: '1920x1080',
+    referrer: 'ya.ru',
+    utmSource: '',
+    landingTab: 'overview',
+    tabsVisited: ['overview', 'market'],
+    maxScrollDepth: 80,
+    durationSec: 120,
+    eventCount: 4,
+    clickCount: 2,
+  };
+  store.sessions['s2'] = {
+    sessionId: 's2',
+    visitorId: 'v2',
+    startedAt: now,
+    lastSeenAt: now,
+    deviceType: 'Mobile',
+    browser: 'Safari',
+    viewport: '390x844',
+    referrer: 'vk.com',
+    utmSource: 'campaign',
+    landingTab: 'overview',
+    tabsVisited: ['overview'],
+    maxScrollDepth: 40,
+    durationSec: 60,
+    eventCount: 2,
+    clickCount: 0,
+  };
+  store.events.push(
+    { id: 'ev1', sessionId: 's1', type: 'pageview', tab: 'overview', timestamp: now, elapsedMs: 0 },
+    { id: 'ev2', sessionId: 's1', type: 'click', tab: 'overview', timestamp: now, elapsedMs: 10, xPct: 10, yPct: 20, label: 'Кнопка' },
+    { id: 'ev3', sessionId: 's1', type: 'click', tab: 'market', timestamp: now, elapsedMs: 20, xPct: 30, yPct: 40, label: 'Кнопка' },
+    { id: 'ev4', sessionId: 's1', type: 'interaction', tab: 'market', timestamp: now, elapsedMs: 30, label: 'Карта' },
+    { id: 'ev5', sessionId: 's2', type: 'session_start', tab: 'overview', timestamp: now, elapsedMs: 0 },
+    { id: 'ev6', sessionId: 's2', type: 'scroll', tab: 'overview', timestamp: now, elapsedMs: 50, scrollDepth: 40 }
+  );
+  await repo.saveStore(store);
+
+  const sql = await repo.loadSummary();
+  const inMemory = AnalyticsAggregationService.summarize(await repo.loadStore());
+
+  // Totals must agree; this is the contract the dashboard depends on.
+  assert.equal(sql.totals.sessions, inMemory.totals.sessions);
+  assert.equal(sql.totals.uniqueVisitors, inMemory.totals.uniqueVisitors);
+  assert.equal(sql.totals.pageviews, inMemory.totals.pageviews);
+  assert.equal(sql.totals.totalEvents, inMemory.totals.totalEvents);
+  assert.equal(sql.totals.totalClicks, inMemory.totals.totalClicks);
+  assert.equal(sql.totals.avgDurationSec, inMemory.totals.avgDurationSec);
+  assert.equal(sql.totals.avgScrollDepth, inMemory.totals.avgScrollDepth);
+
+  // Breakdowns.
+  assert.deepEqual(sql.devices, inMemory.devices);
+  assert.deepEqual(sql.tabStats, inMemory.tabStats);
+  assert.deepEqual(sql.referrers, inMemory.referrers);
+
+  // topClicked groups by (tab, label), so the same label on two tabs is two
+  // entries with count 1 rather than one with count 2. Compare the full set
+  // order-insensitively so a divergence in either direction is caught.
+  const sortClicks = (rows: { label: string; tab: string; count: number }[]) =>
+    [...rows]
+      .map((r) => `${r.tab}::${r.label}=${r.count}`)
+      .sort();
+  assert.deepEqual(sortClicks(sql.topClicked), sortClicks(inMemory.topClicked));
+  assert.equal(sql.topClicked.length, 2);
+
+  assert.equal(sql.heatmapPoints.length, 2);
+  assert.equal(sql.recentSessions.length, 2);
+
+  void user;
   await cleanup();
   await p.end();
   pool = null;

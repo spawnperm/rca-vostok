@@ -45,6 +45,20 @@ export interface ObjectStorage {
    * Garage's S3 API requires signed requests, so uploaded media cannot be
    * fetched by a browser directly. The app proxies the bytes instead, which
    * also lets it enforce album visibility before serving a private file.
+   *
+   * Prefer `getStream` for large files: this variant materialises the whole
+   * object in memory and is only suitable for small ones.
    */
   get(key: string): Promise<{ body: Buffer; contentType: string } | null>;
+
+  /**
+   * Opens an object as a readable stream plus its size.
+   *
+   * A 300 MB video buffered in memory would exhaust the 3.8 GB host, so the
+   * serving route uses this and pipes the bytes straight to the response.
+   * Returns null when the key does not exist.
+   */
+  getStream(
+    key: string
+  ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; sizeBytes?: number } | null>;
 }

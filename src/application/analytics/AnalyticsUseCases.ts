@@ -130,6 +130,13 @@ export class GetAnalyticsSummaryUseCase {
   }
 
   async execute(): Promise<AnalyticsSummaryDTO> {
+    // Prefer the adapter's own aggregation when it has one: the PostgreSQL
+    // adapter computes the whole summary in SQL instead of shipping thousands
+    // of event rows into Node. The in-memory fallback keeps behaviour identical
+    // for development and tests.
+    if (this.analyticsRepo.loadSummary) {
+      return this.analyticsRepo.loadSummary();
+    }
     const store = await this.analyticsRepo.loadStore();
     return AnalyticsAggregationService.summarize(store);
   }

@@ -79,6 +79,36 @@ export class GarageObjectStorage implements ObjectStorage {
     }
   }
 
+
+  /**
+   * Opens the S3 object body as a stream.
+   *
+   * The AWS SDK returns a Node Readable in `Body`, so the bytes are piped to the
+   * client without ever being materialised in memory — a 300 MB video would
+   * otherwise have to fit in the process heap.
+   */
+  async getStream(
+    key: string
+  ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; sizeBytes?: number } | null> {
+    try {
+      const result = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key })
+      );
+      const body = result.Body as unknown as NodeJS.ReadableStream | undefined;
+      if (!body) return null;
+
+      return {
+        stream: body,
+        contentType: result.ContentType || 'application/octet-stream',
+        sizeBytes: result.ContentLength,
+      };
+    } catch (err) {
+      const name = (err as { name?: string }).name;
+      if (name === 'NoSuchKey' || name === 'NotFound') return null;
+      throw err;
+    }
+  }
+
   publicUrl(key: string): string {
     return `${this.publicBaseUrl}/${key.replace(/^\/+/, '')}`;
   }
@@ -154,6 +184,41 @@ export class LocalObjectStorage implements ObjectStorage {
     try {
       const body = await fs.readFile(path.join(this.baseDir, key));
       return { body, contentType: types[ext] ?? 'application/octet-stream' };
+    } catch {
+      return null;
+    }
+  }
+
+
+  async getStream(
+    key: string
+  ): Promise<{ stream: NodeJS.ReadableStream; contentType: string; sizeBytes?: number } | null> {
+    const fs = await import('node:fs');
+    const fsp = await import('node:fs/promises');
+    const path = await import('node:path');
+
+    const target = path.join(this.baseDir, key);
+    try {
+      const stat = await fsp.stat(target);
+      const types: Record<string, string> = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.webp': 'image/webp',
+        '.avif': 'image/avif',
+        '.gif': 'image/gif',
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.mov': 'video/quicktime',
+        '.mp3': 'audio/mpeg',
+        '.ogg': 'audio/ogg',
+        '.wav': 'audio/wav',
+      };
+      return {
+        stream: fs.createReadStream(target),
+        contentType: types[path.extname(key).toLowerCase()] ?? 'application/octet-stream',
+        sizeBytes: stat.size,
+      };
     } catch {
       return null;
     }

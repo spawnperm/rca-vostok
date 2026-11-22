@@ -21,6 +21,7 @@ import {
 } from './src/application/feedback/FeedbackUseCases.ts';
 import { GetSystemHealthUseCase } from './src/application/system/HealthCheckUseCase.ts';
 import { HousekeepingJob } from './src/application/system/HousekeepingJob.ts';
+import { MetricsCollector } from './src/infrastructure/http/Metrics.ts';
 import { DomainError, NotFoundError, ValidationError } from './src/domain/shared/DomainError.ts';
 import type { AnalyticsRepository } from './src/domain/analytics/AnalyticsRepository.ts';
 import type { FeedbackRepository } from './src/domain/feedback/FeedbackRepository.ts';
@@ -75,7 +76,12 @@ import { mountApiDocs } from './src/infrastructure/http/OpenApi.ts';
 import { JsonFileAnalyticsRepository } from './src/infrastructure/persistence/JsonFileAnalyticsRepository.ts';
 import { JsonFileFeedbackRepository } from './src/infrastructure/persistence/JsonFileFeedbackRepository.ts';
 import { JsonFileInquiryRepository } from './src/infrastructure/persistence/JsonFileInquiryRepository.ts';
-import { createPool, runMigrations } from './src/infrastructure/persistence/pg/PostgresPool.ts';
+import {
+  MIGRATION_STEP_COUNT,
+  createPool,
+  readAppliedMigrations,
+  runMigrations,
+} from './src/infrastructure/persistence/pg/PostgresPool.ts';
 import { PostgresAnalyticsRepository } from './src/infrastructure/persistence/pg/PostgresAnalyticsRepository.ts';
 import { PostgresFeedbackRepository } from './src/infrastructure/persistence/pg/PostgresFeedbackRepository.ts';
 import { PostgresInquiryRepository } from './src/infrastructure/persistence/pg/PostgresInquiryRepository.ts';
@@ -111,6 +117,7 @@ import {
   DEFAULT_LOGIN_RULES,
   RateLimiter,
   createLoginRateLimit,
+  createRateLimit,
 } from './src/infrastructure/http/RateLimiter.ts';
 import {
   ForgotPasswordUseCase,
@@ -206,6 +213,18 @@ async function startServer() {
     next();
   });
 
+  // Request metrics: counts, error rate and latency percentiles, exposed at
+  // /api/metrics. Collected in-process — the deployment has no Prometheus.
+  const metrics = new MetricsCollector();
+  app.use((req, res, next) => {
+    const started = process.hrtime.bigint();
+    res.on('finish', () => {
+      const ms = Number(process.hrtime.bigint() - started) / 1e6;
+      metrics.record(req.method, req.path, res.statusCode, ms);
+    });
+    next();
+  });
+
   // Composition Root: Infrastructure Adapters + Domain Event Bus + Use Cases
   // NATS is optional: when the broker is configured and reachable, domain
   // events also fan out across processes; otherwise the in-memory bus is used.
@@ -281,15 +300,47 @@ async function startServer() {
   const getSystemHealthUseCase = new GetSystemHealthUseCase(
     inquiryRepo,
     analyticsRepo,
-    adapterName
+    adapterName,
+    {
+      // A real round-trip, not just "is the pool object present": SELECT 1
+      // fails when the server is down or the connection is broken.
+      checkDatabase: pool
+        ? async () => {
+            const res = await pool.query('SELECT 1 AS ok');
+            return res.rows[0]?.ok === 1;
+          }
+        : undefined,
+      checkEventBus: async () => {
+        // NATS is optional; when it is not in use this reports true because the
+        // in-memory bus is fully functional.
+        if (!natsBus) return true;
+        return natsBus.isConnected();
+      },
+      checkMigrations: pool
+        ? async () => {
+            const applied = await readAppliedMigrations(pool);
+            // All known steps must be recorded; a shorter list means the
+            // container is running a build whose migrations did not run.
+            return applied.length >= MIGRATION_STEP_COUNT;
+          }
+        : undefined,
+    }
   );
 
   // ── Identity bounded context (personal cabinet + RBAC) ────────────────────
   const resolveSessionUseCase = new ResolveSessionUseCase(userRepo, sessionRepo, sessionTokens);
   app.use(createAuthMiddleware(resolveSessionUseCase));
 
-  // Credential-stuffing protection: one counter per IP, one per account.
-  const loginLimiter = new RateLimiter(DEFAULT_LOGIN_RULES);
+  // One limiter instance for every protected endpoint. Sharing it is fine:
+  // rules are namespaced by name, so counters never collide.
+  const rateLimiter = new RateLimiter(DEFAULT_LOGIN_RULES);
+  const loginLimiter = rateLimiter;
+
+  // Public write endpoints accept anonymous traffic, so each needs its own
+  // ceiling. Without these a single client could fill the database.
+  const inquiryRateLimit = createRateLimit(rateLimiter, 'inquiry-ip');
+  const feedbackRateLimit = createRateLimit(rateLimiter, 'feedback-ip');
+  const analyticsRateLimit = createRateLimit(rateLimiter, 'analytics-ip');
   const loginRateLimit = createLoginRateLimit({
     limiter: loginLimiter,
     perIpRule: 'login-ip',
@@ -453,14 +504,24 @@ async function startServer() {
   // Contour 7: System Health & DDD Bounded Context status
   app.get('/api/health', async (_req, res) => {
     try {
-      res.json(await getSystemHealthUseCase.execute());
+      const health = await getSystemHealthUseCase.execute();
+      // 503 when the database is unreachable so load balancers and the compose
+      // healthcheck actually notice; degraded dependencies keep 200 because the
+      // service still serves traffic.
+      res.status(health.status === 'unhealthy' ? 503 : 200).json(health);
     } catch (err) {
       handleDomainError(err, res);
     }
   });
 
+  // In-process request metrics. Deliberately not rate-limited or authenticated
+  // beyond the edge: it carries no personal data, only aggregate counts.
+  app.get('/api/metrics', (_req, res) => {
+    res.json(metrics.snapshot());
+  });
+
   // Bounded Context: Analytics
-  app.post('/api/analytics/collect', async (req, res) => {
+  app.post('/api/analytics/collect', analyticsRateLimit, async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
       const result = await collectBehaviorUseCase.execute({
@@ -524,7 +585,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/inquiries', async (req, res) => {
+  app.post('/api/inquiries', inquiryRateLimit, async (req, res) => {
     try {
       const body = (req.body || {}) as Record<string, unknown>;
       const result = await submitInquiryUseCase.execute(
@@ -555,7 +616,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/feedback', async (req, res) => {
+  app.post('/api/feedback', feedbackRateLimit, async (req, res) => {
     try {
       const body = (req.body || {}) as Record<string, unknown>;
       const result = await submitFeedbackUseCase.execute({

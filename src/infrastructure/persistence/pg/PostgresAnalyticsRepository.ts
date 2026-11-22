@@ -5,6 +5,7 @@ import type {
   BehaviorEventDTO,
   VisitorSessionDTO,
 } from '../../../domain/analytics/BehaviorModels.ts';
+import type { AnalyticsSummaryDTO } from '../../../domain/analytics/AnalyticsAggregationService.ts';
 
 /** Caps mirror the bounded-store limits of the file adapter. */
 const MAX_SESSIONS = 500;
@@ -221,6 +222,159 @@ export class PostgresAnalyticsRepository implements AnalyticsRepository {
     } finally {
       client.release();
     }
+  }
+
+
+  /**
+   * Builds the dashboard summary with SQL aggregates.
+   *
+   * The previous path loaded up to 5000 events into Node just to count and
+   * average them. Every figure below is computed by PostgreSQL, so the payload
+   * is one small row plus a handful of grouped queries — constant work
+   * regardless of how many events the window holds.
+   *
+   * The shape and rounding deliberately match AnalyticsAggregationService so
+   * the API contract is unchanged; that equivalence is covered by an
+   * integration test.
+   */
+  async loadSummary(): Promise<AnalyticsSummaryDTO> {
+    const totals = await this.pool.query<{
+      sessions: string;
+      unique_visitors: string;
+      pageviews: string;
+      total_events: string;
+      total_clicks: string;
+      avg_duration: string | null;
+      avg_scroll: string | null;
+    }>(`
+      WITH s AS (SELECT * FROM analytics_sessions),
+           e AS (SELECT * FROM analytics_events)
+      SELECT
+        (SELECT COUNT(*) FROM s)::text AS sessions,
+        (SELECT COUNT(DISTINCT visitor_id) FROM s)::text AS unique_visitors,
+        (SELECT COUNT(*) FROM e WHERE type IN ('pageview','session_start'))::text AS pageviews,
+        (SELECT COUNT(*) FROM e)::text AS total_events,
+        (SELECT COUNT(*) FROM e WHERE type = 'click')::text AS total_clicks,
+        (SELECT ROUND(AVG(duration_sec)) FROM s)::text AS avg_duration,
+        (SELECT ROUND(AVG(max_scroll_depth)) FROM s)::text AS avg_scroll
+    `);
+
+    const row = totals.rows[0];
+
+    const tabStats = await this.pool.query<{
+      tab: string;
+      views: string;
+      clicks: string;
+      interactions: string;
+    }>(`
+      SELECT tab,
+             COUNT(*) FILTER (WHERE type IN ('pageview','session_start'))::text AS views,
+             COUNT(*) FILTER (WHERE type = 'click')::text AS clicks,
+             COUNT(*) FILTER (WHERE type = 'interaction')::text AS interactions
+        FROM analytics_events
+       GROUP BY tab
+    `);
+
+    const devices = await this.pool.query<{ device_type: string; c: string }>(
+      `SELECT device_type, COUNT(*)::text AS c FROM analytics_sessions GROUP BY device_type`
+    );
+
+    const referrers = await this.pool.query<{ ref: string; c: string }>(`
+      SELECT CASE WHEN utm_source <> '' THEN referrer || ' (utm: ' || utm_source || ')'
+                  ELSE referrer END AS ref,
+             COUNT(*)::text AS c
+        FROM analytics_sessions
+       GROUP BY 1
+    `);
+
+    // Timeline keeps the last 12 hours that actually have traffic, matching the
+    // in-memory implementation.
+    const timeline = await this.pool.query<{ label: string; visits: string; events: string }>(`
+      WITH buckets AS (
+        SELECT date_trunc('hour', started_at) AS hour,
+               COUNT(*)::text AS visits,
+               SUM(event_count)::text AS events
+          FROM analytics_sessions
+         GROUP BY 1
+         ORDER BY 1 DESC
+         LIMIT 12
+      )
+      SELECT to_char(hour, 'HH24') || ':00' AS label, visits, events
+        FROM buckets
+       ORDER BY hour ASC
+    `);
+
+    const topClicked = await this.pool.query<{ label: string; tab: string; c: string }>(`
+      SELECT COALESCE(NULLIF(label, ''), NULLIF(target_tag, ''), 'Элемент интерфейса') AS label,
+             tab,
+             COUNT(*)::text AS c
+        FROM analytics_events
+       WHERE type = 'click'
+       GROUP BY 1, 2
+       ORDER BY COUNT(*) DESC
+       LIMIT 10
+    `);
+
+    const heatmap = await this.pool.query<{ x_pct: number; y_pct: number; tab: string; label: string | null; target_tag: string | null }>(`
+      SELECT x_pct, y_pct, tab, label, target_tag
+        FROM analytics_events
+       WHERE type = 'click' AND x_pct IS NOT NULL AND y_pct IS NOT NULL
+       ORDER BY id DESC
+       LIMIT 400
+    `);
+
+    const recent = await this.pool.query<SessionRow>(
+      `SELECT * FROM analytics_sessions ORDER BY last_seen_at DESC LIMIT 30`
+    );
+
+    const tabStatsMap: AnalyticsSummaryDTO['tabStats'] = {};
+    for (const t of tabStats.rows) {
+      tabStatsMap[t.tab] = {
+        views: Number(t.views),
+        clicks: Number(t.clicks),
+        interactions: Number(t.interactions),
+      };
+    }
+
+    const devicesMap: Record<string, number> = {};
+    for (const d of devices.rows) devicesMap[d.device_type] = Number(d.c);
+
+    const referrersMap: Record<string, number> = {};
+    for (const r of referrers.rows) referrersMap[r.ref] = Number(r.c);
+
+    return {
+      totals: {
+        sessions: Number(row.sessions),
+        uniqueVisitors: Number(row.unique_visitors),
+        pageviews: Number(row.pageviews),
+        totalEvents: Number(row.total_events),
+        totalClicks: Number(row.total_clicks),
+        avgDurationSec: Number(row.avg_duration ?? 0),
+        avgScrollDepth: Number(row.avg_scroll ?? 0),
+      },
+      tabStats: tabStatsMap,
+      devices: devicesMap,
+      referrers: referrersMap,
+      timeline: timeline.rows.map((t) => ({
+        label: t.label,
+        visits: Number(t.visits),
+        events: Number(t.events),
+      })),
+      topClicked: topClicked.rows.map((t) => ({
+        label: t.label,
+        tab: t.tab,
+        count: Number(t.c),
+      })),
+      heatmapPoints: heatmap.rows
+        .map((h) => ({
+          xPct: h.x_pct,
+          yPct: h.y_pct,
+          tab: h.tab,
+          label: h.label || h.target_tag || 'Элемент',
+        }))
+        .reverse(),
+      recentSessions: recent.rows.map(toSessionDTO),
+    };
   }
 
   async reset(): Promise<void> {

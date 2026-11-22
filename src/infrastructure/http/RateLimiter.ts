@@ -14,6 +14,16 @@ import type express from 'express';
  * one who hammers many accounts from one IP would exhaust a shared budget.
  */
 
+/** Extracts the client IP, honouring the proxy header set by Traefik. */
+function clientIp(req: express.Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    // The left-most entry is the original client when exactly one proxy is used.
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
 export interface RateLimitRule {
   /** Human-readable name used in logs. */
   name: string;
@@ -97,16 +107,6 @@ export class RateLimiter {
   }
 }
 
-/** Extracts the client IP, honouring the proxy header set by Traefik. */
-function clientIp(req: express.Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    // The left-most entry is the original client when exactly one proxy is used.
-    return forwarded.split(',')[0].trim();
-  }
-  return req.socket.remoteAddress ?? 'unknown';
-}
-
 export interface LoginRateLimitOptions {
   limiter: RateLimiter;
   /** Attempts allowed per IP per window. */
@@ -178,4 +178,33 @@ export const DEFAULT_LOGIN_RULES: RateLimitRule[] = [
   // twice) but tight enough to stop using the endpoint as a mail relay.
   { name: 'forgot-ip', windowMs: 60 * 60 * 1000, max: 5 },
   { name: 'forgot-account', windowMs: 60 * 60 * 1000, max: 3 },
+
+  // ── Public write endpoints ───────────────────────────────────────────────
+  // These accept anonymous requests, so without a limit one client can fill the
+  // database and every request costs a write.
+  //
+  // Submitting an inquiry is a rare, deliberate action by a human.
+  { name: 'inquiry-ip', windowMs: 60 * 60 * 1000, max: 5 },
+  // Feedback likewise; slightly looser to allow correcting a mistake.
+  { name: 'feedback-ip', windowMs: 60 * 60 * 1000, max: 10 },
+  // Behaviour tracking is batched by the client (one POST per few seconds of
+  // activity), so the ceiling is much higher — but still bounded.
+  { name: 'analytics-ip', windowMs: 60 * 1000, max: 60 },
 ];
+
+/** Blocks with a JSON 429 and a Retry-After header. */
+export function createRateLimit(limiter: RateLimiter, ruleName: string): express.RequestHandler {
+  return (req, res, next) => {
+    const outcome = limiter.hit(ruleName, clientIp(req));
+    if (!outcome.allowed) {
+      res.setHeader('Retry-After', String(outcome.retryAfterSec));
+      res.status(429).json({
+        error: 'Слишком много запросов. Повторите позже.',
+        code: 'RATE_LIMITED',
+        retryAfterSec: outcome.retryAfterSec,
+      });
+      return;
+    }
+    next();
+  };
+}

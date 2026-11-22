@@ -81,6 +81,15 @@ export class NatsDomainEventBus implements DomainEventBus {
     }
   }
 
+  /** Reports whether the broker connection is still open. */
+  isConnected(): boolean {
+    try {
+      return !this.connection.isClosed();
+    } catch {
+      return false;
+    }
+  }
+
   async drain(): Promise<void> {
     await this.connection.drain();
   }
