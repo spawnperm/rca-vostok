@@ -1,6 +1,7 @@
 import express from 'express';
 import { DomainError, ValidationError } from '../../domain/shared/DomainError.ts';
 import { PERMISSIONS } from '../../domain/identity/Rbac.ts';
+import { appLogger } from '../logging/Logger.ts';
 import type {
   AssignRoleUseCase,
   ChangePasswordUseCase,
@@ -42,6 +43,8 @@ export interface IdentityRouterDeps {
   resetPassword?: ResetPasswordUseCase;
 }
 
+const identityLog = appLogger.child('identity');
+
 function sendError(err: unknown, res: express.Response): void {
   if (err instanceof ValidationError) {
     const status = err.code === 'INVALID_CREDENTIALS' || err.code === 'ACCOUNT_DISABLED' ? 401 : 400;
@@ -53,7 +56,7 @@ function sendError(err: unknown, res: express.Response): void {
     res.status(status).json({ error: err.message, code: err.code });
     return;
   }
-  console.error('[identity] unexpected error', err);
+  identityLog.error('Unexpected error in IdentityRouter', err);
   res.status(500).json({ error: 'Внутренняя ошибка сервера.' });
 }
 

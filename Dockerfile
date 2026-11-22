@@ -51,8 +51,8 @@ COPY src ./src
 COPY scripts ./scripts
 COPY --from=builder /app/dist ./dist
 
-# Persisted JSON stores (analytics, inquiries, feedback).
-RUN mkdir -p /app/data && chown -R node:node /app
+# Persisted JSON stores (analytics, inquiries, feedback) and structured log files.
+RUN mkdir -p /app/data /app/logs && chown -R node:node /app
 
 USER node
 

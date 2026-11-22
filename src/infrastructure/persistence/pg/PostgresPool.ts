@@ -1,6 +1,9 @@
 import pg from 'pg';
+import { appLogger } from '../../logging/Logger.ts';
 
 const { Pool } = pg;
+const pgLog = appLogger.child('pg');
+const migrationLog = appLogger.child('migrations');
 
 export interface DatabaseConfig {
   connectionString?: string;
@@ -38,7 +41,7 @@ export function createPool(config: DatabaseConfig = {}): pg.Pool | null {
       });
 
   pool.on('error', (err) => {
-    console.error('[pg] idle client error', err.message);
+    pgLog.error('PostgreSQL idle client error', err);
   });
 
   return pool;
@@ -110,7 +113,7 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
             [step.version]
           );
           await client.query('COMMIT');
-          console.info(`[migrations] applied ${step.version}`);
+          migrationLog.info('Applied database migration', { version: step.version });
         } catch (err) {
           await client.query('ROLLBACK');
           throw new Error(

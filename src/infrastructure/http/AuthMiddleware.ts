@@ -3,6 +3,9 @@ import type { User } from '../../domain/identity/User.ts';
 import type { Permission } from '../../domain/identity/Rbac.ts';
 import { ForbiddenError } from '../../domain/identity/User.ts';
 import type { ResolveSessionUseCase } from '../../application/identity/IdentityUseCases.ts';
+import { appLogger } from '../logging/Logger.ts';
+
+const authLog = appLogger.child('auth');
 
 export const SESSION_COOKIE = 'rca_session';
 
@@ -63,7 +66,7 @@ export function createAuthMiddleware(resolveSession: ResolveSessionUseCase) {
       }
     } catch (err) {
       // A broken session must never block anonymous access to the site.
-      console.error('[auth] session resolve failed', err);
+      authLog.error('Session resolve failed', err);
     }
     next();
   };

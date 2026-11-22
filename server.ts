@@ -131,6 +131,8 @@ import {
   LoggingMailer,
   createMailerFromEnv,
 } from './src/infrastructure/mail/Mailer.ts';
+import { appLogger } from './src/infrastructure/logging/Logger.ts';
+import { createRequestLoggerMiddleware } from './src/infrastructure/http/RequestLogger.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -149,6 +151,8 @@ function getBaseUrl(req: express.Request): string {
   return `${proto}://${host}`;
 }
 
+const serverLog = appLogger.child('server');
+
 function handleDomainError(err: unknown, res: express.Response): void {
   if (err instanceof ValidationError) {
     res.status(400).json({ error: err.message, code: err.code });
@@ -162,7 +166,7 @@ function handleDomainError(err: unknown, res: express.Response): void {
     res.status(422).json({ error: err.message, code: err.code });
     return;
   }
-  console.error('[HTTP Adapter Error]', err);
+  serverLog.error('Unhandled HTTP adapter error', err);
   res.status(500).json({ error: 'Внутренняя ошибка сервера.' });
 }
 
@@ -171,6 +175,7 @@ async function startServer() {
   app.disable('x-powered-by');
   app.set('trust proxy', true);
   app.use(express.json({ limit: '256kb' }));
+  app.use(createRequestLoggerMiddleware(appLogger));
 
   // Security headers.
   //
@@ -252,19 +257,22 @@ async function startServer() {
   let feedbackRepo: FeedbackRepository;
   let adapterName: string;
 
+  const persistenceLog = appLogger.child('persistence');
+  const eventsLog = appLogger.child('events');
+
   if (pool) {
     await runMigrations(pool);
     analyticsRepo = new PostgresAnalyticsRepository(pool);
     inquiryRepo = new PostgresInquiryRepository(pool);
     feedbackRepo = new PostgresFeedbackRepository(pool);
     adapterName = 'postgresql';
-    console.info('[persistence] using PostgreSQL adapter');
+    persistenceLog.info('Using PostgreSQL persistence adapter');
   } else {
     analyticsRepo = new JsonFileAnalyticsRepository(DATA_DIR);
     inquiryRepo = new JsonFileInquiryRepository(DATA_DIR);
     feedbackRepo = new JsonFileFeedbackRepository(DATA_DIR);
     adapterName = 'json-file';
-    console.info('[persistence] no database configured, using JSON file adapter');
+    persistenceLog.info('No database configured, using JSON file adapter', { dataDir: DATA_DIR });
   }
 
   // Identity bounded context: PostgreSQL in production, in-memory for local dev.
@@ -279,27 +287,21 @@ async function startServer() {
 
   // Contour 7: Observability subscriber (logs structured metadata without PII)
   eventBus.subscribe('certification.inquiry_submitted', (event) => {
-    console.info(
-      JSON.stringify({
-        level: 'info',
-        event: event.eventName,
-        boundedContext: event.boundedContext,
-        occurredAt: event.occurredAt,
-        payload: event.payload,
-      })
-    );
+    eventsLog.info('Domain event published', {
+      event: event.eventName,
+      boundedContext: event.boundedContext,
+      occurredAt: event.occurredAt,
+      payload: event.payload,
+    });
   });
 
   eventBus.subscribe('platform.feedback_submitted', (event) => {
-    console.info(
-      JSON.stringify({
-        level: 'info',
-        event: event.eventName,
-        boundedContext: event.boundedContext,
-        occurredAt: event.occurredAt,
-        payload: event.payload,
-      })
-    );
+    eventsLog.info('Domain event published', {
+      event: event.eventName,
+      boundedContext: event.boundedContext,
+      occurredAt: event.occurredAt,
+      payload: event.payload,
+    });
   });
 
   const collectBehaviorUseCase = new CollectBehaviorUseCase(analyticsRepo, eventBus);
@@ -364,9 +366,9 @@ async function startServer() {
   // Password reset: mailer falls back to a logging transport when SMTP is not
   // configured, so the endpoint still works locally and reports delivery status.
   const mailer = createMailerFromEnv() ?? new LoggingMailer();
-  console.info(
-    `[mail] transport: ${mailer.delivers ? 'SMTP' : 'logging (no SMTP configured)'}`
-  );
+  appLogger.child('mail').info('Mail transport configured', {
+    transport: mailer.delivers ? 'SMTP' : 'logging',
+  });
 
   const resetTokenRepo: PasswordResetRepository = pool
     ? new PostgresPasswordResetRepository(pool)
@@ -418,9 +420,9 @@ async function startServer() {
     const chatRepo: ChatRepository = new PostgresChatRepository(pool);
     const mediaRepo: MediaRepository = new PostgresMediaRepository(pool);
     const objectStorage = createObjectStorageFromEnv();
-    console.info(
-      `[storage] media object storage: ${objectStorage ? 'S3/Garage' : 'disabled'}`
-    );
+    appLogger.child('storage').info('Media object storage configured', {
+      provider: objectStorage ? 'S3/Garage' : 'disabled',
+    });
 
     app.use(
       createSocialRouter({
@@ -723,7 +725,17 @@ async function startServer() {
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server listening on http://0.0.0.0:${PORT}`);
+    serverLog.info('Server listening', {
+      url: `http://0.0.0.0:${PORT}`,
+      env: IS_PROD ? 'production' : 'development',
+      logLevel: appLogger.level,
+      logFile: appLogger.getLogFilePath(),
+    });
+    serverLog.debug('Runtime configuration snapshot', {
+      adapter: adapterName,
+      natsConnected: Boolean(natsBus),
+      aiStudioPreview: isAiStudioPreview,
+    });
   });
 
   // Periodic cleanup of expired sessions and stale reset tokens. These tables
@@ -732,11 +744,12 @@ async function startServer() {
   const housekeeping = new HousekeepingJob({
     sessions: sessionRepo,
     resetTokens: resetTokenRepo,
+    logger: appLogger.child('housekeeping'),
   });
 
   // Graceful shutdown so container restarts drain cleanly and the pool closes.
   const shutdown = (signal: string) => {
-    console.log(`[shutdown] received ${signal}`);
+    serverLog.info('Shutdown signal received', { signal });
     housekeeping.stop();
     server.close(() => {
       void (async () => {
@@ -745,8 +758,9 @@ async function startServer() {
             await pool.end();
           }
         } catch (err) {
-          console.error('[shutdown] pool close failed', err);
+          serverLog.error('PostgreSQL pool close failed during shutdown', err);
         }
+        await appLogger.flush();
         process.exit(0);
       })();
     });
@@ -758,7 +772,8 @@ async function startServer() {
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
+startServer().catch(async (err) => {
+  serverLog.error('Failed to start server', err);
+  await appLogger.flush();
   process.exit(1);
 });

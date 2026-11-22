@@ -9,8 +9,9 @@ package-lock.json
 yarn.lock
 bun.lock
 
-# Local data stores created at runtime (root only: src/data holds source code)
+# Local data and log stores created at runtime (root only: src/data holds source code)
 /data
+/logs
 
 # VCS / tooling
 .git

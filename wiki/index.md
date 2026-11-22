@@ -9,6 +9,7 @@
 | Задача | Куда смотреть |
 |---|---|
 | Понять устройство кода | [`system-architecture.md`](./system-architecture.md), [`ddd-and-11-contours.md`](./ddd-and-11-contours.md) |
+| Установить, настроить `.env` и логирование | [`../docs/INSTALLATION_AND_CONFIGURATION.md`](../docs/INSTALLATION_AND_CONFIGURATION.md) |
 | Задеплоить, откатить, настроить бэкапы | [`../deploy/README.md`](../deploy/README.md) |
 | Узнать, что и когда менялось | [`log.md`](./log.md) (append-only, новое в конце) |
 | Восстановить контекст диалога | [`dialogue-context.md`](./dialogue-context.md) |

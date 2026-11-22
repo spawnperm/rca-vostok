@@ -4,6 +4,9 @@ import type {
   DomainEventBus,
   DomainEventHandler,
 } from '../../domain/shared/DomainError.ts';
+import { appLogger } from '../logging/Logger.ts';
+
+const eventsLog = appLogger.child('events');
 
 /**
  * Domain event bus backed by NATS.
@@ -34,11 +37,11 @@ export class NatsDomainEventBus implements DomainEventBus {
           const event = JSON.parse(new TextDecoder().decode(msg.data)) as DomainEvent;
           this.dispatchLocally(event);
         } catch (err) {
-          console.error('[nats] malformed event payload', err);
+          eventsLog.error('Malformed NATS event payload', err);
         }
       }
     } catch (err) {
-      console.error('[nats] subscription failed', err);
+      eventsLog.error('NATS subscription failed', err);
     }
   }
 
@@ -50,8 +53,9 @@ export class NatsDomainEventBus implements DomainEventBus {
     const subject = `${this.subjectPrefix}.${event.boundedContext}.${event.eventName}`;
     try {
       this.connection.publish(subject, new TextEncoder().encode(JSON.stringify(event)));
+      eventsLog.debug('Event published to NATS', { subject, eventName: event.eventName });
     } catch (err) {
-      console.error('[nats] publish failed', err);
+      eventsLog.error('NATS publish failed', { subject, error: err });
     }
   }
 
@@ -75,7 +79,7 @@ export class NatsDomainEventBus implements DomainEventBus {
           // payload is erased here because the dispatch loop is payload-agnostic.
           handler(event as DomainEvent<Record<string, unknown>>);
         } catch (err) {
-          console.error('[events] handler failed', err);
+          eventsLog.error('Local event handler failed', { eventName: event.eventName, error: err });
         }
       }
     }
@@ -113,10 +117,10 @@ export async function createNatsBusFromEnv(): Promise<NatsDomainEventBus | null>
       reconnectTimeWait: 1000,
       timeout: 5000,
     });
-    console.info(`[events] connected to NATS at ${url}`);
+    eventsLog.info('Connected to NATS', { url });
     return new NatsDomainEventBus(connection);
   } catch (err) {
-    console.error('[events] NATS unavailable, falling back to in-memory bus', err);
+    eventsLog.error('NATS unavailable, falling back to in-memory bus', err);
     return null;
   }
 }

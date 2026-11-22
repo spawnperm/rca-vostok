@@ -57,6 +57,16 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-/media}
+      # Structured logging (DEBUG | INFO | ERROR) with file rotation.
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_TO_FILE: ${LOG_TO_FILE:-true}
+      LOG_DIR: ${LOG_DIR:-/app/logs}
+      LOG_FILE: ${LOG_FILE:-rca-vostok.log}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_MAX_SIZE_MB: ${LOG_MAX_SIZE_MB:-10}
+      LOG_MAX_FILES: ${LOG_MAX_FILES:-5}
+    volumes:
+      - rca-app-logs:/app/logs
     expose:
       - "3000"
     healthcheck:
@@ -213,3 +223,4 @@ volumes:
   rca-garage-meta:
   rca-garage-data:
   rca-forgejo-data:
+  rca-app-logs:

@@ -40,7 +40,13 @@ pnpm test         # доменные и прикладные тесты
 pnpm run verify   # lint + test + build одной командой
 ```
 
-## База знаний проекта (LLM Wiki)
+## Логирование
 
-Полный контекст диалога, синтез исходных материалов (`rca-vostok.ru` и корпус `00–04.txt`), формулы модели, архитектурные решения и хронологический журнал изменений сохранены в директории [`/wiki/`](./wiki/index.md) (точка входа — [`wiki/index.md`](./wiki/index.md), регламент — [`wiki/SCHEMA.md`](./wiki/SCHEMA.md)).
+Серверная часть (`src/infrastructure/logging/Logger.ts` + `src/infrastructure/http/RequestLogger.ts`) ведёт структурированное логирование с уровнями `DEBUG`, `INFO`, `ERROR`, маскированием секретов и сохранением в файл с ротацией (`LOG_LEVEL`, `LOG_TO_FILE`, `LOG_DIR`, `LOG_FILE`, `LOG_FORMAT`, `LOG_MAX_SIZE_MB`, `LOG_MAX_FILES` в `.env`). По умолчанию записи сохраняются в `./logs/rca-vostok.log`.
+
+## Документация и база знаний проекта
+
+- **Полное руководство по установке и настройке** (шаги установки, зависимости, примеры `.env` для разных режимов, настройка логирования, Docker Compose, S3 Garage, бэкапы и устранение неполадок): [`docs/INSTALLATION_AND_CONFIGURATION.md`](./docs/INSTALLATION_AND_CONFIGURATION.md).
+- **Эксплуатация продакшен-стека**: [`deploy/README.md`](./deploy/README.md).
+- **База знаний проекта (LLM Wiki)**: полный контекст диалога, синтез исходных материалов (`rca-vostok.ru` и корпус `00–05.txt`), формулы модели, архитектурные решения и хронологический журнал изменений сохранены в директории [`/wiki/`](./wiki/index.md) (точка входа — [`wiki/index.md`](./wiki/index.md), регламент — [`wiki/SCHEMA.md`](./wiki/SCHEMA.md)).
 

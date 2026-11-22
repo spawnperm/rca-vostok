@@ -1,6 +1,9 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import type { Mailer, MailMessage } from '../../domain/identity/PasswordReset.ts';
+import { appLogger } from '../logging/Logger.ts';
+
+const mailLog = appLogger.child('mail');
 
 /**
  * Mail transports.
@@ -44,9 +47,10 @@ export class SmtpMailer implements Mailer {
         text: message.text,
         html: message.html,
       });
+      mailLog.info('SMTP message delivered', { subject: message.subject });
       return true;
     } catch (err) {
-      console.error('[mail] delivery failed', err instanceof Error ? err.message : err);
+      mailLog.error('SMTP delivery failed', err);
       return false;
     }
   }
@@ -63,18 +67,16 @@ export class LoggingMailer implements Mailer {
   readonly delivers = false;
 
   async send(message: MailMessage): Promise<boolean> {
-    console.info(
-      JSON.stringify({
-        level: 'info',
-        kind: 'mail-not-sent',
-        reason: 'no SMTP transport configured',
-        to: message.to,
-        subject: message.subject,
-        // The body contains the reset link, so it is logged only here, never
-        // returned by the API.
-        text: message.text,
-      })
-    );
+    mailLog.info('Mail not sent (no SMTP transport configured)', {
+      kind: 'mail-not-sent',
+      to: message.to,
+      subject: message.subject,
+    });
+    mailLog.debug('Fallback mail body (local testing only)', {
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+    });
     return false;
   }
 }

@@ -1,4 +1,7 @@
 import type express from 'express';
+import { appLogger } from '../logging/Logger.ts';
+
+const rateLimitLog = appLogger.child('rate-limit');
 
 /**
  * In-memory, fixed-window rate limiter.
@@ -62,7 +65,7 @@ export class RateLimiter {
     const rule = this.rules.find((r) => r.name === name);
     if (!rule) {
       // An unknown rule must not fail open silently; refuse and log loudly.
-      console.error(`[rate-limit] unknown rule "${name}"`);
+      rateLimitLog.error('Unknown rate-limit rule', { ruleName: name });
       return { allowed: false, retryAfterSec: 60, remaining: 0 };
     }
 

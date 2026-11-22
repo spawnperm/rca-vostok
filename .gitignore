@@ -7,6 +7,7 @@ coverage/
 .env*
 !.env.example
 /data/
+/logs/
 
 # pnpm's local state
 .pnpm-store/

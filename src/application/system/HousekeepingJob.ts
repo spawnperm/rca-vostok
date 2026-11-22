@@ -1,5 +1,6 @@
 import type { SessionRepository } from '../../domain/identity/IdentityRepositories.ts';
 import type { PasswordResetRepository } from '../../domain/identity/PasswordReset.ts';
+import { appLogger, type Logger } from '../../infrastructure/logging/Logger.ts';
 
 /**
  * Periodic housekeeping.
@@ -25,6 +26,7 @@ export interface HousekeepingDeps {
   intervalMs?: number;
   /** Auto-start on construction. Tests pass false and call runOnce(). */
   autoStart?: boolean;
+  logger?: Logger;
 }
 
 export interface HousekeepingResult {
@@ -39,6 +41,7 @@ export class HousekeepingJob {
   private readonly sessions: SessionRepository | undefined;
   private readonly resetTokens: PasswordResetRepository | undefined;
   private readonly intervalMs: number;
+  private readonly logger: Logger;
   private timer: NodeJS.Timeout | null = null;
   private running = false;
 
@@ -46,6 +49,7 @@ export class HousekeepingJob {
     this.sessions = deps.sessions;
     this.resetTokens = deps.resetTokens;
     this.intervalMs = deps.intervalMs ?? 60 * 60 * 1000;
+    this.logger = deps.logger ?? appLogger.child('housekeeping');
 
     if (deps.autoStart !== false) {
       this.start();
@@ -86,7 +90,7 @@ export class HousekeepingJob {
         expiredSessions = await this.sessions.purgeExpired(now.toISOString());
       }
     } catch (err) {
-      console.error('[housekeeping] session purge failed', err);
+      this.logger.error('Session purge failed', err);
     }
 
     try {
@@ -94,20 +98,21 @@ export class HousekeepingJob {
         await this.purgeResetTokens(now);
       }
     } catch (err) {
-      console.error('[housekeeping] reset-token purge failed', err);
+      this.logger.error('Reset-token purge failed', err);
     } finally {
       this.running = false;
     }
 
     if (expiredSessions > 0) {
-      console.info(
-        JSON.stringify({
-          level: 'info',
-          event: 'housekeeping.completed',
-          expiredSessions,
-          at: now.toISOString(),
-        })
-      );
+      this.logger.info('Housekeeping completed', {
+        event: 'housekeeping.completed',
+        expiredSessions,
+        at: now.toISOString(),
+      });
+    } else {
+      this.logger.debug('Housekeeping run finished with no expired sessions', {
+        at: now.toISOString(),
+      });
     }
 
     return { expiredSessions, ranAt: now.toISOString() };

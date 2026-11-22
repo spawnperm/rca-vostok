@@ -2,6 +2,7 @@ import express from 'express';
 import { DomainError, NotFoundError, ValidationError } from '../../domain/shared/DomainError.ts';
 import { PERMISSIONS } from '../../domain/identity/Rbac.ts';
 import { requireAuth, requirePermission } from './AuthMiddleware.ts';
+import { appLogger } from '../logging/Logger.ts';
 import type {
   AddCommentUseCase,
   CreatePostUseCase,
@@ -38,6 +39,8 @@ export interface SocialRouterDeps {
   updateInquiryStatus: UpdateInquiryStatusUseCase;
 }
 
+const httpLog = appLogger.child('http');
+
 export function sendDomainError(err: unknown, res: express.Response): void {
   if (err instanceof ValidationError) {
     res.status(400).json({ error: err.message, code: err.code });
@@ -52,7 +55,7 @@ export function sendDomainError(err: unknown, res: express.Response): void {
     res.status(status).json({ error: err.message, code: err.code });
     return;
   }
-  console.error('[http] unexpected error', err);
+  httpLog.error('Unexpected domain router error', err);
   res.status(500).json({ error: 'Внутренняя ошибка сервера.' });
 }
 
