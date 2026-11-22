@@ -2172,6 +2172,499 @@ export const ATTESTATION_ANNOUNCEMENTS: AttestationAnnouncement[] = [
   },
 ];
 
+export interface DfoRegionalFlowProfile {
+  id: string;
+  name: string;
+  shortName: string;
+  baseFlowThousands: number;
+  activeSharePct: number;
+  pOrg: number;
+  gSize: number;
+  groupsPerSeason: number;
+  kSeason: number;
+  kTurnover: number;
+  defaultFlowGrowthPct: number;
+  registryCount: number;
+  driverNote: string;
+}
+
+export const DFO_REGIONAL_FLOW_PROFILES: DfoRegionalFlowProfile[] = [
+  {
+    id: 'primorye',
+    name: 'Приморский край',
+    shortName: 'Приморье',
+    baseFlowThousands: 4068.9,
+    activeSharePct: 20.5,
+    pOrg: 30,
+    gSize: 10,
+    groupsPerSeason: 15,
+    kSeason: 1.3,
+    kTurnover: 1.1,
+    defaultFlowGrowthPct: 7.5,
+    registryCount: 122,
+    driverNote: 'Курорт «Приморье» (бухта Алеут, 2027) и Хасанский кластер (2028)',
+  },
+  {
+    id: 'kamchatka',
+    name: 'Камчатский край',
+    shortName: 'Камчатка',
+    baseFlowThousands: 425,
+    activeSharePct: 22,
+    pOrg: 58,
+    gSize: 7,
+    groupsPerSeason: 14,
+    kSeason: 1.45,
+    kTurnover: 1.15,
+    defaultFlowGrowthPct: 10.0,
+    registryCount: 343,
+    driverNote: 'Высокая доля организованных экспедиций (до 88% летом) и малые группы',
+  },
+  {
+    id: 'khabarovsk',
+    name: 'Хабаровский край',
+    shortName: 'Хабаровский кр.',
+    baseFlowThousands: 910,
+    activeSharePct: 18,
+    pOrg: 28,
+    gSize: 9,
+    groupsPerSeason: 14,
+    kSeason: 1.35,
+    kTurnover: 1.1,
+    defaultFlowGrowthPct: 12.0,
+    registryCount: 33,
+    driverNote: 'Отложенный спрос и межрегиональная аттестация через РЦА Приморья',
+  },
+  {
+    id: 'sakhalin',
+    name: 'Сахалинская область (и Курилы)',
+    shortName: 'Сахалин',
+    baseFlowThousands: 298,
+    activeSharePct: 24,
+    pOrg: 32,
+    gSize: 8,
+    groupsPerSeason: 14,
+    kSeason: 1.4,
+    kTurnover: 1.12,
+    defaultFlowGrowthPct: 11.5,
+    registryCount: 48,
+    driverNote: 'Горно-прибрежные маршруты, Курилы и морской каякинг',
+  },
+  {
+    id: 'yakutia',
+    name: 'Республика Саха (Якутия)',
+    shortName: 'Якутия',
+    baseFlowThousands: 173,
+    activeSharePct: 18,
+    pOrg: 30,
+    gSize: 7,
+    groupsPerSeason: 12,
+    kSeason: 1.45,
+    kTurnover: 1.12,
+    defaultFlowGrowthPct: 11.5,
+    registryCount: 18,
+    driverNote: 'Ленские столбы, таёжные сплавы и длительная автономия',
+  },
+  {
+    id: 'amur',
+    name: 'Амурская область',
+    shortName: 'Амурская обл.',
+    baseFlowThousands: 288,
+    activeSharePct: 15,
+    pOrg: 25,
+    gSize: 10,
+    groupsPerSeason: 14,
+    kSeason: 1.3,
+    kTurnover: 1.1,
+    defaultFlowGrowthPct: 11.5,
+    registryCount: 12,
+    driverNote: 'Трансграничные маршруты, реки Амур и Зея, автотуризм',
+  },
+  {
+    id: 'magadan-chukotka',
+    name: 'Магаданская область и Чукотка',
+    shortName: 'Магадан / Чукотка',
+    baseFlowThousands: 32,
+    activeSharePct: 22,
+    pOrg: 35,
+    gSize: 6,
+    groupsPerSeason: 10,
+    kSeason: 1.5,
+    kTurnover: 1.15,
+    defaultFlowGrowthPct: 11.5,
+    registryCount: 6,
+    driverNote: 'Арктические экспедиции 4–6 чел. с высокой ценой ошибки',
+  },
+];
+
+export interface DfoCertifiedYearPoint {
+  year: string;
+  certifiedCount: number;
+  annualAdditions: number;
+  phase: 'факт' | 'прогноз';
+  note: string;
+}
+
+export const DFO_CERTIFIED_DYNAMICS_BY_REGION: Record<string, DfoCertifiedYearPoint[]> = {
+  primorye: [
+    {
+      year: '2024',
+      certifiedCount: 66,
+      annualAdditions: 24,
+      phase: 'факт',
+      note: 'Стартовый реестр на июль 2024 г. (данные Минтуризма ПК до запуска потоков ВВГУ)',
+    },
+    {
+      year: '2025',
+      certifiedCount: 122,
+      annualAdditions: 56,
+      phase: 'факт',
+      note: 'Февральский срез Единого реестра (рост в 1,85× после запуска РЦА «Русский Восток»)',
+    },
+    {
+      year: '2026',
+      certifiedCount: 186,
+      annualAdditions: 64,
+      phase: 'факт',
+      note: 'Включая +15 гидов на окт. сессии РЦА 2026 и доборы IV кв. по ПП № 1893',
+    },
+    {
+      year: '2027',
+      certifiedCount: 540,
+      annualAdditions: 354,
+      phase: 'прогноз',
+      note: 'Масштабирование Контура А и запуск курорта «Приморье» в бухте Алеут',
+    },
+    {
+      year: '2028',
+      certifiedCount: 1120,
+      annualAdditions: 580,
+      phase: 'прогноз',
+      note: 'Ввод новых объектов Хасанского округа и целевые субсидии ДПО (до 70%)',
+    },
+    {
+      year: '2029',
+      certifiedCount: 1860,
+      annualAdditions: 740,
+      phase: 'прогноз',
+      note: 'Синхронизация договорных потоков ВВГУ с ООПТ и крупными туроператорами',
+    },
+    {
+      year: '2030',
+      certifiedCount: 2680,
+      annualAdditions: 820,
+      phase: 'прогноз',
+      note: 'Выход на плановое воспроизводство и первый 5-летний цикл переаттестации',
+    },
+  ],
+  kamchatka: [
+    {
+      year: '2024',
+      certifiedCount: 215,
+      annualAdditions: 72,
+      phase: 'факт',
+      note: 'Ранняя волна регистрации гидов вулканических и горных маршрутов',
+    },
+    {
+      year: '2025',
+      certifiedCount: 343,
+      annualAdditions: 128,
+      phase: 'факт',
+      note: 'Лидер ДФО по числу записей в реестре (343 чел.); высокий процент организованных групп',
+    },
+    {
+      year: '2026',
+      certifiedCount: 410,
+      annualAdditions: 67,
+      phase: 'факт',
+      note: 'Подтверждение аттестации (>80 чел. по новым правилам + выездная сдача в РЦА Приморья)',
+    },
+    {
+      year: '2027',
+      certifiedCount: 620,
+      annualAdditions: 210,
+      phase: 'прогноз',
+      note: 'Расширение межрегиональных экзаменационных комиссий с участием ФСТР',
+    },
+    {
+      year: '2028',
+      certifiedCount: 860,
+      annualAdditions: 240,
+      phase: 'прогноз',
+      note: 'Покрытие сезонного экспедиционного дефицита и обновление старых удостоверений',
+    },
+    {
+      year: '2029',
+      certifiedCount: 1110,
+      annualAdditions: 250,
+      phase: 'прогноз',
+      note: 'Стабилизация кадрового резерва под малые группы (4–7 чел.) и ООПТ Камчатки',
+    },
+    {
+      year: '2030',
+      certifiedCount: 1320,
+      annualAdditions: 210,
+      phase: 'прогноз',
+      note: 'Плановая переаттестация когорты 2025 г. и достижение >89% покрытия базового спроса',
+    },
+  ],
+  khabarovsk: [
+    {
+      year: '2024',
+      certifiedCount: 14,
+      annualAdditions: 6,
+      phase: 'факт',
+      note: 'Единичные записи спортивных инструкторов ФСТР на старте реформы',
+    },
+    {
+      year: '2025',
+      certifiedCount: 33,
+      annualAdditions: 19,
+      phase: 'факт',
+      note: 'Базовый срез реестра (33 чел.) при остром дефиците на водных и таёжных маршрутах',
+    },
+    {
+      year: '2026',
+      certifiedCount: 78,
+      annualAdditions: 45,
+      phase: 'факт',
+      note: 'Включая +9 гидов, успешно аттестованных в окт. 2026 г. на площадке ВВГУ и РЦА',
+    },
+    {
+      year: '2027',
+      certifiedCount: 240,
+      annualAdditions: 162,
+      phase: 'прогноз',
+      note: 'Ускоренное закрытие отложенного спроса через межрегиональные выездные сессии',
+    },
+    {
+      year: '2028',
+      certifiedCount: 420,
+      annualAdditions: 180,
+      phase: 'прогноз',
+      note: 'Развитие Шантарского направления, сплавов и таёжных экспедиций',
+    },
+    {
+      year: '2029',
+      certifiedCount: 630,
+      annualAdditions: 210,
+      phase: 'прогноз',
+      note: 'Сетевые потоки ДПО и интеграция с межрегиональным центром компетенций ДФО',
+    },
+    {
+      year: '2030',
+      certifiedCount: 820,
+      annualAdditions: 190,
+      phase: 'прогноз',
+      note: 'Сокращение дефицита на 85%+ в сегменте водного и пешеходного туризма',
+    },
+  ],
+  sakhalin: [
+    {
+      year: '2024',
+      certifiedCount: 24,
+      annualAdditions: 9,
+      phase: 'факт',
+      note: 'Начальный реестр гидов морского каякинга и горных треков Сахалина',
+    },
+    {
+      year: '2025',
+      certifiedCount: 48,
+      annualAdditions: 24,
+      phase: 'факт',
+      note: 'Удвоение числа аттестованных проводников (48 чел. в Едином реестре)',
+    },
+    {
+      year: '2026',
+      certifiedCount: 94,
+      annualAdditions: 46,
+      phase: 'факт',
+      note: 'Легализация проводников Курильских островов и мультипрофильных туров',
+    },
+    {
+      year: '2027',
+      certifiedCount: 195,
+      annualAdditions: 101,
+      phase: 'прогноз',
+      note: 'Рост спроса со стороны морских и экспедиционных операторов Сахалина и Курил',
+    },
+    {
+      year: '2028',
+      certifiedCount: 310,
+      annualAdditions: 115,
+      phase: 'прогноз',
+      note: 'Подготовка гидов смешанного водно-горного профиля с допусками WFA',
+    },
+    {
+      year: '2029',
+      certifiedCount: 420,
+      annualAdditions: 110,
+      phase: 'прогноз',
+      note: 'Сближение реестра с расчётным уровнем сезонной нагрузки Курильского кластера',
+    },
+    {
+      year: '2030',
+      certifiedCount: 510,
+      annualAdditions: 90,
+      phase: 'прогноз',
+      note: 'Устойчивое воспроизводство кадров и обновление допусков 2025 года',
+    },
+  ],
+  yakutia: [
+    {
+      year: '2024',
+      certifiedCount: 8,
+      annualAdditions: 4,
+      phase: 'факт',
+      note: 'Первичная аттестация проводников на маршрутах Ленских столбов и северных сплавов',
+    },
+    {
+      year: '2025',
+      certifiedCount: 18,
+      annualAdditions: 10,
+      phase: 'факт',
+      note: 'Реестровый срез 2025 г. (18 аттестованных специалистов при высокой автономности туров)',
+    },
+    {
+      year: '2026',
+      certifiedCount: 44,
+      annualAdditions: 26,
+      phase: 'факт',
+      note: 'Переход ООПТ и этнотуристических операторов на обязательный реестр с окт. 2026 г.',
+    },
+    {
+      year: '2027',
+      certifiedCount: 105,
+      annualAdditions: 61,
+      phase: 'прогноз',
+      note: 'Обучение гидов с усиленными модулями спутниковой связи и зимней безопасности',
+    },
+    {
+      year: '2028',
+      certifiedCount: 165,
+      annualAdditions: 60,
+      phase: 'прогноз',
+      note: 'Рост экспедиционных туров на северных реках и в арктических районах',
+    },
+    {
+      year: '2029',
+      certifiedCount: 225,
+      annualAdditions: 60,
+      phase: 'прогноз',
+      note: 'Формирование локального пула наставников-проводников',
+    },
+    {
+      year: '2030',
+      certifiedCount: 275,
+      annualAdditions: 50,
+      phase: 'прогноз',
+      note: 'Балансировка спроса по особо охраняемым природным территориям республики',
+    },
+  ],
+  amur: [
+    {
+      year: '2024',
+      certifiedCount: 5,
+      annualAdditions: 2,
+      phase: 'факт',
+      note: 'Стартовый этап формирования реестра в Амурской области',
+    },
+    {
+      year: '2025',
+      certifiedCount: 12,
+      annualAdditions: 7,
+      phase: 'факт',
+      note: 'Базовый срез (12 чел.) по пешеходным, речным и автомаршрутам',
+    },
+    {
+      year: '2026',
+      certifiedCount: 32,
+      annualAdditions: 20,
+      phase: 'факт',
+      note: 'Активизация аттестации на фоне запуска трансграничных и речных программ',
+    },
+    {
+      year: '2027',
+      certifiedCount: 78,
+      annualAdditions: 46,
+      phase: 'прогноз',
+      note: 'Включение гидов-проводников автотуризма (новый проектируемый профиль ВВГУ)',
+    },
+    {
+      year: '2028',
+      certifiedCount: 118,
+      annualAdditions: 40,
+      phase: 'прогноз',
+      note: 'Рост водных маршрутов по рекам Амур и Зея и промышленно-природных туров',
+    },
+    {
+      year: '2029',
+      certifiedCount: 155,
+      annualAdditions: 37,
+      phase: 'прогноз',
+      note: 'Закрытие базовой потребности организованных групп региона',
+    },
+    {
+      year: '2030',
+      certifiedCount: 185,
+      annualAdditions: 30,
+      phase: 'прогноз',
+      note: 'Переход к плановой переаттестации и поддержанию реестрового резерва',
+    },
+  ],
+  'magadan-chukotka': [
+    {
+      year: '2024',
+      certifiedCount: 2,
+      annualAdditions: 1,
+      phase: 'факт',
+      note: 'Единичные аттестованные руководители автономных экспедиций на Северо-Востоке',
+    },
+    {
+      year: '2025',
+      certifiedCount: 6,
+      annualAdditions: 4,
+      phase: 'факт',
+      note: 'Базовый срез 2025 г. (6 специалистов при критической сложности маршрутов)',
+    },
+    {
+      year: '2026',
+      certifiedCount: 18,
+      annualAdditions: 12,
+      phase: 'факт',
+      note: 'Легализация штатных экспедиционных гидов под требования ПП № 1893',
+    },
+    {
+      year: '2027',
+      certifiedCount: 42,
+      annualAdditions: 24,
+      phase: 'прогноз',
+      note: 'Подготовка мультипрофильных специалистов по ПСР и длительной автономии',
+    },
+    {
+      year: '2028',
+      certifiedCount: 62,
+      annualAdditions: 20,
+      phase: 'прогноз',
+      note: 'Выполнение нормативов малых арктических групп (4–6 чел.)',
+    },
+    {
+      year: '2029',
+      certifiedCount: 82,
+      annualAdditions: 20,
+      phase: 'прогноз',
+      note: 'Выход на целевое кадровое обеспечение арктических маршрутов',
+    },
+    {
+      year: '2030',
+      certifiedCount: 100,
+      annualAdditions: 18,
+      phase: 'прогноз',
+      note: 'Полное покрытие потребности регулярных экспедиционных туров кластера',
+    },
+  ],
+};
+
+
 
 
 

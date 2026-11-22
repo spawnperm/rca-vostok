@@ -105,6 +105,65 @@ test('DemandForecastService: calculates Primorye base scenario (~2390 guides) an
   );
 });
 
+test('DemandForecastService: forecastDfoRegions2030 models 2025-2030 regional demand from tourist flow', () => {
+  const forecast = DemandForecastService.forecastDfoRegions2030({
+    profiles: [
+      {
+        id: 'primorye',
+        name: 'Приморский край',
+        shortName: 'Приморье',
+        baseFlowThousands: 4068.9,
+        activeSharePct: 20.5,
+        pOrg: 30,
+        gSize: 10,
+        groupsPerSeason: 15,
+        kSeason: 1.3,
+        kTurnover: 1.1,
+        defaultFlowGrowthPct: 7.5,
+        registryCount: 122,
+        driverNote: 'Тест',
+      },
+      {
+        id: 'kamchatka',
+        name: 'Камчатский край',
+        shortName: 'Камчатка',
+        baseFlowThousands: 425,
+        activeSharePct: 22,
+        pOrg: 58,
+        gSize: 7,
+        groupsPerSeason: 14,
+        kSeason: 1.45,
+        kTurnover: 1.15,
+        defaultFlowGrowthPct: 10,
+        registryCount: 343,
+        driverNote: 'Тест',
+      },
+    ],
+    selectedRegionId: 'all',
+    flowMultiplierPct: 100,
+    annualFlowGrowthOverridePct: null,
+    pOrgShiftBy2030Pct: 0,
+  });
+
+  assert.equal(forecast.yearlySeries.length, 6);
+  assert.equal(forecast.yearlySeries[0].year, '2025');
+  assert.equal(forecast.yearlySeries[5].year, '2030');
+  assert.ok(forecast.totals.demand2030 > forecast.totals.demand2025);
+  assert.equal(forecast.totals.registryCount, 465);
+
+  assert.throws(
+    () =>
+      DemandForecastService.forecastDfoRegions2030({
+        profiles: [],
+        selectedRegionId: 'all',
+        flowMultiplierPct: 0,
+        annualFlowGrowthOverridePct: null,
+        pOrgShiftBy2030Pct: 0,
+      }),
+    InvariantViolationError
+  );
+});
+
 test('Application UseCases + Persistence + DomainEventBus work end-to-end in isolated temp directory', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-vostok-ddd-'));
   try {

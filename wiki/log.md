@@ -72,3 +72,23 @@
 - В `src/components/AnalyticsSection.tsx` добавлен переключаемый фильтр субъектов ДФО (`Все регионы`, Приморский край, Камчатский край, Хабаровский край, Сахалин, Якутия, Амурская область, Магадан / Чукотка) с мгновенной сводкой реестра, спроса и кадрового разрыва.
 - `src/components/DfoDemandForecastChart.tsx` и `src/components/DfoRegionsDistributionMap.tsx` синхронизированы через общее состояние фильтра: выбор субъекта в фильтре или клик по карте выделяют регион, пересчитывают KPI и изолируют его прогнозную кривую до 2030 года на графике Recharts.
 
+## [2026-11-22] feature | Межрегиональное сравнение показателей аттестации в разделе «Рынок ДФО»
+- Создан компонент `src/components/DfoRegionComparisonChart.tsx` с выбором двух любых субъектов ДФО (Регион А и Регион Б), кнопкой обмена местами, пресетами пар (`Приморье vs Камчатка`, `Приморье vs Хабаровск`, `Камчатка vs Сахалин`), сравнительными KPI-карточками и двумя графиками Recharts (`BarChart` структуры аттестации в чел. / долях `%` и `LineChart` динамики спроса на 2025–2030 гг.).
+- Компонент встроен в `src/components/MarketSection.tsx` и синхронизирован с документацией в [`system-architecture.md`](./system-architecture.md).
+
+## [2026-11-22] ingest | Изучение и включение в LLM Wiki аудита цифровой экосистемы (05_76353747.txt)
+- Изучен новый первоисточник [`/public/assets/aistudio/05_76353747.txt`](../public/assets/aistudio/05_76353747.txt) (анализ `region.visit-primorye.ru`, `attestation.tssr.ru/primorie`, `vvsu.ru`, `vk.com/rcaprm`, `@tourprimorsky` и недоступного `tour.primorsky.ru`, разрывы пользовательского сценария, UI/UX и SEO-аудит).
+- Создана тематическая страница [`digital-ecosystem-and-ux-seo.md`](./digital-ecosystem-and-ux-seo.md); обновлены [`SCHEMA.md`](./SCHEMA.md), [`index.md`](./index.md), [`sources-synthesis.md`](./sources-synthesis.md) и [`dialogue-context.md`](./dialogue-context.md).
+
+## [2026-11-22] feature | Интерактивная SVG-карта ДФО для заполнения формы сравнения регионов
+- Создан компонент `src/components/DfoComparisonSvgMap.tsx` с интерактивными полигонами и пузырями данных 7 субъектов ДФО, переключателем слоёв (`Реестр`, `Спрос`, `РЦА окт.`), маркерами `А`/`Б`, линией сопоставления и поддержкой клавиатурной навигации.
+- Карта интегрирована в `src/components/DfoRegionComparisonChart.tsx` рядом с формой выбора регионов: клик по субъекту на карте автоматически подставляет регион в активный слот (`А` или `Б`), переключает следующий слот (`А → Б`) и мгновенно пересчитывает KPI и графики Recharts.
+
+## [2026-11-22] feature | Модуль прогнозирования потребности по регионам ДФО до 2030 г. в «Калькуляторе»
+- В `src/data/researchData.ts` добавлены профили турпотока 7 субъектов ДФО (`DFO_REGIONAL_FLOW_PROFILES`), в `src/domain/certification/DemandForecastService.ts` реализован доменный метод `forecastDfoRegions2030` (проверен модульным тестом в `tests/ddd-domain.test.ts`).
+- Создан интерактивный модуль `src/components/DfoRegionalForecastModule.tsx` и встроен в `src/components/CalculatorSection.tsx`: позволяет моделировать динамику турпотока и потребности 2025–2030 гг. как по всему ДФО, так и по отдельным субъектам, переносит параметры региона в верхний калькулятор и строит графики Recharts (`AreaChart`, `ComposedChart`, `BarChart`) и региональную матрицу.
+
+## [2026-11-22] feature | Линейный график Recharts динамики аттестованных инструкторов по годам в «Рынке ДФО»
+- В `src/data/researchData.ts` добавлен набор `DFO_CERTIFIED_DYNAMICS_BY_REGION` (факт 2024–2026 гг. и прогноз 2027–2030 гг. по 7 субъектам ДФО с ежегодным приростом и контекстными заметками).
+- Создан компонент `src/components/DfoCertifiedDynamicsLineChart.tsx` на `recharts` (`LineChart` с разделительным рубежом `01.10.2026 · ПП № 1893`, фильтром периода `2024–2030` / `Факт` / `Прогноз`, наложением второго региона сравнения, 4 KPI-блоками и таблицей по годам).
+- Компонент встроен в `src/components/DfoRegionComparisonChart.tsx` и автоматически переключается на регион, выбранный кликом на интерактивной SVG-карте `DfoComparisonSvgMap.tsx` в разделе «Рынок ДФО».

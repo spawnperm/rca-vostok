@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
 import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
+import { DfoRegionalForecastModule } from './DfoRegionalForecastModule';
 
 export const CalculatorSection: React.FC = () => {
   const [activePresetId, setActivePresetId] = useState<string>(DEMAND_PRESETS[0].id);
@@ -27,6 +28,26 @@ export const CalculatorSection: React.FC = () => {
     setKSeason(preset.kSeason);
     setKTurnover(preset.kTurnover);
     setRegistryCount(preset.registryCount);
+  };
+
+  const applyRegionToMainCalculator = (profile: {
+    tAct: number;
+    pOrg: number;
+    gSize: number;
+    groupsPerSeason: number;
+    kSeason: number;
+    kTurnover: number;
+    registryCount: number;
+  }) => {
+    setActivePresetId('custom');
+    setTAct(profile.tAct);
+    setPOrg(profile.pOrg);
+    setGSize(profile.gSize);
+    setGroupsPerSeason(profile.groupsPerSeason);
+    setKSeason(profile.kSeason);
+    setKTurnover(profile.kTurnover);
+    setRegistryCount(profile.registryCount);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const results = useMemo(
@@ -541,6 +562,9 @@ export const CalculatorSection: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* Regional DFO 2030 Forecast Module with Tourist Flow */}
+      <DfoRegionalForecastModule onApplyRegionToCalculator={applyRegionToMainCalculator} />
     </div>
   );
 };

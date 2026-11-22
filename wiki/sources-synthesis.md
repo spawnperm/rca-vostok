@@ -1,6 +1,6 @@
-# Синтез первоисточников: rca-vostok.ru и корпус документов 00–04
+# Синтез первоисточников: rca-vostok.ru и корпус документов 00–05
 
-Все данные, формулы, прогнозы и тезисы приложения базируются на профиле центра [`https://rca-vostok.ru/`](https://rca-vostok.ru/) и пяти исходных аналитических документах в [`/public/assets/aistudio/`](../public/assets/aistudio/).
+Все данные, формулы, прогнозы и тезисы приложения базируются на профиле центра [`https://rca-vostok.ru/`](https://rca-vostok.ru/) и шести исходных аналитических документах в [`/public/assets/aistudio/`](../public/assets/aistudio/).
 
 ## 1. Карта исходных документов
 
@@ -11,6 +11,7 @@
 | [`02_6d62cc5e.txt`](../public/assets/aistudio/02_6d62cc5e.txt) | Структурный разбор рынка ДФО: 3 сегмента спроса, окно 2026–2028 гг., 5 «узких мест», прогноз востребованности на 1/2/3 года и 7 управленческих рекомендаций для ВВГУ и ведомств | [`MarketSection`](../src/components/MarketSection.tsx), [`PrimoryeActivityMap`](../src/components/PrimoryeActivityMap.tsx) |
 | [`03_977ea706.txt`](../public/assets/aistudio/03_977ea706.txt) | Требования ВАК (кандидатская vs докторская), паспорт специальности 5.2.3 (область 4.15), полная формулировка научной новизны (4 пункта), положений на защиту и публикационной стратегии | [`DissertationSection`](../src/components/DissertationSection.tsx) |
 | [`04_1840038b.txt`](../public/assets/aistudio/04_1840038b.txt) | Требования ВАК к презентации, полный сценарий академической защиты (18 слайдов, 18 мин) и управленческого доклада для Минтуризма (10 слайдов, 12 мин) | [`PresentationsSection`](../src/components/PresentationsSection.tsx) |
+| [`05_76353747.txt`](../public/assets/aistudio/05_76353747.txt) | Аудит цифровой экосистемы аттестации Приморья (`visit-primorye.ru`, `attestation.tssr.ru/primorie`, `vvsu.ru`, соцканалы, битый `tour.primorsky.ru`), разрывы пути пользователя, UI/UX и SEO-рекомендации «единого окна» | [`OverviewSection`](../src/components/OverviewSection.tsx), [`AnalyticsSection`](../src/components/AnalyticsSection.tsx), [`seo.ts`](../src/utils/seo.ts) |
 
 ## 2. Ключевые сквозные факты из первоисточников
 
@@ -34,3 +35,4 @@
 - Институциональная структура и персоналии: [`entities-and-institutions.md`](./entities-and-institutions.md)
 - Математическая модель и округа Приморья: [`economic-model-and-market.md`](./economic-model-and-market.md)
 - Диссертация и презентации: [`dissertation-and-presentations.md`](./dissertation-and-presentations.md)
+- Цифровая экосистема, UI/UX и SEO-аудит: [`digital-ecosystem-and-ux-seo.md`](./digital-ecosystem-and-ux-seo.md)

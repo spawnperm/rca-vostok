@@ -6,6 +6,7 @@ import {
   MARKET_SEGMENTS,
   RECOMMENDATIONS,
 } from '../data/researchData';
+import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
 import { PrimoryeActivityMap } from './PrimoryeActivityMap';
 
 export const MarketSection: React.FC = () => {
@@ -102,6 +103,9 @@ export const MarketSection: React.FC = () => {
 
       {/* Interactive Map of Primorsky Krai Guide Activity */}
       <PrimoryeActivityMap />
+
+      {/* Visual Comparison of Two Selected DFO Regions */}
+      <DfoRegionComparisonChart />
 
       {/* Regional Specifics (DFO Safety Requirements) */}
       <section className="bg-slate-900 text-white rounded-xl p-8 space-y-6">
