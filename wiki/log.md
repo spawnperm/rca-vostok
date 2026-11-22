@@ -120,3 +120,13 @@
 - JSON-полезная нагрузка читается со стандартного ввода, поэтому пароль не попадает в `argv`, историю оболочки и логи контейнера. Скрипт копируется в runtime-образ и вызывается как `docker compose exec -T app node scripts/create-admin.ts`.
 - На продакшене создан администратор `info@mirovisor.com` (Смирнов Александр, Приморский край), роль `admin`, 20 разрешений. Проверено: вход успешен, `/api/admin/users` возвращает 200, неверный пароль отклоняется с 401, cookie `HttpOnly` + `SameSite=Lax`.
 
+
+## [2026-11-22] chore | Переход на pnpm
+- Менеджер пакетов заменён на **pnpm 11.13.1**, версия зафиксирована в поле `packageManager` и запускается через Corepack. Прежний `bun.lock` удалён: он не использовался ни CI, ни образом, из-за чего объявленный и фактический резолвер расходились.
+- `pnpm-lock.yaml` закоммичен; `package-lock.json`, `yarn.lock` и `bun.lock` добавлены в `.gitignore` и `.dockerignore`, чтобы устаревший локфайл не подхватился случайно.
+- pnpm 11 по умолчанию не выполняет postinstall-скрипты зависимостей. Разрешены ровно три пакета через `pnpm-workspace.yaml` → `allowBuilds`: `esbuild` (платформенный бинарник), `@google/genai`, `protobufjs`. Ключ `onlyBuiltDependencies` в этой линейке pnpm не поддерживается и был первой неудачной попыткой.
+- `Dockerfile`: Corepack включается до установки, а манифест копируется **до** `corepack prepare --activate` — иначе команда падает с «Couldn't find a project». Обе стадии используют `pnpm install --frozen-lockfile` (runtime дополнительно `--prod`), что гарантирует сборку ровно по закоммиченному разрешению и падение при расхождении.
+- CI (`.github/workflows/ci.yml`): `pnpm/action-setup` выполняется раньше `setup-node`, чтобы кэш Node опирался на хранилище pnpm; установка с `--frozen-lockfile`.
+- Скрипты `verify` переведены на pnpm; документация (README, [`system-architecture.md`](./system-architecture.md) §4, [`ddd-and-11-contours.md`](./ddd-and-11-contours.md)) обновлена, добавлено описание allowlist для build-скриптов.
+- Проверено: чистая установка, `lint`, 50/50 тестов, `vite build`, полная сборка Docker-образа с запуском контейнера (healthy, адаптер `postgresql`), зелёный CI-прогон на GitHub Actions и деплой на прод с сохранением администратора `info@mirovisor.com`.
+
