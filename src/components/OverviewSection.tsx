@@ -8,9 +8,11 @@ import {
   ChevronRight,
   Compass,
   ExternalLink,
+  MessageSquare,
   Quote,
   Send,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 import {
   ATTESTATION_FAQ,
@@ -186,6 +188,102 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   const [formSuccess, setFormSuccess] = useState<{ id: string; createdAt: string } | null>(null);
   const [totalSubscriptions, setTotalSubscriptions] = useState<number | null>(null);
 
+  // Curator consultation modal state
+  const [curatorModalOpen, setCuratorModalOpen] = useState<boolean>(false);
+  const [curatorName, setCuratorName] = useState<string>('');
+  const [curatorEmail, setCuratorEmail] = useState<string>('');
+  const [curatorContact, setCuratorContact] = useState<string>('');
+  const [curatorRegion, setCuratorRegion] = useState<string>('Приморский край');
+  const [curatorTopic, setCuratorTopic] = useState<string>('Допуск и перечень документов');
+  const [curatorQuestion, setCuratorQuestion] = useState<string>('');
+  const [curatorConsent, setCuratorConsent] = useState<boolean>(false);
+  const [curatorSubmitting, setCuratorSubmitting] = useState<boolean>(false);
+  const [curatorError, setCuratorError] = useState<string | null>(null);
+  const [curatorSuccess, setCuratorSuccess] = useState<{ id: string; topic: string } | null>(null);
+
+  useEffect(() => {
+    if (!curatorModalOpen) return;
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        setCuratorModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [curatorModalOpen]);
+
+  const openCuratorModal = (sourceLabel: string) => {
+    setCuratorError(null);
+    setCuratorModalOpen(true);
+    tracker.trackCustomInteraction('Открыто окно связи с куратором', sourceLabel);
+  };
+
+  const handleCuratorSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setCuratorError(null);
+
+    if (curatorName.trim().length < 2) {
+      setCuratorError('Укажите ваше имя или ФИО (не менее 2 символов).');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(curatorEmail.trim())) {
+      setCuratorError('Укажите корректный адрес электронной почты для ответа куратора.');
+      return;
+    }
+    if (curatorQuestion.trim().length < 5) {
+      setCuratorError('Опишите ваш вопрос по аттестации (минимум 5 символов).');
+      return;
+    }
+    if (!curatorConsent) {
+      setCuratorError('Подтвердите согласие на обработку обращения куратором РЦА.');
+      return;
+    }
+
+    setCuratorSubmitting(true);
+    try {
+      const res = await fetch('/api/inquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: curatorName.trim(),
+          email: curatorEmail.trim(),
+          contactChannel: curatorContact.trim(),
+          region: curatorRegion,
+          track: `Консультация куратора: ${curatorTopic}`,
+          experienceNote: curatorQuestion.trim(),
+          consentAccepted: curatorConsent,
+        }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        id?: string;
+        totalSubscriptions?: number;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Не удалось отправить запрос на консультацию.');
+      }
+
+      setCuratorSuccess({
+        id: data.id || 'registered',
+        topic: curatorTopic,
+      });
+      if (typeof data.totalSubscriptions === 'number') {
+        setTotalSubscriptions(data.totalSubscriptions);
+      }
+      tracker.trackCustomInteraction(`Консультация куратора: ${curatorTopic}`, curatorRegion);
+      setCuratorName('');
+      setCuratorEmail('');
+      setCuratorContact('');
+      setCuratorQuestion('');
+      setCuratorConsent(false);
+    } catch (err) {
+      setCuratorError(err instanceof Error ? err.message : 'Ошибка отправки запроса.');
+    } finally {
+      setCuratorSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     fetch('/api/inquiries/stats')
       .then((r) => (r.ok ? r.json() : null))
@@ -323,6 +421,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               >
                 Открыть презентации
               </button>
+              <button
+                type="button"
+                onClick={() => openCuratorModal('Hero')}
+                className="px-4 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+              >
+                <MessageSquare className="w-4 h-4 text-teal-300" aria-hidden="true" />
+                <span>Связаться с куратором</span>
+              </button>
             </div>
 
             <a
@@ -421,6 +527,18 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               </dd>
             </div>
           </dl>
+
+          <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-3">
+            <span className="text-xs text-slate-500">Вопросы по аттестации и зачёту стажа</span>
+            <button
+              type="button"
+              onClick={() => openCuratorModal('Архитектура РЦА')}
+              className="px-3.5 py-2 text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            >
+              <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Связаться с куратором</span>
+            </button>
+          </div>
         </div>
 
         <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-8 space-y-6">
@@ -1532,6 +1650,224 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           )}
         </div>
       </section>
+
+      {/* Curator Consultation Modal */}
+      {curatorModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setCuratorModalOpen(false);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="curator-modal-title"
+            className="w-full max-w-xl bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+          >
+            <div className="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4 bg-slate-50">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-teal-700">
+                  Индивидуальная консультация · РЦА «Русский Восток»
+                </p>
+                <h2 id="curator-modal-title" className="text-lg font-bold text-slate-900">
+                  Запрос куратору по вопросам аттестации
+                </h2>
+                <p className="text-xs text-slate-600">
+                  Куратор направления: Григорий Саранча (руководитель центра, ВВГУ)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCuratorModalOpen(false)}
+                aria-label="Закрыть окно консультации"
+                className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 rounded-lg transition-colors shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              {curatorSuccess ? (
+                <div className="py-6 space-y-4">
+                  <div className="inline-flex items-center gap-2 text-teal-700 font-semibold text-sm">
+                    <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
+                    <span>Запрос на консультацию отправлен</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900">
+                    Обращение зарегистрировано в журнале РЦА
+                  </h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">
+                    Тема: <span className="font-medium text-slate-900">{curatorSuccess.topic}</span>.
+                    Куратор свяжется с вами по указанной электронной почте или контактному каналу.
+                    Номер обращения:{' '}
+                    <span className="font-mono text-slate-900">{curatorSuccess.id}</span>.
+                  </p>
+                  <div className="pt-2 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCuratorSuccess(null)}
+                      className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      Задать ещё вопрос
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCuratorSuccess(null);
+                        setCuratorModalOpen(false);
+                      }}
+                      className="px-4 py-2 bg-white border border-slate-300 text-slate-800 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      Закрыть окно
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleCuratorSubmit} noValidate className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="cur-name" className="block text-xs font-semibold text-slate-700">
+                        ФИО или имя <span className="text-red-700">*</span>
+                      </label>
+                      <input
+                        id="cur-name"
+                        type="text"
+                        required
+                        value={curatorName}
+                        onChange={(e) => setCuratorName(e.target.value)}
+                        placeholder="Например, Мария Соколова"
+                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-700 focus:ring-1 focus:ring-teal-700"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label htmlFor="cur-email" className="block text-xs font-semibold text-slate-700">
+                        Электронная почта <span className="text-red-700">*</span>
+                      </label>
+                      <input
+                        id="cur-email"
+                        type="email"
+                        required
+                        value={curatorEmail}
+                        onChange={(e) => setCuratorEmail(e.target.value)}
+                        placeholder="guide@example.ru"
+                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-700 focus:ring-1 focus:ring-teal-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="cur-contact" className="block text-xs font-semibold text-slate-700">
+                        Телефон или Telegram
+                      </label>
+                      <input
+                        id="cur-contact"
+                        type="text"
+                        value={curatorContact}
+                        onChange={(e) => setCuratorContact(e.target.value)}
+                        placeholder="+7 999 ... или @nick"
+                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-700 focus:ring-1 focus:ring-teal-700"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label htmlFor="cur-region" className="block text-xs font-semibold text-slate-700">
+                        Регион ДФО
+                      </label>
+                      <select
+                        id="cur-region"
+                        value={curatorRegion}
+                        onChange={(e) => setCuratorRegion(e.target.value)}
+                        className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-teal-700 focus:ring-1 focus:ring-teal-700"
+                      >
+                        <option value="Приморский край">Приморский край</option>
+                        <option value="Хабаровский край">Хабаровский край</option>
+                        <option value="Камчатский край">Камчатский край</option>
+                        <option value="Сахалинская область">Сахалинская область</option>
+                        <option value="Другой регион ДФО">Другой регион ДФО</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="cur-topic" className="block text-xs font-semibold text-slate-700">
+                      Тема консультации
+                    </label>
+                    <select
+                      id="cur-topic"
+                      value={curatorTopic}
+                      onChange={(e) => setCuratorTopic(e.target.value)}
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-teal-700 focus:ring-1 focus:ring-teal-700"
+                    >
+                      <option value="Допуск и перечень документов">Допуск и перечень документов</option>
+                      <option value="Зачёт походного стажа (Контур А)">Зачёт походного стажа (Контур А)</option>
+                      <option value="Теория и защита паспорта маршрута">Теория и защита паспорта маршрута</option>
+                      <option value="Полевые испытания в Шкотовском районе">Полевые испытания в Шкотовском районе</option>
+                      <option value="Договорное обучение и субсидии 70%">Договорное обучение и субсидии 70%</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="cur-question" className="block text-xs font-semibold text-slate-700">
+                      Суть вопроса куратору <span className="text-red-700">*</span>
+                    </label>
+                    <textarea
+                      id="cur-question"
+                      rows={3}
+                      required
+                      value={curatorQuestion}
+                      onChange={(e) => setCuratorQuestion(e.target.value)}
+                      placeholder="Опишите ваш маршрут, категорию сложности или вопрос по расписанию ближайшей аттестационной сессии"
+                      className="w-full px-3.5 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-700 focus:ring-1 focus:ring-teal-700 resize-y"
+                    />
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      id="cur-consent"
+                      type="checkbox"
+                      checked={curatorConsent}
+                      onChange={(e) => setCuratorConsent(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-teal-700 rounded cursor-pointer"
+                    />
+                    <label htmlFor="cur-consent" className="text-xs text-slate-600 leading-relaxed cursor-pointer">
+                      Согласен на обработку обращения и направление ответа куратором РЦА «Русский Восток».
+                    </label>
+                  </div>
+
+                  {curatorError && (
+                    <div role="alert" className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800">
+                      {curatorError}
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setCuratorModalOpen(false)}
+                      className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={curatorSubmitting}
+                      className="px-5 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 disabled:opacity-50 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                    >
+                      <Send className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>{curatorSubmitting ? 'Отправка…' : 'Отправить запрос куратору'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

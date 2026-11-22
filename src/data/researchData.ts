@@ -1620,6 +1620,289 @@ export const GLOSSARY_TERMS: GlossaryTerm[] = [
   },
 ];
 
+export interface DfoRegionalDemandPoint {
+  year: string;
+  primorye: number;
+  kamchatka: number;
+  khabarovsk: number;
+  sakhalinAndOther: number;
+  totalDemand: number;
+  projectedRegistry: number;
+  driverNote: string;
+}
+
+export const DFO_REGIONAL_DEMAND_FORECAST_2025_2030: {
+  base: DfoRegionalDemandPoint[];
+  conservative: DfoRegionalDemandPoint[];
+} = {
+  base: [
+    {
+      year: '2025',
+      primorye: 2390,
+      kamchatka: 920,
+      khabarovsk: 540,
+      sakhalinAndOther: 680,
+      totalDemand: 4530,
+      projectedRegistry: 580,
+      driverNote: 'Базовая фиксация (4,07 млн поездок в ПК, 122 чел. в реестре)',
+    },
+    {
+      year: '2026',
+      primorye: 2520,
+      kamchatka: 1010,
+      khabarovsk: 610,
+      sakhalinAndOther: 760,
+      totalDemand: 4900,
+      projectedRegistry: 1240,
+      driverNote: 'Вступление ПП № 1893 (01.03.2026) и дедлайн переаттестации 01.10.2026',
+    },
+    {
+      year: '2027',
+      primorye: 2740,
+      kamchatka: 1120,
+      khabarovsk: 690,
+      sakhalinAndOther: 850,
+      totalDemand: 5400,
+      projectedRegistry: 2180,
+      driverNote: 'Ввод первой очереди курорта «Приморье» (бухта Алеут) и водного трека',
+    },
+    {
+      year: '2028',
+      primorye: 2980,
+      kamchatka: 1240,
+      khabarovsk: 780,
+      sakhalinAndOther: 950,
+      totalDemand: 5950,
+      projectedRegistry: 3320,
+      driverNote: 'Запуск объектов Хасанского кластера (+500 тыс. туристов) и автотуров',
+    },
+    {
+      year: '2029',
+      primorye: 3210,
+      kamchatka: 1360,
+      khabarovsk: 870,
+      sakhalinAndOther: 1060,
+      totalDemand: 6500,
+      projectedRegistry: 4650,
+      driverNote: 'Масштабирование межрегиональных экспедиций и мультипрофилей ДФО',
+    },
+    {
+      year: '2030',
+      primorye: 3450,
+      kamchatka: 1480,
+      khabarovsk: 960,
+      sakhalinAndOther: 1180,
+      totalDemand: 7070,
+      projectedRegistry: 5890,
+      driverNote: 'Первый 5-летний цикл переаттестации и рост отрасли до >10 тыс. кадров',
+    },
+  ],
+  conservative: [
+    {
+      year: '2025',
+      primorye: 1400,
+      kamchatka: 680,
+      khabarovsk: 390,
+      sakhalinAndOther: 490,
+      totalDemand: 2960,
+      projectedRegistry: 580,
+      driverNote: 'Консервативный сценарий (P_org = 18%, высокая доля автотуризма)',
+    },
+    {
+      year: '2026',
+      primorye: 1490,
+      kamchatka: 740,
+      khabarovsk: 440,
+      sakhalinAndOther: 550,
+      totalDemand: 3220,
+      projectedRegistry: 1120,
+      driverNote: 'Постепенная легализация действующих гидов по Контуру А ВВГУ',
+    },
+    {
+      year: '2027',
+      primorye: 1620,
+      kamchatka: 810,
+      khabarovsk: 490,
+      sakhalinAndOther: 610,
+      totalDemand: 3530,
+      projectedRegistry: 1850,
+      driverNote: 'Рост глэмпинг-инфраструктуры и организованных экотроп ООПТ',
+    },
+    {
+      year: '2028',
+      primorye: 1760,
+      kamchatka: 890,
+      khabarovsk: 550,
+      sakhalinAndOther: 680,
+      totalDemand: 3880,
+      projectedRegistry: 2640,
+      driverNote: 'Ввод прибрежных рекреационных зон Хасанского округа',
+    },
+    {
+      year: '2029',
+      primorye: 1890,
+      kamchatka: 960,
+      khabarovsk: 610,
+      sakhalinAndOther: 750,
+      totalDemand: 4210,
+      projectedRegistry: 3480,
+      driverNote: 'Договорные профили туроператоров и целевые потоки ВВГУ',
+    },
+    {
+      year: '2030',
+      primorye: 2040,
+      kamchatka: 1040,
+      khabarovsk: 680,
+      sakhalinAndOther: 830,
+      totalDemand: 4590,
+      projectedRegistry: 4250,
+      driverNote: 'Плановое воспроизводство и сближение предложения с потребностью',
+    },
+  ],
+};
+
+export interface DfoRegionDistribution {
+  id: string;
+  name: string;
+  shortName: string;
+  certifiedInRegistry: number;
+  estimatedDemand: number;
+  october2026Certified: number;
+  statusLabel: string;
+  keyTracks: string;
+  note: string;
+  svgPath: string;
+  cx: number;
+  cy: number;
+  labelX: number;
+  labelY: number;
+  labelAnchor?: 'start' | 'middle' | 'end';
+}
+
+export const DFO_REGIONS_DISTRIBUTION: DfoRegionDistribution[] = [
+  {
+    id: 'primorye',
+    name: 'Приморский край',
+    shortName: 'Приморье',
+    certifiedInRegistry: 122,
+    estimatedDemand: 2390,
+    october2026Certified: 15,
+    statusLabel: 'Опорный центр РЦА «Русский Восток» (ВВГУ)',
+    keyTracks: 'Пешеходный, водный, экотропы ООПТ, автотуризм',
+    note: 'Крупнейший активный поток ДФО (≈835 тыс. туристов). При 122 записях в реестре разрыв с расчётной потребностью (2 390 чел.) превышает 18 раз.',
+    svgPath: 'M 332,330 L 368,314 L 382,340 L 366,385 L 334,405 L 306,408 L 314,368 Z',
+    cx: 345,
+    cy: 368,
+    labelX: 300,
+    labelY: 382,
+    labelAnchor: 'end',
+  },
+  {
+    id: 'kamchatka',
+    name: 'Камчатский край',
+    shortName: 'Камчатка',
+    certifiedInRegistry: 343,
+    estimatedDemand: 920,
+    october2026Certified: 2,
+    statusLabel: 'Контрольная точка · 88% организованных групп',
+    keyTracks: 'Вулканические треки, горный и экспедиционный туризм',
+    note: 'Лидер ДФО по числу записей в реестре (343 чел.), однако новую аттестацию подтвердили >80 чел., ещё 2 специалиста прошли экзамен в РЦА в окт. 2026 г.',
+    svgPath: 'M 470,115 L 520,104 L 548,136 L 526,188 L 494,248 L 474,234 L 484,182 L 458,148 Z',
+    cx: 503,
+    cy: 172,
+    labelX: 554,
+    labelY: 168,
+    labelAnchor: 'start',
+  },
+  {
+    id: 'khabarovsk',
+    name: 'Хабаровский край',
+    shortName: 'Хабаровский кр.',
+    certifiedInRegistry: 33,
+    estimatedDemand: 540,
+    october2026Certified: 9,
+    statusLabel: 'Выездная аттестация через РЦА Приморья',
+    keyTracks: 'Горные и таёжные сплавы, пешеходные маршруты',
+    note: 'Высокий отложенный спрос: 33 специалиста в реестре и 9 гидов, успешно аттестованных на площадке ВВГУ и РЦА в октябре 2026 г.',
+    svgPath: 'M 288,186 L 348,162 L 384,192 L 392,248 L 372,306 L 332,324 L 304,296 L 284,242 Z',
+    cx: 342,
+    cy: 248,
+    labelX: 278,
+    labelY: 254,
+    labelAnchor: 'end',
+  },
+  {
+    id: 'sakhalin',
+    name: 'Сахалинская область (и Курилы)',
+    shortName: 'Сахалин',
+    certifiedInRegistry: 48,
+    estimatedDemand: 320,
+    october2026Certified: 0,
+    statusLabel: 'Островной и горно-прибрежный профиль',
+    keyTracks: 'Морской каякинг, Курильские маршруты, трекинг',
+    note: 'Высокая потребность в мультипрофильных и экспедиционных гидах для маршрутов на Сахалине и Курильских островах.',
+    svgPath: 'M 412,244 L 430,248 L 434,302 L 424,352 L 408,348 L 406,294 Z',
+    cx: 420,
+    cy: 298,
+    labelX: 444,
+    labelY: 304,
+    labelAnchor: 'start',
+  },
+  {
+    id: 'yakutia',
+    name: 'Республика Саха (Якутия)',
+    shortName: 'Якутия',
+    certifiedInRegistry: 18,
+    estimatedDemand: 180,
+    october2026Certified: 0,
+    statusLabel: 'Северный экспедиционный профиль',
+    keyTracks: 'Сплавы, Ленские столбы, автономные маршруты',
+    note: 'Специфика экстремальных дистанций требует навыков Wilderness First Aid, спутниковой связи и автономного жизнеобеспечения.',
+    svgPath: 'M 72,54 L 246,42 L 318,74 L 336,154 L 278,182 L 210,192 L 138,184 L 78,136 Z',
+    cx: 204,
+    cy: 120,
+    labelX: 204,
+    labelY: 92,
+    labelAnchor: 'middle',
+  },
+  {
+    id: 'amur',
+    name: 'Амурская область',
+    shortName: 'Амурская обл.',
+    certifiedInRegistry: 12,
+    estimatedDemand: 110,
+    october2026Certified: 0,
+    statusLabel: 'Речной и трансграничный туризм',
+    keyTracks: 'Пешеходный, водный (Амур и Зея), автотуры',
+    note: 'Формирующийся сегмент организованных маршрутов с потенциалом подготовки на межрегиональной площадке ДФО.',
+    svgPath: 'M 176,196 L 274,190 L 298,256 L 266,294 L 204,284 L 164,244 Z',
+    cx: 232,
+    cy: 242,
+    labelX: 158,
+    labelY: 248,
+    labelAnchor: 'end',
+  },
+  {
+    id: 'magadan-chukotka',
+    name: 'Магаданская область и Чукотка',
+    shortName: 'Магадан / Чукотка',
+    certifiedInRegistry: 6,
+    estimatedDemand: 70,
+    october2026Certified: 0,
+    statusLabel: 'Арктический и удалённый экспедиционный сегмент',
+    keyTracks: 'Автономные экспедиции 4–6 чел., ПСР, трекинг',
+    note: 'Единичные аттестованные специалисты в реестре при критической цене ошибки и высокой стоимости эвакуации.',
+    svgPath: 'M 332,46 L 478,34 L 584,62 L 566,104 L 462,110 L 392,158 L 344,148 Z',
+    cx: 452,
+    cy: 78,
+    labelX: 452,
+    labelY: 54,
+    labelAnchor: 'middle',
+  },
+];
+
+
+
 
 
 

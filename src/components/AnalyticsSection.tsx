@@ -16,6 +16,8 @@ import {
   type SiteTabId,
 } from '../utils/seo';
 import { tracker, type ClientBehaviorEvent } from '../utils/tracker';
+import { DfoDemandForecastChart } from './DfoDemandForecastChart';
+import { DfoRegionsDistributionMap } from './DfoRegionsDistributionMap';
 
 interface SessionRecord {
   sessionId: string;
@@ -536,6 +538,12 @@ export const AnalyticsSection: React.FC = () => {
                   </div>
                 </div>
               </section>
+
+              {/* DFO Regional Demand Forecast through 2030 (Recharts) */}
+              <DfoDemandForecastChart />
+
+              {/* DFO Geographic Distribution of Certified Guides (SVG) */}
+              <DfoRegionsDistributionMap />
 
               {/* Top Clicked Elements + Devices/Referrers */}
               <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
