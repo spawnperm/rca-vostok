@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import { AccreditationRegistryTable } from './AccreditationRegistryTable';
 import { ActiveInquiriesDashboardWidget } from './ActiveInquiriesDashboardWidget';
 import { AttestationCommissionWidget } from './AttestationCommissionWidget';
 import { AttestationCostCalculator } from './AttestationCostCalculator';
@@ -21,7 +22,9 @@ import { AttestationNewsFeed } from './AttestationNewsFeed';
 import { AttestationReadinessCheck } from './AttestationReadinessCheck';
 import { AttestationRoadmap } from './AttestationRoadmap';
 import { CenterReadinessMiniQuiz } from './CenterReadinessMiniQuiz';
+import { DfoAttestationPointsWidget } from './DfoAttestationPointsWidget';
 import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
+import { DfoRegionalOfficesMap } from './DfoRegionalOfficesMap';
 import { KnowledgeBaseFaq } from './KnowledgeBaseFaq';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import { RegionalSessionsTimeline } from './RegionalSessionsTimeline';
@@ -773,6 +776,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
       </section>
 
+      {/* Accreditation & Licensing Status Registry Table */}
+      <AccreditationRegistryTable />
+
       {/* Visual Comparison: Demand vs Registry & Interregional Results */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-6 bg-white border border-slate-200 rounded-xl p-8 space-y-5">
@@ -867,6 +873,15 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Compact Interactive DFO Map with Hover Registry & Session Info */}
       <DfoOverviewHoverMap onOpenMarket={() => onNavigate('market')} />
+
+      {/* Interactive DFO Map: Regional Training Office Contacts */}
+      <DfoRegionalOfficesMap
+        onContactCurator={openCuratorModal}
+        onApplyForSession={handleApplyForSession}
+      />
+
+      {/* Interactive DFO Attestation Points & Expert Groups Modal Widget */}
+      <DfoAttestationPointsWidget onContactCurator={openCuratorModal} />
 
       {/* Interactive Regional Sessions & Deadlines Timeline */}
       <RegionalSessionsTimeline
