@@ -188,8 +188,8 @@ async function startServer() {
     "connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'self'";
 
   const APP_CSP =
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; " +
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org; media-src 'self' blob:; font-src 'self' data: https://fonts.gstatic.com; " +
     "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; " +
     "frame-ancestors 'none'";
 
@@ -583,6 +583,46 @@ async function startServer() {
     } catch (err) {
       handleDomainError(err, res);
     }
+  });
+
+  app.get('/api/inquiries/stats/stream', async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    const pushStats = async () => {
+      try {
+        const stats = await getInquiryStatsUseCase.execute();
+        res.write(`data: ${JSON.stringify(stats)}\n\n`);
+      } catch {
+        // Ignore transient write errors on closing stream
+      }
+    };
+
+    await pushStats();
+
+    const unsubSubmitted = eventBus.subscribe('certification.inquiry_submitted', () => {
+      void pushStats();
+    });
+    const unsubStatus = eventBus.subscribe('certification.inquiry_status_changed', () => {
+      void pushStats();
+    });
+
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        // Closed socket will trigger cleanup
+      }
+    }, 25_000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      unsubSubmitted();
+      unsubStatus();
+      res.end();
+    });
   });
 
   app.post('/api/inquiries', inquiryRateLimit, async (req, res) => {

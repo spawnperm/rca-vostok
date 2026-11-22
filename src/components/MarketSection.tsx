@@ -7,6 +7,7 @@ import {
   RECOMMENDATIONS,
 } from '../data/researchData';
 import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
+import { DfoGeographyLeafletMap } from './DfoGeographyLeafletMap';
 import { PrimoryeActivityMap } from './PrimoryeActivityMap';
 
 export const MarketSection: React.FC = () => {
@@ -100,6 +101,9 @@ export const MarketSection: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* React-Leaflet Geography: Certified Routes & RCA Offices */}
+      <DfoGeographyLeafletMap />
 
       {/* Interactive Map of Primorsky Krai Guide Activity */}
       <PrimoryeActivityMap />

@@ -65,6 +65,21 @@ export class SubmitInquiryUseCase {
   }
 }
 
+export interface InquiryStatsDTO {
+  totalSubscriptions: number;
+  activeCount: number;
+  byStatus: {
+    new: number;
+    in_review: number;
+    approved: number;
+    rejected: number;
+  };
+  byRegion: { region: string; count: number }[];
+  byTrack: { track: string; count: number }[];
+  lastInquiryAt: string | null;
+  updatedAt: string;
+}
+
 export class GetInquiryStatsUseCase {
   private readonly inquiryRepo: InquiryRepository;
 
@@ -72,9 +87,54 @@ export class GetInquiryStatsUseCase {
     this.inquiryRepo = inquiryRepo;
   }
 
-  async execute(): Promise<{ totalSubscriptions: number }> {
+  async execute(): Promise<InquiryStatsDTO> {
+    const records = await this.inquiryRepo.loadAll();
+    const byStatus = {
+      new: 0,
+      in_review: 0,
+      approved: 0,
+      rejected: 0,
+    };
+    const regionCounts = new Map<string, number>();
+    const trackCounts = new Map<string, number>();
+    let lastInquiryAt: string | null = null;
+
+    for (const rec of records) {
+      if (rec.status in byStatus) {
+        byStatus[rec.status] += 1;
+      } else {
+        byStatus.new += 1;
+      }
+
+      const regionKey = (rec.region || 'Не указан').trim();
+      regionCounts.set(regionKey, (regionCounts.get(regionKey) ?? 0) + 1);
+
+      const trackKey = (rec.track || 'Не указано').trim();
+      trackCounts.set(trackKey, (trackCounts.get(trackKey) ?? 0) + 1);
+
+      if (!lastInquiryAt || rec.createdAt > lastInquiryAt) {
+        lastInquiryAt = rec.createdAt;
+      }
+    }
+
+    const byRegion = [...regionCounts.entries()]
+      .map(([region, count]) => ({ region, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    const byTrack = [...trackCounts.entries()]
+      .map(([track, count]) => ({ track, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
     return {
-      totalSubscriptions: await this.inquiryRepo.count(),
+      totalSubscriptions: records.length,
+      activeCount: byStatus.new + byStatus.in_review,
+      byStatus,
+      byRegion,
+      byTrack,
+      lastInquiryAt,
+      updatedAt: new Date().toISOString(),
     };
   }
 }

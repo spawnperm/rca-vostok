@@ -15,9 +15,12 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import { ActiveInquiriesDashboardWidget } from './ActiveInquiriesDashboardWidget';
 import { AttestationCostCalculator } from './AttestationCostCalculator';
 import { AttestationNewsFeed } from './AttestationNewsFeed';
+import { AttestationReadinessCheck } from './AttestationReadinessCheck';
 import { AttestationRoadmap } from './AttestationRoadmap';
+import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import {
   ATTESTATION_FAQ,
@@ -193,6 +196,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<{ id: string; createdAt: string } | null>(null);
   const [totalSubscriptions, setTotalSubscriptions] = useState<number | null>(null);
+  const [statsRefreshKey, setStatsRefreshKey] = useState<number>(0);
+
+  const scrollToInquiryForm = () => {
+    const el = document.getElementById('inquiry-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   // Curator consultation modal state
   const [curatorModalOpen, setCuratorModalOpen] = useState<boolean>(false);
@@ -277,6 +288,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
       if (typeof data.totalSubscriptions === 'number') {
         setTotalSubscriptions(data.totalSubscriptions);
       }
+      setStatsRefreshKey((prev) => prev + 1);
       tracker.trackCustomInteraction(`Консультация куратора: ${curatorTopic}`, curatorRegion);
       setCuratorName('');
       setCuratorEmail('');
@@ -351,6 +363,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
       if (typeof data.totalSubscriptions === 'number') {
         setTotalSubscriptions(data.totalSubscriptions);
       }
+      setStatsRefreshKey((prev) => prev + 1);
       tracker.trackCustomInteraction(`Подписка на аттестацию: ${track}`, region);
       setFullName('');
       setEmail('');
@@ -509,6 +522,13 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
       </section>
 
+      {/* Real-time Active Applications Dashboard Widget */}
+      <ActiveInquiriesDashboardWidget
+        refreshKey={statsRefreshKey}
+        onScrollToForm={scrollToInquiryForm}
+        onContactCurator={openCuratorModal}
+      />
+
       {/* Institutional Profile & Certification Pipeline */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-8 space-y-6">
@@ -600,6 +620,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Candidate Attestation Roadmap */}
       <AttestationRoadmap onContactCurator={openCuratorModal} />
+
+      {/* Candidate Readiness Self-Check */}
+      <AttestationReadinessCheck onContactCurator={openCuratorModal} />
 
       {/* Operational Certification Announcements & Regulatory Updates Feed */}
       <AttestationNewsFeed onContactCurator={openCuratorModal} />
@@ -848,6 +871,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           </div>
         </div>
       </section>
+
+      {/* Compact Interactive DFO Map with Hover Registry & Session Info */}
+      <DfoOverviewHoverMap onOpenMarket={() => onNavigate('market')} />
 
       {/* Horizontal Attestation Development Timeline 2025-2030 */}
       <section aria-labelledby="timeline-2030-heading" className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
@@ -1561,7 +1587,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
       </section>
 
       {/* Instructor Feedback & Certification Updates Form */}
-      <section aria-labelledby="inquiry-heading" className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+      <section
+        id="inquiry-section"
+        aria-labelledby="inquiry-heading"
+        className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch scroll-mt-24"
+      >
         <div className="lg:col-span-5 bg-slate-900 text-white rounded-xl p-8 flex flex-col justify-between gap-6">
           <div className="space-y-4">
             <p className="text-xs font-medium text-teal-300">Обратная связь для соискателей</p>

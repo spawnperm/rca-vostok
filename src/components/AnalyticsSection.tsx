@@ -18,6 +18,7 @@ import {
 import { DFO_REGIONS_DISTRIBUTION } from '../data/researchData';
 import { tracker, type ClientBehaviorEvent } from '../utils/tracker';
 import { DfoDemandForecastChart, type DfoRegionFilterId } from './DfoDemandForecastChart';
+import { DfoHubsInteractiveMap } from './DfoHubsInteractiveMap';
 import { DfoRegionsDistributionMap } from './DfoRegionsDistributionMap';
 
 interface SessionRecord {
@@ -637,6 +638,12 @@ export const AnalyticsSection: React.FC = () => {
 
               {/* DFO Geographic Distribution of Certified Guides (SVG) */}
               <DfoRegionsDistributionMap
+                regionFilter={dfoRegionFilter}
+                onSelectRegionFilter={setDfoRegionFilter}
+              />
+
+              {/* DFO Regional Representatives & Partner Tourism Hubs Map */}
+              <DfoHubsInteractiveMap
                 regionFilter={dfoRegionFilter}
                 onSelectRegionFilter={setDfoRegionFilter}
               />
