@@ -113,7 +113,12 @@ import {
   UpdateProfileUseCase,
 } from './src/application/identity/IdentityUseCases.ts';
 import { createIdentityRouter } from './src/infrastructure/http/IdentityRouter.ts';
-import { createAuthMiddleware } from './src/infrastructure/http/AuthMiddleware.ts';
+import {
+  createAuthMiddleware,
+  requireAuth,
+  requirePermission,
+} from './src/infrastructure/http/AuthMiddleware.ts';
+import { PERMISSIONS } from './src/domain/identity/Rbac.ts';
 import {
   DEFAULT_LOGIN_RULES,
   RateLimiter,
@@ -133,6 +138,7 @@ import {
 } from './src/infrastructure/mail/Mailer.ts';
 import { appLogger } from './src/infrastructure/logging/Logger.ts';
 import { createRequestLoggerMiddleware } from './src/infrastructure/http/RequestLogger.ts';
+import { getFarEastHubsWeather } from './src/utils/hubsWeather.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -469,7 +475,132 @@ async function startServer() {
         storage: objectStorage,
       })
     );
+  } else {
+    // Fallback mode without PostgreSQL: inquiry cabinet endpoints remain fully
+    // functional via JsonFileInquiryRepository, and public/cabinet social,
+    // chat, and media reads return clean empty JSON payloads instead of 404s.
+    const listMyInquiries = new ListMyInquiriesUseCase(inquiryRepo);
+    const listAllInquiries = new ListAllInquiriesUseCase(inquiryRepo);
+    const updateInquiryStatus = new UpdateInquiryStatusUseCase(inquiryRepo, eventBus);
+
+    app.get(
+      '/api/account/inquiries',
+      requireAuth(),
+      requirePermission(PERMISSIONS.VIEW_OWN_INQUIRIES),
+      async (req, res) => {
+        try {
+          res.json({ inquiries: await listMyInquiries.execute(req.authUser!) });
+        } catch (err) {
+          handleDomainError(err, res);
+        }
+      }
+    );
+
+    app.get(
+      '/api/admin/inquiries',
+      requireAuth(),
+      requirePermission(PERMISSIONS.VIEW_ALL_INQUIRIES),
+      async (req, res) => {
+        try {
+          res.json({ inquiries: await listAllInquiries.execute(req.authUser!) });
+        } catch (err) {
+          handleDomainError(err, res);
+        }
+      }
+    );
+
+    app.patch(
+      '/api/admin/inquiries/:inquiryId',
+      requireAuth(),
+      requirePermission(PERMISSIONS.VIEW_ALL_INQUIRIES),
+      async (req, res) => {
+        try {
+          const body = (req.body || {}) as Record<string, unknown>;
+          res.json(
+            await updateInquiryStatus.execute(req.authUser!, {
+              inquiryId: req.params.inquiryId,
+              status: body.status,
+            })
+          );
+        } catch (err) {
+          handleDomainError(err, res);
+        }
+      }
+    );
+
+    app.get('/api/social/feed', (_req, res) => {
+      res.json({ posts: [], total: 0 });
+    });
+
+    app.get('/api/social/profiles/:userId', async (req, res) => {
+      try {
+        const target = await userRepo.findById(req.params.userId);
+        if (!target) {
+          res.status(404).json({ error: 'Профиль пользователя не найден.', code: 'NOT_FOUND' });
+          return;
+        }
+        res.json({
+          userId: target.id,
+          displayName: target.fullName,
+          headline: '',
+          bio: '',
+          region: target.region,
+          organisation: target.organisation,
+          role: target.role,
+          websiteUrl: '',
+          coverAssetId: null,
+          avatarAssetId: null,
+          skills: [],
+          followerCount: 0,
+          followingCount: 0,
+          postCount: 0,
+          albumCount: 0,
+          isFollowedByMe: false,
+          createdAt: target.createdAt,
+          updatedAt: target.createdAt,
+        });
+      } catch (err) {
+        handleDomainError(err, res);
+      }
+    });
+
+    app.get('/api/social/activity', requireAuth(), (_req, res) => {
+      res.json({ activity: [] });
+    });
+
+    app.get('/api/chat/channels', (_req, res) => {
+      res.json({ channels: [] });
+    });
+
+    app.get('/api/chat/reactions', (_req, res) => {
+      res.json({ emoji: ['👍', '❤️', '🔥', '👏', '⛰️'] });
+    });
+
+    app.get('/api/media/albums', (_req, res) => {
+      res.json({ albums: [], total: 0 });
+    });
+
+    app.get('/api/media/assets', (_req, res) => {
+      res.json({ assets: [], total: 0 });
+    });
+
+    app.use(['/api/social', '/api/chat', '/api/media'], (_req, res) => {
+      res.status(503).json({
+        error: 'Модули публикаций, чата и медиатеки требуют подключения PostgreSQL.',
+        code: 'DB_REQUIRED',
+      });
+    });
   }
+
+  // Far East tourism hubs current weather (Open-Meteo with seasonal fallback)
+  app.get('/api/weather/hubs', async (req, res) => {
+    try {
+      const forceRefresh = req.query.refresh === '1';
+      res.json(await getFarEastHubsWeather(forceRefresh));
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
 
   // Interactive API documentation (Scalar) + raw OpenAPI document.
   mountApiDocs(app);
@@ -698,6 +829,12 @@ async function startServer() {
   });
 
   if (!IS_PROD) {
+    app.use('/api', (_req, res) => {
+      res.status(404).json({
+        error: 'Запрошенный метод API не найден.',
+        code: 'NOT_FOUND',
+      });
+    });
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },

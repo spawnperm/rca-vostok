@@ -25,6 +25,7 @@ import { AttestationReadinessCheck } from './AttestationReadinessCheck';
 import { AttestationRoadmap } from './AttestationRoadmap';
 import { CenterReadinessMiniQuiz } from './CenterReadinessMiniQuiz';
 import { DfoAttestationPointsWidget } from './DfoAttestationPointsWidget';
+import { DfoHubsWeatherWidget } from './DfoHubsWeatherWidget';
 import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
 import { DfoRegionalOfficesMap } from './DfoRegionalOfficesMap';
 import { ExpertProfileWidget } from './ExpertProfileWidget';
@@ -511,6 +512,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           <p className="mt-2 text-xs text-slate-600">26 аттестованы (15 ПК, 9 ХК, 2 Камч.), 52 обучены за год</p>
         </div>
       </section>
+
+      {/* Compact Far East Tourism Hubs Weather Widget */}
+      <DfoHubsWeatherWidget />
 
       {/* Real-time Active Applications Dashboard Widget */}
       <ActiveInquiriesDashboardWidget

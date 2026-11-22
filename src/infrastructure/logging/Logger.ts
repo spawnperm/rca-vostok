@@ -364,11 +364,17 @@ export function createLogger(options: LoggerOptions = {}): Logger {
 
 export function createLoggerFromEnv(overrides: LoggerOptions = {}): Logger {
   const isProd = process.env.NODE_ENV === 'production';
+  const isAiStudioPreview =
+    process.env.DISABLE_HMR === 'true' ||
+    Boolean(process.env.K_SERVICE) ||
+    (process.env.APP_URL ?? '').includes('.run.app');
   const isTestRunner =
     Boolean(process.env.NODE_TEST_CONTEXT) ||
     process.argv.some((arg) => arg.includes('--test'));
 
-  const level = overrides.level ?? parseLogLevel(process.env.LOG_LEVEL, isProd ? 'INFO' : 'DEBUG');
+  const level =
+    overrides.level ??
+    parseLogLevel(process.env.LOG_LEVEL, isProd || isAiStudioPreview ? 'INFO' : 'DEBUG');
   const format = overrides.format ?? parseLogFormat(process.env.LOG_FORMAT, isProd ? 'json' : 'pretty');
 
   const envLogToFile = process.env.LOG_TO_FILE;
