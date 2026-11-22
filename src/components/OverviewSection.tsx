@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import { AttestationCostCalculator } from './AttestationCostCalculator';
 import { AttestationNewsFeed } from './AttestationNewsFeed';
 import { AttestationRoadmap } from './AttestationRoadmap';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
@@ -602,6 +603,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Operational Certification Announcements & Regulatory Updates Feed */}
       <AttestationNewsFeed onContactCurator={openCuratorModal} />
+
+      {/* Certification Cost & Fee Estimator */}
+      <AttestationCostCalculator onContactCurator={openCuratorModal} />
 
       {/* Center Accreditation & Licensing Status */}
       <section
