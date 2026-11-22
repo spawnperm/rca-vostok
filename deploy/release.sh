@@ -55,15 +55,29 @@ git reset --hard origin/main -q
 SHA=$(git rev-parse --short HEAD)
 echo "commit: $SHA"
 
-# Remember the image that is currently serving traffic, so --rollback has a
-# target even if the new build never becomes healthy.
-if docker image inspect rca-vostok:latest >/dev/null 2>&1; then
-  PREV_SHA=$(cat .current-sha 2>/dev/null || echo "unknown")
-  if [ "$PREV_SHA" != "unknown" ]; then
-    docker tag rca-vostok:latest "rca-vostok:$PREV_SHA" 2>/dev/null || true
+# Record the image currently serving traffic so --rollback has a target.
+#
+# The previous version of this script read `.current-sha`, which does not exist
+# on a first deploy — so nothing was recorded and --rollback had no target.
+# Fall back to asking Docker which non-`latest` tags exist and treating the
+# newest as current.
+PREV_SHA=$(cat .current-sha 2>/dev/null || true)
+if [ -z "$PREV_SHA" ]; then
+  PREV_SHA=$(docker images rca-vostok --format '{{.Tag}} {{.CreatedAt}}' \
+    | grep -v '^latest ' | sort -k2 -r | head -1 | awk '{print $1}')
+fi
+
+if [ -n "$PREV_SHA" ] && [ "$PREV_SHA" != "$SHA" ]; then
+  if docker image inspect "rca-vostok:$PREV_SHA" >/dev/null 2>&1; then
+    docker tag "rca-vostok:$PREV_SHA" rca-vostok:latest 2>/dev/null || true
     echo "$PREV_SHA" > .last-good-sha
-    echo "previous image kept as rca-vostok:$PREV_SHA"
+    echo "rollback target: rca-vostok:$PREV_SHA"
   fi
+elif [ "$PREV_SHA" = "$SHA" ]; then
+  # Redeploying the same commit: keep whatever rollback target already exists.
+  [ -f .last-good-sha ] && echo "rollback target unchanged: $(cat .last-good-sha)"
+else
+  echo "no previous image found — this is the first tagged deploy"
 fi
 
 docker compose build app

@@ -26,3 +26,8 @@ bun.lock
 # and must never be committed: `git add -A` would otherwise publish them.
 .forgejo-api-pass
 .forgejo-token
+
+# Deploy bookkeeping written by deploy/release.sh on the server (which commit is
+# running, which image to roll back to). Per-host runtime state, not source.
+.current-sha
+.last-good-sha
