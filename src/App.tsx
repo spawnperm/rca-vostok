@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, UserRound } from 'lucide-react';
 import { OverviewSection } from './components/OverviewSection';
 import { CalculatorSection } from './components/CalculatorSection';
 import { MarketSection } from './components/MarketSection';
 import { DissertationSection } from './components/DissertationSection';
 import { PresentationsSection } from './components/PresentationsSection';
 import { AnalyticsSection } from './components/AnalyticsSection';
+import { AccountSection } from './components/AccountSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { applySectionSeo, SECTION_SEO_MAP, type SiteTabId } from './utils/seo';
 import { tracker } from './utils/tracker';
@@ -104,8 +105,22 @@ export default function App() {
             })}
           </nav>
 
-          {/* Zone 3: 1 primary action + mobile menu button */}
+          {/* Zone 3: 1 primary action + account entry + mobile menu button */}
           <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigateTo('account')}
+              aria-label="Личный кабинет"
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                activeTab === 'account'
+                  ? 'bg-teal-50 border-teal-300 text-teal-800'
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <UserRound className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Кабинет</span>
+            </button>
+
             <button
               type="button"
               onClick={() => navigateTo('presentations')}
@@ -132,7 +147,11 @@ export default function App() {
         {/* Mobile Drawer */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-slate-200 bg-white px-6 py-4 space-y-2">
-            {[...NAV_ITEMS, { id: 'presentations' as SiteTabId, label: 'Презентации (Режим защиты)' }].map((item) => {
+            {[
+              ...NAV_ITEMS,
+              { id: 'account' as SiteTabId, label: 'Личный кабинет' },
+              { id: 'presentations' as SiteTabId, label: 'Презентации (Режим защиты)' },
+            ].map((item) => {
               const active = activeTab === item.id;
               return (
                 <button
@@ -160,6 +179,7 @@ export default function App() {
           {activeTab === 'dissertation' && <DissertationSection />}
           {activeTab === 'presentations' && <PresentationsSection />}
           {activeTab === 'analytics' && <AnalyticsSection />}
+          {activeTab === 'account' && <AccountSection />}
         </ErrorBoundary>
       </main>
 

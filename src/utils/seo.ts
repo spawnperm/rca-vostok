@@ -4,7 +4,8 @@ export type SiteTabId =
   | 'market'
   | 'dissertation'
   | 'presentations'
-  | 'analytics';
+  | 'analytics'
+  | 'account';
 
 export interface SectionSeoMeta {
   tab: SiteTabId;
@@ -69,6 +70,15 @@ export const SECTION_SEO_MAP: Record<SiteTabId, SectionSeoMeta> = {
       'Отслеживание SEO-метрик, статистика посещений платформы, карта кликов и запись пользовательских сценариев поведения в реальном времени.',
     keywords: 'SEO аудит, статистика посещений, карта кликов, поведение пользователей',
     pathQuery: '?tab=analytics',
+  },
+  account: {
+    tab: 'account',
+    name: 'Личный кабинет',
+    title: 'Личный кабинет соискателя и проводника — РЦА «Русский Восток»',
+    description:
+      'Персональный кабинет платформы РЦА «Русский Восток»: профиль соискателя, статус аттестации, заявки и права доступа по роли.',
+    keywords: 'личный кабинет РЦА, статус аттестации проводника, заявка на аттестацию',
+    pathQuery: '?tab=account',
   },
 };
 

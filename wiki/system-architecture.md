@@ -31,6 +31,38 @@
 | `POST /api/inquiries` | Валидация и сохранение заявки инструктора (ФИО, email, контакты, регион, трек, опыт) | `/data/inquiries.json` (атомарная запись через `.tmp.json`) |
 | `GET /api/feedback/stats` | Публичный счётчик обращений по развитию платформы без раскрытия ПДн | JSON `{ totalFeedback }` |
 | `POST /api/feedback` | Валидация и сохранение предложений/вопросов по работе платформы | `/data/feedback.json` (атомарная запись через `.tmp`) |
+| `POST /api/auth/register` | Самостоятельная регистрация в личном кабинете; роль всегда `candidate` | `users` + сессионная cookie |
+| `POST /api/auth/login` | Вход по email/паролю, выпуск сессии (scrypt-проверка) | `user_sessions` (хранится SHA-256 хеш токена) |
+| `POST /api/auth/logout` | Завершение сессии и очистка cookie | `{ ok: true }` |
+| `GET /api/auth/session` | Восстановление сессии при загрузке SPA | `{ authenticated, user }` |
+| `GET /api/account/profile` | Профиль текущего пользователя (требует `profile:view_own`) | JSON `UserDTO` |
+| `PATCH /api/account/profile` | Редактирование ФИО, региона, организации (требует `profile:edit_own`) | JSON `UserDTO` |
+| `POST /api/account/password` | Смена пароля; отзывает **все** сессии аккаунта | `{ ok: true, reauthenticate: true }` |
+| `GET /api/admin/users` | Список учётных записей (требует `users:manage`) | `{ users: UserDTO[] }` |
+| `PATCH /api/admin/users/:id/role` | Назначение роли; запрещено самопонижение администратора | JSON `UserDTO` |
+| `PATCH /api/admin/users/:id/status` | Блокировка/разблокировка; запрещена самоблокировка | JSON `UserDTO` |
+
+### 2.1. Ограниченный контекст `identity` и RBAC
+
+Личный кабинет реализован как отдельный ограниченный контекст по образцу существующих (`domain` → `application` → `infrastructure`):
+
+- `src/domain/identity/Rbac.ts` — единственный источник истины по правам: `PERMISSIONS` (8 возможностей), `ROLES` (`candidate`, `instructor`, `curator`, `admin`) и матрица `ROLE_PERMISSIONS`. Гранты кумулятивны: `candidate ⊂ instructor ⊂ curator ⊂ admin`.
+- `src/domain/identity/User.ts` — агрегат пользователя: валидация пароля (минимум 10 символов, буквы и цифры, отказ от односимвольных повторов), неизменяемые `email`/`role`, `can()`/`assertCan()` для доменных проверок, `ForbiddenError` с кодом `FORBIDDEN`.
+- `src/domain/identity/IdentityRepositories.ts` — порты `UserRepository` и `SessionRepository` (асинхронные, как и остальные адаптеры PostgreSQL).
+- `src/application/identity/IdentityUseCases.ts` — регистрация, вход, выход, разыменование сессии, профиль, смена пароля, администрирование пользователей.
+- `src/infrastructure/security/ScryptPasswordHasher.ts` — scrypt (встроен в Node, без нативных зависимостей), `timingSafeEqual` при проверке; `Sha256SessionTokenService` выпускает 32-байтные токены.
+- `src/infrastructure/http/AuthMiddleware.ts` — `requireAuth()` и `requirePermission()`: маршруты описывают требуемую **возможность**, а не роль, поэтому все проверки проходят через одну точку.
+- `src/infrastructure/http/IdentityRouter.ts` — HTTP-адаптер контекста.
+- `src/components/AccountSection.tsx` — UI кабинета: вход/регистрация, профиль, смена пароля, список своих прав и (только для `admin`) управление пользователями.
+
+Ключевые защитные решения:
+
+1. **Никакой эскалации при регистрации.** `RegisterUserUseCase` собирает агрегат из явного белого списка полей и принудительно ставит `candidate`; переданный в теле запроса `role: "admin"` игнорируется (покрыто тестом).
+2. **Сессии непрозрачны для БД.** В `user_sessions` хранится только `sha256(token)`; cookie — `HttpOnly`, `SameSite=Lax`, `Secure` при `https` в `APP_URL`.
+3. **Единый ответ на неудачный вход.** Неверный пароль и несуществующий аккаунт возвращают одинаковую ошибку `INVALID_CREDENTIALS`, чтобы не раскрывать наличие учётной записи.
+4. **Смена пароля отзывает все сеансы** (`deleteByUserId`), принуждая повторный вход.
+5. **Администратор не может лишиться доступа**: самопонижение роли и самоблокировка возвращают `403`.
+6. **Роль ограничена на уровне БД** (`users_role_check`), а `parseRole` деградирует к `candidate` при неизвестном значении — испорченная строка не даёт прав.
 
 ## 3. Визуальные ассеты и правила игнорирования
 

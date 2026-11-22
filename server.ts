@@ -29,6 +29,34 @@ import { createPool, runMigrations } from './src/infrastructure/persistence/pg/P
 import { PostgresAnalyticsRepository } from './src/infrastructure/persistence/pg/PostgresAnalyticsRepository.ts';
 import { PostgresFeedbackRepository } from './src/infrastructure/persistence/pg/PostgresFeedbackRepository.ts';
 import { PostgresInquiryRepository } from './src/infrastructure/persistence/pg/PostgresInquiryRepository.ts';
+import { PostgresUserRepository } from './src/infrastructure/persistence/pg/PostgresUserRepository.ts';
+import { PostgresSessionRepository } from './src/infrastructure/persistence/pg/PostgresSessionRepository.ts';
+import {
+  InMemorySessionRepository,
+  InMemoryUserRepository,
+} from './src/infrastructure/persistence/InMemoryIdentityRepositories.ts';
+import type {
+  SessionRepository,
+  UserRepository,
+} from './src/domain/identity/IdentityRepositories.ts';
+import {
+  ScryptPasswordHasher,
+  Sha256SessionTokenService,
+} from './src/infrastructure/security/ScryptPasswordHasher.ts';
+import {
+  AssignRoleUseCase,
+  ChangePasswordUseCase,
+  GetProfileUseCase,
+  ListUsersUseCase,
+  LoginUseCase,
+  LogoutUseCase,
+  RegisterUserUseCase,
+  ResolveSessionUseCase,
+  SetUserActiveUseCase,
+  UpdateProfileUseCase,
+} from './src/application/identity/IdentityUseCases.ts';
+import { createIdentityRouter } from './src/infrastructure/http/IdentityRouter.ts';
+import { createAuthMiddleware } from './src/infrastructure/http/AuthMiddleware.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,6 +131,16 @@ async function startServer() {
     console.info('[persistence] no database configured, using JSON file adapter');
   }
 
+  // Identity bounded context: PostgreSQL in production, in-memory for local dev.
+  const userRepo: UserRepository = pool
+    ? new PostgresUserRepository(pool)
+    : new InMemoryUserRepository();
+  const sessionRepo: SessionRepository = pool
+    ? new PostgresSessionRepository(pool)
+    : new InMemorySessionRepository();
+  const passwordHasher = new ScryptPasswordHasher();
+  const sessionTokens = new Sha256SessionTokenService();
+
   // Contour 7: Observability subscriber (logs structured metadata without PII)
   eventBus.subscribe('certification.inquiry_submitted', (event) => {
     console.info(
@@ -140,6 +178,24 @@ async function startServer() {
     inquiryRepo,
     analyticsRepo,
     adapterName
+  );
+
+  // ── Identity bounded context (personal cabinet + RBAC) ────────────────────
+  const resolveSessionUseCase = new ResolveSessionUseCase(userRepo, sessionRepo, sessionTokens);
+  app.use(createAuthMiddleware(resolveSessionUseCase));
+
+  app.use(
+    createIdentityRouter({
+      registerUser: new RegisterUserUseCase(userRepo, passwordHasher, eventBus),
+      login: new LoginUseCase(userRepo, sessionRepo, passwordHasher, sessionTokens, eventBus),
+      logout: new LogoutUseCase(sessionRepo, sessionTokens),
+      getProfile: new GetProfileUseCase(),
+      updateProfile: new UpdateProfileUseCase(userRepo, eventBus),
+      changePassword: new ChangePasswordUseCase(userRepo, passwordHasher, sessionRepo),
+      listUsers: new ListUsersUseCase(userRepo),
+      assignRole: new AssignRoleUseCase(userRepo, eventBus),
+      setUserActive: new SetUserActiveUseCase(userRepo),
+    })
   );
 
   // Dynamic robots.txt

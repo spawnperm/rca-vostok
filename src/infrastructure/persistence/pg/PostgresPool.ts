@@ -163,4 +163,60 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS platform_feedback_created_idx
       ON platform_feedback (created_at DESC);
   `);
+
+  // ── Identity bounded context ──────────────────────────────────────────────
+  // Accounts for the personal cabinet. Email is the login key, so it carries a
+  // unique constraint; the role drives all RBAC decisions.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id             TEXT PRIMARY KEY,
+      email          TEXT NOT NULL,
+      full_name      TEXT NOT NULL,
+      region         TEXT NOT NULL DEFAULT '',
+      organisation   TEXT NOT NULL DEFAULT '',
+      role           TEXT NOT NULL DEFAULT 'candidate',
+      password_hash  TEXT NOT NULL,
+      password_salt  TEXT NOT NULL,
+      is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at     TIMESTAMPTZ NOT NULL,
+      last_login_at  TIMESTAMPTZ
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (email);
+  `);
+
+  // The role is constrained at the storage layer as a second line of defence:
+  // an unexpected value would otherwise be silently coerced by parseRole.
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check'
+      ) THEN
+        ALTER TABLE users
+          ADD CONSTRAINT users_role_check
+          CHECK (role IN ('candidate', 'instructor', 'curator', 'admin'));
+      END IF;
+    END $$;
+  `);
+
+  // Only the SHA-256 hash of a session token is stored.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token_hash  TEXT PRIMARY KEY,
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ NOT NULL,
+      expires_at  TIMESTAMPTZ NOT NULL
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS user_sessions_user_idx ON user_sessions (user_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS user_sessions_expires_idx ON user_sessions (expires_at);
+  `);
 }

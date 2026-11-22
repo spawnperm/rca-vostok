@@ -24,6 +24,15 @@ export class SanitizedText {
     }
     return new SanitizedText(cleaned);
   }
+
+  /**
+   * Rebuilds a value object from already-validated persistence data.
+   * Unlike `create`, it does not re-run field rules: aggregates restored from
+   * the database must not fail on historical rows that predate a rule change.
+   */
+  static rehydrate(value: string): SanitizedText {
+    return new SanitizedText(value);
+  }
 }
 
 export class EmailAddress {
@@ -39,6 +48,11 @@ export class EmailAddress {
       throw new ValidationError('Укажите корректный адрес электронной почты.');
     }
     return new EmailAddress(cleaned);
+  }
+
+  /** Rebuilds an address already validated when it was persisted. */
+  static rehydrate(value: string): EmailAddress {
+    return new EmailAddress(value);
   }
 }
 

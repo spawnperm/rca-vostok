@@ -92,3 +92,12 @@
 - В `src/data/researchData.ts` добавлен набор `DFO_CERTIFIED_DYNAMICS_BY_REGION` (факт 2024–2026 гг. и прогноз 2027–2030 гг. по 7 субъектам ДФО с ежегодным приростом и контекстными заметками).
 - Создан компонент `src/components/DfoCertifiedDynamicsLineChart.tsx` на `recharts` (`LineChart` с разделительным рубежом `01.10.2026 · ПП № 1893`, фильтром периода `2024–2030` / `Факт` / `Прогноз`, наложением второго региона сравнения, 4 KPI-блоками и таблицей по годам).
 - Компонент встроен в `src/components/DfoRegionComparisonChart.tsx` и автоматически переключается на регион, выбранный кликом на интерактивной SVG-карте `DfoComparisonSvgMap.tsx` в разделе «Рынок ДФО».
+
+## [2026-11-22] feature | Личный кабинет пользователя на DDD + RBAC
+- Выделен ограниченный контекст `identity`: `src/domain/identity/Rbac.ts` (8 разрешений, 4 роли, кумулятивная матрица грантов), агрегат `User` с доменной валидацией пароля и методами `can`/`assertCan`, порты `UserRepository`/`SessionRepository`.
+- Сценарии в `src/application/identity/IdentityUseCases.ts`: регистрация, вход/выход, разыменование сессии, профиль, смена пароля, администрирование пользователей. Добавлены события `identity.user_registered`, `identity.user_logged_in`, `identity.profile_updated`, `identity.role_assigned`.
+- Инфраструктура: scrypt-хешер и SHA-256 сервис сессионных токенов (`src/infrastructure/security/`), PostgreSQL-адаптеры `users`/`user_sessions` с идемпотентными миграциями, in-memory адаптеры для локальной разработки.
+- HTTP: `requireAuth`/`requirePermission` как единая точка RBAC, маршруты `/api/auth/*`, `/api/account/*`, `/api/admin/users/*`; cookie `HttpOnly`/`SameSite=Lax`, в БД хранится только хеш токена.
+- UI: `src/components/AccountSection.tsx` (вкладка `?tab=account`) — вход и регистрация, профиль, смена пароля, перечень прав и панель управления пользователями для администратора.
+- Закрыта уязвимость эскалации привилегий: регистрация собирает агрегат из белого списка полей и принудительно назначает роль `candidate`, игнорируя `role` из тела запроса.
+- Добавлено 22 теста (`tests/identity.test.ts`), всего 29; проверены матрица RBAC, вход, истечение сессии, смена пароля, запрет самопонижения и самоблокировки администратора.
