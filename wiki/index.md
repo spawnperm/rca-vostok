@@ -20,4 +20,5 @@
 
 ## Техническая реализация
 
+- [**ddd-and-11-contours.md**](./ddd-and-11-contours.md) — Архитектура Domain-Driven Design (Bounded Contexts `certification`, `analytics`, Shared Kernel, Use Cases, Repositories, Domain Events) и матрица 11 контуров профессиональной разработки.
 - [**system-architecture.md**](./system-architecture.md) — Стек React 19 + Vite + Express (`server.ts`), компоненты интерфейса, SEO-инфраструктура (`/robots.txt`, `/sitemap.xml`, JSON-LD), трекинг поведения и карта кликов, форма заявок `/api/inquiries`, хранение данных в `/data/` и правила дизайн-системы.

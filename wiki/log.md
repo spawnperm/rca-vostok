@@ -30,3 +30,10 @@
 ## [2026-11-22] wiki | Сохранение полного контекста диалога в формате LLM Wiki
 - Сформирована папка `/wiki/` (`SCHEMA.md`, `index.md`, `log.md`, `dialogue-context.md`, `sources-synthesis.md`, `entities-and-institutions.md`, `economic-model-and-market.md`, `dissertation-and-presentations.md`, `system-architecture.md`) с перекрёстными ссылками на все исходные файлы, модули и коммиты.
 - Обновлён `README.md` ссылкой на каталог `/wiki/index.md` и подготовлена публикация в GitHub (`spawnperm/rca-vostok`).
+
+## [2026-11-22] refactor | Внедрение DDD и 11 контуров профессиональной разработки
+- Выделены слои `src/domain/` (`shared`, `certification`, `analytics`), `src/application/` (Use Cases), `src/infrastructure/` (JSON-репозитории с `PathConfinement`, `InMemoryDomainEventBus`) и тонкий HTTP-адаптер `server.ts`.
+- `CalculatorSection.tsx` переведён на доменный сервис `DemandForecastService`, `App.tsx` обёрнут в `ErrorBoundary`.
+- Добавлены эндпоинт `GET /api/health`, заголовки безопасности, набор тестов `tests/ddd-domain.test.ts` (`npm test`) и CI-пайплайн `.github/workflows/ci.yml`.
+- Создана страница документации [`ddd-and-11-contours.md`](./ddd-and-11-contours.md).
+

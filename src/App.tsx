@@ -6,6 +6,7 @@ import { MarketSection } from './components/MarketSection';
 import { DissertationSection } from './components/DissertationSection';
 import { PresentationsSection } from './components/PresentationsSection';
 import { AnalyticsSection } from './components/AnalyticsSection';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { applySectionSeo, SECTION_SEO_MAP, type SiteTabId } from './utils/seo';
 import { tracker } from './utils/tracker';
 
@@ -152,12 +153,14 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-[1240px] w-full mx-auto px-6 py-10">
-        {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
-        {activeTab === 'calculator' && <CalculatorSection />}
-        {activeTab === 'market' && <MarketSection />}
-        {activeTab === 'dissertation' && <DissertationSection />}
-        {activeTab === 'presentations' && <PresentationsSection />}
-        {activeTab === 'analytics' && <AnalyticsSection />}
+        <ErrorBoundary onReset={() => navigateTo('overview')}>
+          {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
+          {activeTab === 'calculator' && <CalculatorSection />}
+          {activeTab === 'market' && <MarketSection />}
+          {activeTab === 'dissertation' && <DissertationSection />}
+          {activeTab === 'presentations' && <PresentationsSection />}
+          {activeTab === 'analytics' && <AnalyticsSection />}
+        </ErrorBoundary>
       </main>
 
       {/* Quiet Institutional Footer */}

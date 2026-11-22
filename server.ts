@@ -1,8 +1,22 @@
 import 'dotenv/config';
 import express from 'express';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  CollectBehaviorUseCase,
+  GetAnalyticsSummaryUseCase,
+  GetSessionDetailsUseCase,
+  ResetAnalyticsUseCase,
+} from './src/application/analytics/AnalyticsUseCases.ts';
+import {
+  GetInquiryStatsUseCase,
+  SubmitInquiryUseCase,
+} from './src/application/certification/InquiryUseCases.ts';
+import { GetSystemHealthUseCase } from './src/application/system/HealthCheckUseCase.ts';
+import { DomainError, NotFoundError, ValidationError } from './src/domain/shared/DomainError.ts';
+import { InMemoryDomainEventBus } from './src/infrastructure/events/InMemoryDomainEventBus.ts';
+import { JsonFileAnalyticsRepository } from './src/infrastructure/persistence/JsonFileAnalyticsRepository.ts';
+import { JsonFileInquiryRepository } from './src/infrastructure/persistence/JsonFileInquiryRepository.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,173 +24,6 @@ const __dirname = path.dirname(__filename);
 const PORT = 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DATA_DIR = path.resolve(__dirname, 'data');
-const STORE_PATH = path.resolve(DATA_DIR, 'analytics-store.json');
-const INQUIRIES_PATH = path.resolve(DATA_DIR, 'inquiries.json');
-
-const ALLOWED_EVENT_TYPES = new Set([
-  'session_start',
-  'pageview',
-  'click',
-  'scroll',
-  'interaction',
-  'outbound',
-]);
-
-interface BehaviorEvent {
-  id: string;
-  sessionId: string;
-  type: string;
-  tab: string;
-  timestamp: string;
-  elapsedMs: number;
-  label?: string;
-  targetTag?: string;
-  xPct?: number;
-  yPct?: number;
-  scrollDepth?: number;
-  detail?: string;
-}
-
-interface SessionRecord {
-  sessionId: string;
-  visitorId: string;
-  startedAt: string;
-  lastSeenAt: string;
-  deviceType: 'Desktop' | 'Mobile' | 'Tablet';
-  browser: string;
-  viewport: string;
-  referrer: string;
-  utmSource: string;
-  landingTab: string;
-  tabsVisited: string[];
-  maxScrollDepth: number;
-  durationSec: number;
-  eventCount: number;
-  clickCount: number;
-}
-
-interface AnalyticsStore {
-  sessions: Record<string, SessionRecord>;
-  events: BehaviorEvent[];
-}
-
-function ensureStoreDir(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
-
-function loadStore(): AnalyticsStore {
-  ensureStoreDir();
-  if (!STORE_PATH.startsWith(DATA_DIR + path.sep)) {
-    throw new Error('Invalid analytics store path');
-  }
-  if (!fs.existsSync(STORE_PATH)) {
-    return { sessions: {}, events: [] };
-  }
-  try {
-    const raw = fs.readFileSync(STORE_PATH, 'utf-8');
-    const parsed = JSON.parse(raw) as Partial<AnalyticsStore>;
-    return {
-      sessions: parsed.sessions && typeof parsed.sessions === 'object' ? parsed.sessions : {},
-      events: Array.isArray(parsed.events) ? parsed.events : [],
-    };
-  } catch {
-    return { sessions: {}, events: [] };
-  }
-}
-
-function saveStore(store: AnalyticsStore): void {
-  ensureStoreDir();
-  if (!STORE_PATH.startsWith(DATA_DIR + path.sep)) {
-    throw new Error('Invalid analytics store path');
-  }
-  // Keep latest 5000 events and 500 sessions to bound disk usage
-  const sessionEntries = Object.entries(store.sessions)
-    .sort((a, b) => (a[1].lastSeenAt < b[1].lastSeenAt ? 1 : -1))
-    .slice(0, 500);
-  const trimmedSessions: Record<string, SessionRecord> = Object.fromEntries(sessionEntries);
-  const trimmedEvents = store.events.slice(-5000);
-
-  const tmpPath = path.resolve(DATA_DIR, 'analytics-store.tmp.json');
-  if (!tmpPath.startsWith(DATA_DIR + path.sep)) {
-    throw new Error('Invalid temp path');
-  }
-  fs.writeFileSync(
-    tmpPath,
-    JSON.stringify({ sessions: trimmedSessions, events: trimmedEvents }, null, 2),
-    'utf-8'
-  );
-  fs.renameSync(tmpPath, STORE_PATH);
-}
-
-interface InquiryRecord {
-  id: string;
-  fullName: string;
-  email: string;
-  contactChannel: string;
-  region: string;
-  track: string;
-  experienceNote: string;
-  consentAccepted: boolean;
-  createdAt: string;
-}
-
-function loadInquiries(): InquiryRecord[] {
-  ensureStoreDir();
-  if (!INQUIRIES_PATH.startsWith(DATA_DIR + path.sep)) {
-    throw new Error('Invalid inquiries store path');
-  }
-  if (!fs.existsSync(INQUIRIES_PATH)) {
-    return [];
-  }
-  try {
-    const raw = fs.readFileSync(INQUIRIES_PATH, 'utf-8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as InquiryRecord[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveInquiries(records: InquiryRecord[]): void {
-  ensureStoreDir();
-  if (!INQUIRIES_PATH.startsWith(DATA_DIR + path.sep)) {
-    throw new Error('Invalid inquiries store path');
-  }
-  const tmpPath = path.resolve(DATA_DIR, 'inquiries.tmp.json');
-  if (!tmpPath.startsWith(DATA_DIR + path.sep)) {
-    throw new Error('Invalid temp path');
-  }
-  fs.writeFileSync(tmpPath, JSON.stringify(records.slice(-1000), null, 2), 'utf-8');
-  fs.renameSync(tmpPath, INQUIRIES_PATH);
-}
-
-function sanitizeStr(val: unknown, maxLen = 160): string {
-  if (typeof val !== 'string') return '';
-  return val.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, maxLen);
-}
-
-function clampNum(val: unknown, min: number, max: number): number | undefined {
-  if (typeof val !== 'number' || !Number.isFinite(val)) return undefined;
-  return Math.min(Math.max(Math.round(val * 10) / 10, min), max);
-}
-
-function parseUserAgent(ua: string): { deviceType: 'Desktop' | 'Mobile' | 'Tablet'; browser: string } {
-  const lower = ua.toLowerCase();
-  let deviceType: 'Desktop' | 'Mobile' | 'Tablet' = 'Desktop';
-  if (/ipad|tablet/.test(lower)) deviceType = 'Tablet';
-  else if (/mobi|android|iphone/.test(lower)) deviceType = 'Mobile';
-
-  let browser = 'Другой';
-  if (lower.includes('yabrowser')) browser = 'Яндекс.Браузер';
-  else if (lower.includes('edg/')) browser = 'Edge';
-  else if (lower.includes('chrome/')) browser = 'Chrome';
-  else if (lower.includes('firefox/')) browser = 'Firefox';
-  else if (lower.includes('safari/') && !lower.includes('chrome/')) browser = 'Safari';
-
-  return { deviceType, browser };
-}
 
 function getBaseUrl(req: express.Request): string {
   const envUrl = process.env.APP_URL;
@@ -188,12 +35,61 @@ function getBaseUrl(req: express.Request): string {
   return `${proto}://${host}`;
 }
 
+function handleDomainError(err: unknown, res: express.Response): void {
+  if (err instanceof ValidationError) {
+    res.status(400).json({ error: err.message, code: err.code });
+    return;
+  }
+  if (err instanceof NotFoundError) {
+    res.status(404).json({ error: err.message, code: err.code });
+    return;
+  }
+  if (err instanceof DomainError) {
+    res.status(422).json({ error: err.message, code: err.code });
+    return;
+  }
+  console.error('[HTTP Adapter Error]', err);
+  res.status(500).json({ error: 'Внутренняя ошибка сервера.' });
+}
+
 async function startServer() {
   const app = express();
+  app.disable('x-powered-by');
   app.set('trust proxy', true);
   app.use(express.json({ limit: '256kb' }));
 
-  let store = loadStore();
+  // Contour 3: Security headers middleware
+  app.use((_req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
+
+  // Composition Root: Infrastructure Adapters + Domain Event Bus + Use Cases
+  const eventBus = new InMemoryDomainEventBus();
+  const analyticsRepo = new JsonFileAnalyticsRepository(DATA_DIR);
+  const inquiryRepo = new JsonFileInquiryRepository(DATA_DIR);
+
+  // Contour 7: Observability subscriber (logs structured metadata without PII)
+  eventBus.subscribe('certification.inquiry_submitted', (event) => {
+    console.info(
+      JSON.stringify({
+        level: 'info',
+        event: event.eventName,
+        boundedContext: event.boundedContext,
+        occurredAt: event.occurredAt,
+        payload: event.payload,
+      })
+    );
+  });
+
+  const collectBehaviorUseCase = new CollectBehaviorUseCase(analyticsRepo, eventBus);
+  const getAnalyticsSummaryUseCase = new GetAnalyticsSummaryUseCase(analyticsRepo);
+  const getSessionDetailsUseCase = new GetSessionDetailsUseCase(analyticsRepo);
+  const resetAnalyticsUseCase = new ResetAnalyticsUseCase(analyticsRepo);
+  const submitInquiryUseCase = new SubmitInquiryUseCase(inquiryRepo, eventBus);
+  const getInquiryStatsUseCase = new GetInquiryStatsUseCase(inquiryRepo);
+  const getSystemHealthUseCase = new GetSystemHealthUseCase(inquiryRepo, analyticsRepo);
 
   // Dynamic robots.txt
   app.get('/robots.txt', (req, res) => {
@@ -238,252 +134,56 @@ async function startServer() {
     );
   });
 
-  // Collect real visit & user behavior events
+  // Contour 7: System Health & DDD Bounded Context status
+  app.get('/api/health', (_req, res) => {
+    try {
+      res.json(getSystemHealthUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  // Bounded Context: Analytics
   app.post('/api/analytics/collect', (req, res) => {
-    const body = req.body as {
-      sessionId?: unknown;
-      visitorId?: unknown;
-      viewport?: unknown;
-      referrer?: unknown;
-      utmSource?: unknown;
-      events?: unknown;
-    };
-
-    const sessionId = sanitizeStr(body.sessionId, 64);
-    const visitorId = sanitizeStr(body.visitorId, 64) || sessionId;
-    if (!sessionId) {
-      res.status(400).json({ error: 'sessionId is required' });
-      return;
+    try {
+      const body = req.body as Record<string, unknown>;
+      const result = collectBehaviorUseCase.execute({
+        sessionId: body?.sessionId,
+        visitorId: body?.visitorId,
+        viewport: body?.viewport,
+        referrer: body?.referrer,
+        utmSource: body?.utmSource,
+        events: body?.events,
+        userAgent: req.get('user-agent') || '',
+      });
+      res.json(result);
+    } catch (err) {
+      handleDomainError(err, res);
     }
-
-    const rawEvents = Array.isArray(body.events) ? body.events.slice(0, 50) : [];
-    if (rawEvents.length === 0) {
-      res.json({ ok: true, accepted: 0 });
-      return;
-    }
-
-    const ua = sanitizeStr(req.get('user-agent') || '', 256);
-    const { deviceType, browser } = parseUserAgent(ua);
-    const viewport = sanitizeStr(body.viewport, 32) || '1440x900';
-    const referrerRaw = sanitizeStr(body.referrer, 200);
-    let referrerLabel = 'Прямой заход';
-    if (referrerRaw) {
-      try {
-        const parsedRef = new URL(referrerRaw);
-        referrerLabel = parsedRef.hostname;
-      } catch {
-        referrerLabel = referrerRaw.slice(0, 64);
-      }
-    }
-    const utmSource = sanitizeStr(body.utmSource, 64);
-    const nowIso = new Date().toISOString();
-
-    if (!store.sessions[sessionId]) {
-      const firstTab = sanitizeStr((rawEvents[0] as { tab?: unknown })?.tab, 32) || 'overview';
-      store.sessions[sessionId] = {
-        sessionId,
-        visitorId,
-        startedAt: nowIso,
-        lastSeenAt: nowIso,
-        deviceType,
-        browser,
-        viewport,
-        referrer: referrerLabel,
-        utmSource,
-        landingTab: firstTab,
-        tabsVisited: [firstTab],
-        maxScrollDepth: 0,
-        durationSec: 0,
-        eventCount: 0,
-        clickCount: 0,
-      };
-    }
-
-    const session = store.sessions[sessionId];
-    session.lastSeenAt = nowIso;
-    session.viewport = viewport;
-
-    let accepted = 0;
-    for (const item of rawEvents) {
-      if (!item || typeof item !== 'object') continue;
-      const ev = item as Record<string, unknown>;
-      const type = sanitizeStr(ev.type, 32);
-      if (!ALLOWED_EVENT_TYPES.has(type)) continue;
-
-      const tab = sanitizeStr(ev.tab, 32) || 'overview';
-      const elapsedMs = clampNum(ev.elapsedMs, 0, 86_400_000) ?? 0;
-      const scrollDepth = clampNum(ev.scrollDepth, 0, 100);
-      const xPct = clampNum(ev.xPct, 0, 100);
-      const yPct = clampNum(ev.yPct, 0, 100);
-
-      const cleanEvent: BehaviorEvent = {
-        id: sanitizeStr(ev.id, 48) || `${Date.now()}-${accepted}`,
-        sessionId,
-        type,
-        tab,
-        timestamp: sanitizeStr(ev.timestamp, 40) || nowIso,
-        elapsedMs,
-        label: sanitizeStr(ev.label, 120) || undefined,
-        targetTag: sanitizeStr(ev.targetTag, 24) || undefined,
-        xPct,
-        yPct,
-        scrollDepth,
-        detail: sanitizeStr(ev.detail, 160) || undefined,
-      };
-
-      store.events.push(cleanEvent);
-      accepted++;
-      session.eventCount += 1;
-
-      if (type === 'click') {
-        session.clickCount += 1;
-      }
-      if (!session.tabsVisited.includes(tab)) {
-        session.tabsVisited.push(tab);
-      }
-      if (typeof scrollDepth === 'number' && scrollDepth > session.maxScrollDepth) {
-        session.maxScrollDepth = scrollDepth;
-      }
-      const sec = Math.round(elapsedMs / 1000);
-      if (sec > session.durationSec) {
-        session.durationSec = sec;
-      }
-    }
-
-    if (accepted > 0) {
-      saveStore(store);
-    }
-
-    res.json({ ok: true, accepted });
   });
 
-  // Get aggregated visit statistics, heatmap points, and session summaries
   app.get('/api/analytics/summary', (_req, res) => {
-    const sessionsList = Object.values(store.sessions).sort((a, b) =>
-      a.lastSeenAt < b.lastSeenAt ? 1 : -1
-    );
-    const uniqueVisitors = new Set(sessionsList.map((s) => s.visitorId)).size;
-    const pageviews = store.events.filter(
-      (e) => e.type === 'pageview' || e.type === 'session_start'
-    ).length;
-    const totalClicks = store.events.filter((e) => e.type === 'click').length;
-
-    const avgDurationSec =
-      sessionsList.length > 0
-        ? Math.round(
-            sessionsList.reduce((acc, s) => acc + s.durationSec, 0) / sessionsList.length
-          )
-        : 0;
-
-    const avgScrollDepth =
-      sessionsList.length > 0
-        ? Math.round(
-            sessionsList.reduce((acc, s) => acc + s.maxScrollDepth, 0) / sessionsList.length
-          )
-        : 0;
-
-    // Tab breakdown
-    const tabStatsMap: Record<string, { views: number; clicks: number; interactions: number }> = {};
-    for (const ev of store.events) {
-      if (!tabStatsMap[ev.tab]) {
-        tabStatsMap[ev.tab] = { views: 0, clicks: 0, interactions: 0 };
-      }
-      if (ev.type === 'pageview' || ev.type === 'session_start') tabStatsMap[ev.tab].views += 1;
-      if (ev.type === 'click') tabStatsMap[ev.tab].clicks += 1;
-      if (ev.type === 'interaction') tabStatsMap[ev.tab].interactions += 1;
+    try {
+      res.json(getAnalyticsSummaryUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
     }
-
-    // Device & Referrer breakdown
-    const devices: Record<string, number> = {};
-    const referrers: Record<string, number> = {};
-    for (const s of sessionsList) {
-      devices[s.deviceType] = (devices[s.deviceType] || 0) + 1;
-      const refKey = s.utmSource ? `${s.referrer} (utm: ${s.utmSource})` : s.referrer;
-      referrers[refKey] = (referrers[refKey] || 0) + 1;
-    }
-
-    // Hourly traffic buckets (last 24h or by session start hour)
-    const timelineMap: Record<string, { label: string; visits: number; events: number }> = {};
-    for (const s of sessionsList) {
-      const dt = new Date(s.startedAt);
-      const key = `${dt.toISOString().slice(0, 13)}:00`;
-      const label = `${String(dt.getHours()).padStart(2, '0')}:00`;
-      if (!timelineMap[key]) timelineMap[key] = { label, visits: 0, events: 0 };
-      timelineMap[key].visits += 1;
-      timelineMap[key].events += s.eventCount;
-    }
-    const timeline = Object.entries(timelineMap)
-      .sort((a, b) => (a[0] > b[0] ? 1 : -1))
-      .slice(-12)
-      .map(([, val]) => val);
-
-    // Top clicked labels
-    const clickLabelsMap: Record<string, { label: string; tab: string; count: number }> = {};
-    const heatmapPoints: { xPct: number; yPct: number; tab: string; label: string }[] = [];
-
-    for (const ev of store.events) {
-      if (ev.type === 'click') {
-        if (typeof ev.xPct === 'number' && typeof ev.yPct === 'number') {
-          heatmapPoints.push({
-            xPct: ev.xPct,
-            yPct: ev.yPct,
-            tab: ev.tab,
-            label: ev.label || ev.targetTag || 'Элемент',
-          });
-        }
-        const key = `${ev.tab}::${ev.label || ev.targetTag || 'Клик'}`;
-        if (!clickLabelsMap[key]) {
-          clickLabelsMap[key] = {
-            label: ev.label || ev.targetTag || 'Элемент интерфейса',
-            tab: ev.tab,
-            count: 0,
-          };
-        }
-        clickLabelsMap[key].count += 1;
-      }
-    }
-
-    const topClicked = Object.values(clickLabelsMap)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    res.json({
-      totals: {
-        sessions: sessionsList.length,
-        uniqueVisitors,
-        pageviews,
-        totalEvents: store.events.length,
-        totalClicks,
-        avgDurationSec,
-        avgScrollDepth,
-      },
-      tabStats: tabStatsMap,
-      devices,
-      referrers,
-      timeline,
-      topClicked,
-      heatmapPoints: heatmapPoints.slice(-400),
-      recentSessions: sessionsList.slice(0, 30),
-    });
   });
 
-  // Get detailed behavior event log for a specific session
   app.get('/api/analytics/sessions/:sessionId', (req, res) => {
-    const sessionId = sanitizeStr(req.params.sessionId, 64);
-    const session = store.sessions[sessionId];
-    if (!session) {
-      res.status(404).json({ error: 'Session not found' });
-      return;
+    try {
+      res.json(getSessionDetailsUseCase.execute(req.params.sessionId));
+    } catch (err) {
+      handleDomainError(err, res);
     }
-    const events = store.events.filter((e) => e.sessionId === sessionId);
-    res.json({ session, events });
   });
 
-  // Reset stored analytics logs
   app.delete('/api/analytics/reset', (_req, res) => {
-    store = { sessions: {}, events: [] };
-    saveStore(store);
-    res.json({ ok: true });
+    try {
+      res.json(resetAnalyticsUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
   });
 
   // Server-side SEO endpoints check
@@ -499,56 +199,31 @@ async function startServer() {
     });
   });
 
-  // Instructor certification inquiry subscription (POST) & aggregate count (GET, no PII)
+  // Bounded Context: Certification Inquiries
   app.get('/api/inquiries/stats', (_req, res) => {
-    const inquiries = loadInquiries();
-    res.json({ totalSubscriptions: inquiries.length });
+    try {
+      res.json(getInquiryStatsUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
   });
 
   app.post('/api/inquiries', (req, res) => {
-    const body = req.body as Record<string, unknown>;
-    const fullName = sanitizeStr(body.fullName, 120);
-    const email = sanitizeStr(body.email, 160).toLowerCase();
-    const contactChannel = sanitizeStr(body.contactChannel, 100);
-    const region = sanitizeStr(body.region, 80);
-    const track = sanitizeStr(body.track, 100);
-    const experienceNote = sanitizeStr(body.experienceNote, 600);
-    const consentAccepted = body.consentAccepted === true;
-
-    if (fullName.length < 2) {
-      res.status(400).json({ error: 'Укажите имя или ФИО (не менее 2 символов).' });
-      return;
+    try {
+      const body = (req.body || {}) as Record<string, unknown>;
+      const result = submitInquiryUseCase.execute({
+        fullName: body.fullName,
+        email: body.email,
+        contactChannel: body.contactChannel,
+        region: body.region,
+        track: body.track,
+        experienceNote: body.experienceNote,
+        consentAccepted: body.consentAccepted,
+      });
+      res.status(201).json(result);
+    } catch (err) {
+      handleDomainError(err, res);
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-      res.status(400).json({ error: 'Укажите корректный адрес электронной почты.' });
-      return;
-    }
-    if (!consentAccepted) {
-      res.status(400).json({ error: 'Необходимо подтвердить согласие на получение уведомлений.' });
-      return;
-    }
-
-    const inquiries = loadInquiries();
-    const newRecord: InquiryRecord = {
-      id: `inq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      fullName,
-      email,
-      contactChannel,
-      region: region || 'Приморский край',
-      track: track || 'Пешеходный туризм',
-      experienceNote,
-      consentAccepted: true,
-      createdAt: new Date().toISOString(),
-    };
-    inquiries.push(newRecord);
-    saveInquiries(inquiries);
-
-    res.status(201).json({
-      ok: true,
-      id: newRecord.id,
-      createdAt: newRecord.createdAt,
-      totalSubscriptions: inquiries.length,
-    });
   });
 
   if (!IS_PROD) {

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
+import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
 
 export const CalculatorSection: React.FC = () => {
   const [activePresetId, setActivePresetId] = useState<string>(DEMAND_PRESETS[0].id);
@@ -28,51 +29,22 @@ export const CalculatorSection: React.FC = () => {
     setRegistryCount(preset.registryCount);
   };
 
-  const results = useMemo(() => {
-    const organizedTourists = Math.round(tAct * (pOrg / 100));
-    const humanGroupsPerYear = organizedTourists / gSize;
-    const baseDemand = humanGroupsPerYear / groupsPerSeason;
-    const totalDemand = Math.round(baseDemand * kSeason * kTurnover);
-    const deficit = Math.max(totalDemand - registryCount, 0);
-    const gapMultiple = registryCount > 0 ? totalDemand / registryCount : 0;
-
-    // Sensitivity curve across P_org 10% -> 50%
-    const sensitivityPoints = [10, 15, 20, 25, 30, 35, 40, 45, 50].map((p) => {
-      const n = Math.round(((tAct * (p / 100)) / gSize / groupsPerSeason) * kSeason * kTurnover);
-      return { p, n };
-    });
-
-    // 5-year cohort simulation considering 10% annual attrition & 5-year recertification cycle
-    const annualTrained = groupsPerYear * cohortSize;
-    const annualNewCertified = Math.round(annualTrained * (conversionRate / 100));
-    const attritionRate = kTurnover - 1; // e.g., 0.10
-
-    const fiveYearProjection: { year: number; certified: number; deficitRemaining: number }[] = [];
-    let currentLegal = registryCount;
-    for (let y = 2026; y <= 2030; y++) {
-      if (y > 2026) {
-        currentLegal = Math.round(currentLegal * (1 - attritionRate) + annualNewCertified);
-      }
-      fiveYearProjection.push({
-        year: y,
-        certified: currentLegal,
-        deficitRemaining: Math.max(totalDemand - currentLegal, 0),
-      });
-    }
-
-    return {
-      organizedTourists,
-      humanGroupsPerYear: Math.round(humanGroupsPerYear),
-      baseDemand: Math.round(baseDemand),
-      totalDemand,
-      deficit,
-      gapMultiple,
-      sensitivityPoints,
-      annualTrained,
-      annualNewCertified,
-      fiveYearProjection,
-    };
-  }, [tAct, pOrg, gSize, groupsPerSeason, kSeason, kTurnover, registryCount, groupsPerYear, cohortSize, conversionRate]);
+  const results = useMemo(
+    () =>
+      DemandForecastService.calculate({
+        tAct,
+        pOrg,
+        gSize,
+        groupsPerSeason,
+        kSeason,
+        kTurnover,
+        registryCount,
+        groupsPerYear,
+        cohortSize,
+        conversionRate,
+      }),
+    [tAct, pOrg, gSize, groupsPerSeason, kSeason, kTurnover, registryCount, groupsPerYear, cohortSize, conversionRate]
+  );
 
   // SVG Sensitivity chart geometry
   const chartW = 540;
