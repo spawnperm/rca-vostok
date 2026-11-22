@@ -1,12 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Menu, UserRound, X } from 'lucide-react';
-import { OverviewSection } from './components/OverviewSection';
-import { CalculatorSection } from './components/CalculatorSection';
-import { MarketSection } from './components/MarketSection';
-import { DissertationSection } from './components/DissertationSection';
-import { PresentationsSection } from './components/PresentationsSection';
-import { AnalyticsSection } from './components/AnalyticsSection';
-import { AccountSection } from './components/AccountSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   LandingHero,
@@ -20,6 +13,54 @@ import { NewsSection, RoutesSection } from './components/landing/NewsAndRoutes';
 import { LANDING_SECTIONS } from './data/landingContent';
 import { applySectionSeo, SECTION_SEO_MAP, type SiteTabId } from './utils/seo';
 import { tracker } from './utils/tracker';
+
+/**
+ * Heavy platform sections are split out of the entry chunk.
+ *
+ * The landing page is what every visitor loads, so it stays in the initial
+ * bundle; the analytical sections (charts, presentations, the cabinet) are only
+ * fetched when their tab is opened. Before this split the whole application —
+ * including Recharts and every analytical page — shipped as one 1.2 MB chunk
+ * that had to be parsed before the landing could render.
+ */
+const OverviewSection = lazy(() =>
+  import('./components/OverviewSection').then((m) => ({ default: m.OverviewSection }))
+);
+const CalculatorSection = lazy(() =>
+  import('./components/CalculatorSection').then((m) => ({ default: m.CalculatorSection }))
+);
+const MarketSection = lazy(() =>
+  import('./components/MarketSection').then((m) => ({ default: m.MarketSection }))
+);
+const DissertationSection = lazy(() =>
+  import('./components/DissertationSection').then((m) => ({ default: m.DissertationSection }))
+);
+const PresentationsSection = lazy(() =>
+  import('./components/PresentationsSection').then((m) => ({ default: m.PresentationsSection }))
+);
+const AnalyticsSection = lazy(() =>
+  import('./components/AnalyticsSection').then((m) => ({ default: m.AnalyticsSection }))
+);
+const AccountSection = lazy(() =>
+  import('./components/AccountSection').then((m) => ({ default: m.AccountSection }))
+);
+
+/** Placeholder shown while a lazy section is being fetched. */
+function SectionFallback({ label }: { label: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="bg-white border border-slate-200 rounded-xl p-8 space-y-3"
+    >
+      <span className="sr-only">Загрузка раздела «{label}»</span>
+      <div className="h-4 w-40 bg-slate-100 rounded animate-pulse" aria-hidden="true" />
+      <div className="h-3 w-full bg-slate-100 rounded animate-pulse" aria-hidden="true" />
+      <div className="h-3 w-5/6 bg-slate-100 rounded animate-pulse" aria-hidden="true" />
+      <p className="text-xs text-slate-500 pt-2">Загружаем «{label}»…</p>
+    </div>
+  );
+}
 
 /**
  * Navigation is split in two, mirroring the product's two halves:
@@ -231,13 +272,17 @@ export default function App() {
             {activeTab === 'routes' && <RoutesSection />}
             {activeTab === 'contacts' && <ContactsSection />}
 
-            {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
-            {activeTab === 'calculator' && <CalculatorSection />}
-            {activeTab === 'market' && <MarketSection />}
-            {activeTab === 'dissertation' && <DissertationSection />}
-            {activeTab === 'presentations' && <PresentationsSection />}
-            {activeTab === 'analytics' && <AnalyticsSection />}
-            {activeTab === 'account' && <AccountSection />}
+            {/* Lazy sections need a boundary per tab so switching tabs shows a
+                placeholder instead of suspending the whole page. */}
+            <Suspense fallback={<SectionFallback label={SECTION_SEO_MAP[activeTab].name} />}>
+              {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
+              {activeTab === 'calculator' && <CalculatorSection />}
+              {activeTab === 'market' && <MarketSection />}
+              {activeTab === 'dissertation' && <DissertationSection />}
+              {activeTab === 'presentations' && <PresentationsSection />}
+              {activeTab === 'analytics' && <AnalyticsSection />}
+              {activeTab === 'account' && <AccountSection />}
+            </Suspense>
           </ErrorBoundary>
         </main>
 

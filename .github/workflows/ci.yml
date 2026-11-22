@@ -31,6 +31,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Fails the build on high/critical advisories only: low-severity findings
+      # in transitive dev dependencies are noisy and would block unrelated work.
+      - name: Dependency vulnerability audit
+        run: pnpm audit --audit-level=high
+
       - name: TypeScript static check
         run: pnpm run lint
 
@@ -39,3 +44,46 @@ jobs:
 
       - name: Production bundle build
         run: pnpm run build
+
+  integration:
+    name: PostgreSQL Integration Tests
+    runs-on: ubuntu-latest
+
+    # Real database, because the PostgreSQL adapters were previously only
+    # exercised through in-memory doubles and two production bugs (duplicate
+    # analytics events, a missing column) went unnoticed as a result.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: rca
+          POSTGRES_PASSWORD: integration-only-password
+          POSTGRES_DB: rca_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rca -d rca_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run PostgreSQL integration suite
+        env:
+          TEST_DATABASE_URL: postgres://rca:integration-only-password@localhost:5432/rca_integration
+        run: node --test tests/postgres-integration.test.ts

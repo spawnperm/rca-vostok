@@ -1,0 +1,50 @@
+# Keeps dependencies and GitHub Actions current.
+#
+# Security patches are grouped and opened immediately; routine version bumps are
+# batched weekly so they do not flood the repository with pull requests.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+    open-pull-requests-limit: 5
+    groups:
+      # Security fixes should be reviewed on their own, never buried in a batch.
+      security:
+        applies-to: security-updates
+        patterns: ['*']
+      # Dev tooling can be upgraded together: a failure here is caught by CI
+      # long before it reaches production.
+      dev-dependencies:
+        dependency-type: development
+        patterns: ['*']
+    ignore:
+      # Major upgrades need a deliberate migration, not an automated PR.
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'esbuild'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'vite'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+
+  # Base images matter as much as packages: a stale Node or Postgres image is a
+  # quiet source of unpatched CVEs.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
