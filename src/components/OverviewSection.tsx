@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
+  BookOpen,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -9,17 +10,85 @@ import {
   ExternalLink,
   Quote,
   Send,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   ATTESTATION_FAQ,
   ATTESTATION_TIMELINE_2025_2030,
+  CENTER_ACCREDITATION_STATUS,
   EMPIRICAL_TABLE,
   EXPERT_TESTIMONIALS,
+  GLOSSARY_TERMS,
   HERO_IMAGE,
   INDUSTRY_NEWS,
   RCA_PROFILE,
+  type GlossaryTerm,
 } from '../data/researchData';
 import { tracker } from '../utils/tracker';
+
+interface GlossaryTooltipTermProps {
+  termItem: GlossaryTerm;
+  displayText?: string;
+  isPinned: boolean;
+  onPinToggle: (term: GlossaryTerm) => void;
+}
+
+const GlossaryTooltipTerm: React.FC<GlossaryTooltipTermProps> = ({
+  termItem,
+  displayText,
+  isPinned,
+  onPinToggle,
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const isOpen = isHovered || isPinned;
+
+  return (
+    <span
+      className="relative inline-block"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <button
+        type="button"
+        onClick={() => onPinToggle(termItem)}
+        onFocus={() => setIsHovered(true)}
+        onBlur={() => setIsHovered(false)}
+        aria-describedby={`tooltip-inline-${termItem.id}`}
+        aria-expanded={isOpen}
+        className={`inline font-medium border-b border-dotted transition-colors cursor-help focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+          isOpen
+            ? 'text-teal-800 border-teal-800 bg-teal-50/70 rounded-xs px-0.5'
+            : 'text-teal-800 border-teal-700/70 hover:text-teal-900 hover:border-teal-900'
+        }`}
+      >
+        {displayText ?? termItem.term}
+      </button>
+
+      <span
+        id={`tooltip-inline-${termItem.id}`}
+        role="tooltip"
+        className={`absolute z-30 bottom-full left-0 sm:left-1/2 sm:-translate-x-1/2 mb-2.5 w-72 sm:w-80 max-w-[calc(100vw-3rem)] p-4 rounded-lg bg-slate-900 text-white shadow-lg border border-slate-700 text-left transition-[opacity,transform] duration-150 ${
+          isOpen
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 translate-y-1 pointer-events-none'
+        }`}
+      >
+        <span className="block text-[11px] font-mono text-teal-300 tabular-nums">
+          {termItem.categoryLabel} · {termItem.shortTag}
+        </span>
+        <span className="block mt-1 text-sm font-semibold text-white">
+          {termItem.term}
+        </span>
+        <span className="block mt-1.5 text-xs text-slate-200 leading-relaxed font-normal">
+          {termItem.definition}
+        </span>
+        <span className="block mt-2 pt-2 border-t border-slate-700/80 text-[11px] text-slate-300 leading-snug font-normal">
+          {termItem.contextNote}
+        </span>
+      </span>
+    </span>
+  );
+};
 
 interface OverviewSectionProps {
   onNavigate: (tab: 'calculator' | 'market' | 'dissertation' | 'presentations') => void;
@@ -34,10 +103,41 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   const [timelineIndex, setTimelineIndex] = useState<number>(2); // Default to active 2026-2027 stage
   const [newsCategory, setNewsCategory] = useState<'all' | 'regulation' | 'rca' | 'market'>('all');
   const [expandedNewsIds, setExpandedNewsIds] = useState<string[]>([INDUSTRY_NEWS[0].id]);
+  const [activeContourId, setActiveContourId] = useState<string>(
+    CENTER_ACCREDITATION_STATUS.contours[0].id
+  );
+  const [glossaryCategory, setGlossaryCategory] = useState<
+    'all' | 'regulation' | 'procedure' | 'economics'
+  >('all');
+  const [hoveredGlossaryId, setHoveredGlossaryId] = useState<string | null>(null);
+  const [pinnedGlossaryId, setPinnedGlossaryId] = useState<string | null>(null);
 
   const activeExpert = EXPERT_TESTIMONIALS[expertIndex] ?? EXPERT_TESTIMONIALS[0];
   const activeMilestone =
     ATTESTATION_TIMELINE_2025_2030[timelineIndex] ?? ATTESTATION_TIMELINE_2025_2030[0];
+  const activeAccreditationContour =
+    CENTER_ACCREDITATION_STATUS.contours.find((c) => c.id === activeContourId) ??
+    CENTER_ACCREDITATION_STATUS.contours[0];
+
+  const glossaryById = Object.fromEntries(GLOSSARY_TERMS.map((t) => [t.id, t])) as Record<
+    string,
+    GlossaryTerm
+  >;
+
+  const filteredGlossary =
+    glossaryCategory === 'all'
+      ? GLOSSARY_TERMS
+      : GLOSSARY_TERMS.filter((item) => item.category === glossaryCategory);
+
+  const handleToggleGlossaryPin = (term: GlossaryTerm) => {
+    setPinnedGlossaryId((prev) => {
+      const next = prev === term.id ? null : term.id;
+      if (next) {
+        tracker.trackCustomInteraction(`Глоссарий: ${term.term}`, term.categoryLabel);
+      }
+      return next;
+    });
+  };
 
   const handleSelectTimeline = (idx: number) => {
     const normalized = Math.max(0, Math.min(idx, ATTESTATION_TIMELINE_2025_2030.length - 1));
@@ -363,6 +463,156 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Center Accreditation & Licensing Status */}
+      <section
+        aria-labelledby="accreditation-status-heading"
+        className="bg-white border border-slate-200 rounded-xl p-8 space-y-6"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1 max-w-3xl">
+            <p className="text-xs font-medium text-teal-700">
+              Правовая легитимность и лицензирование по законам РФ
+            </p>
+            <h2 id="accreditation-status-heading" className="text-xl font-bold text-slate-900">
+              Статус аккредитации центра
+            </h2>
+            <p className="text-sm text-slate-600 leading-relaxed pt-1">
+              {CENTER_ACCREDITATION_STATUS.summary}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 shrink-0">
+            <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800">
+              <ShieldCheck className="w-4 h-4 text-teal-700" aria-hidden="true" />
+              <span>Действующий уполномоченный статус</span>
+            </div>
+            <a
+              href={CENTER_ACCREDITATION_STATUS.officialPortal}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            >
+              <span>Портал rca-vostok.ru</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+            </a>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pt-2 border-t border-slate-200">
+          {/* Left 7 cols: Interactive Legal Contours */}
+          <div className="lg:col-span-7 space-y-5">
+            <div
+              role="tablist"
+              aria-label="Правовые контуры деятельности РЦА и ВВГУ"
+              className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
+            >
+              {CENTER_ACCREDITATION_STATUS.contours.map((contour, idx) => {
+                const isSelected = contour.id === activeAccreditationContour.id;
+                return (
+                  <button
+                    key={contour.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      setActiveContourId(contour.id);
+                      tracker.trackCustomInteraction(`Аккредитация: ${contour.code}`);
+                    }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                      isSelected
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    0{idx + 1}.{' '}
+                    {idx === 0
+                      ? 'Лицензия ДПО ВВГУ'
+                      : idx === 1
+                      ? 'Полномочия РЦА и ФСТР'
+                      : 'Комиссия и полигоны'}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                <span className="font-mono font-semibold text-teal-800 tabular-nums">
+                  {activeAccreditationContour.code}
+                </span>
+                <span className="font-medium text-slate-700">
+                  {activeAccreditationContour.statusLabel}
+                </span>
+              </div>
+
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                {activeAccreditationContour.title}
+              </h3>
+
+              <dl className="divide-y divide-slate-200 text-xs sm:text-sm">
+                <div className="py-2.5 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
+                  <dt className="text-slate-500 font-medium">Уполномоченный орган</dt>
+                  <dd className="sm:col-span-2 text-slate-900 font-medium">
+                    {activeAccreditationContour.authority}
+                  </dd>
+                </div>
+                <div className="py-2.5 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
+                  <dt className="text-slate-500 font-medium">Нормативное основание</dt>
+                  <dd className="sm:col-span-2 font-mono text-xs text-teal-800 tabular-nums">
+                    {activeAccreditationContour.legalNorm}
+                  </dd>
+                </div>
+                <div className="py-2.5 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4">
+                  <dt className="text-slate-500 font-medium">Область действия</dt>
+                  <dd className="sm:col-span-2 text-slate-700 leading-relaxed">
+                    {activeAccreditationContour.scope}
+                  </dd>
+                </div>
+              </dl>
+
+              <p className="text-xs text-slate-600 pt-2 border-t border-slate-200 leading-relaxed">
+                {activeAccreditationContour.verificationNote}
+              </p>
+            </div>
+          </div>
+
+          {/* Right 5 cols: RF Statutory Compliance Matrix */}
+          <div className="lg:col-span-5 space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-slate-700">
+                Соответствие требованиям законодательства РФ
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Оператор обучения: ВВГУ · Оператор реестра: Минэкономразвития РФ
+              </p>
+            </div>
+
+            <div className="divide-y divide-slate-200 border-y border-slate-200">
+              {CENTER_ACCREDITATION_STATUS.complianceChecklist.map((item) => (
+                <div key={item.id} className="py-3.5 space-y-1">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-xs font-semibold text-slate-900 leading-snug">
+                      {item.requirement}
+                    </p>
+                    <span className="text-[11px] font-mono text-teal-800 tabular-nums whitespace-nowrap shrink-0">
+                      {item.normRef}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed">{item.implementation}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Актуальный перечень образовательных программ ДПО и графики аттестационных сессий
+              подтверждаются официальным порталом{' '}
+              <span className="font-mono text-slate-700">rca-vostok.ru</span> и вносимыми записями
+              в Единый федеральный реестр.
+            </p>
           </div>
         </div>
       </section>
@@ -836,6 +1086,171 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
             );
           })}
         </ol>
+      </section>
+
+      {/* Interactive Glossary of Terms */}
+      <section
+        aria-labelledby="glossary-heading"
+        className="bg-white border border-slate-200 rounded-xl p-8 space-y-6"
+      >
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-teal-700">Терминологический справочник</p>
+            <h2 id="glossary-heading" className="text-xl font-bold text-slate-900 inline-flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-teal-700 shrink-0" aria-hidden="true" />
+              <span>Глоссарий терминов</span>
+            </h2>
+          </div>
+
+          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            {(
+              [
+                { id: 'all', label: `Все понятия (${GLOSSARY_TERMS.length})` },
+                { id: 'regulation', label: 'Правовой статус' },
+                { id: 'procedure', label: 'Процедура и маршруты' },
+                { id: 'economics', label: 'Экономика и модель' },
+              ] as const
+            ).map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setGlossaryCategory(cat.id)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  glossaryCategory === cat.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Contextual editorial prose with hover/focus inline glossary tooltips */}
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 space-y-3">
+          <p className="text-xs font-medium text-slate-500">
+            Наведите курсор на выделенное понятие (или сфокусируйтесь с клавиатуры), чтобы открыть всплывающее определение
+          </p>
+          <p className="text-sm sm:text-base text-slate-800 leading-relaxed max-w-4xl">
+            В соответствии с действующим законодательством РФ, каждый{' '}
+            <GlossaryTooltipTerm
+              termItem={glossaryById['term-instructor-guide']}
+              displayText="инструктор-проводник"
+              isPinned={pinnedGlossaryId === 'term-instructor-guide'}
+              onPinToggle={handleToggleGlossaryPin}
+            />
+            , сопровождающий туристические группы на активных маршрутах, обязан пройти государственную{' '}
+            <GlossaryTooltipTerm
+              termItem={glossaryById['term-attestation']}
+              displayText="аттестацию"
+              isPinned={pinnedGlossaryId === 'term-attestation'}
+              onPinToggle={handleToggleGlossaryPin}
+            />{' '}
+            с учётом заявленной{' '}
+            <GlossaryTooltipTerm
+              termItem={glossaryById['term-difficulty-category']}
+              displayText="категории сложности"
+              isPinned={pinnedGlossaryId === 'term-difficulty-category'}
+              onPinToggle={handleToggleGlossaryPin}
+            />
+            . На теоретическом этапе в ВВГУ соискатель защищает{' '}
+            <GlossaryTooltipTerm
+              termItem={glossaryById['term-route-passport']}
+              displayText="паспорт маршрута"
+              isPinned={pinnedGlossaryId === 'term-route-passport'}
+              onPinToggle={handleToggleGlossaryPin}
+            />
+            , после полевых испытаний сведения вносятся в{' '}
+            <GlossaryTooltipTerm
+              termItem={glossaryById['term-federal-registry']}
+              displayText="Единый федеральный реестр"
+              isPinned={pinnedGlossaryId === 'term-federal-registry'}
+              onPinToggle={handleToggleGlossaryPin}
+            />
+            . Чтобы вовлечь в легальное поле{' '}
+            <GlossaryTooltipTerm
+              termItem={glossaryById['term-unlegalized-reserve']}
+              displayText="нелегализованный резерв"
+              isPinned={pinnedGlossaryId === 'term-unlegalized-reserve'}
+              onPinToggle={handleToggleGlossaryPin}
+            />{' '}
+            опытных гидов ДФО, применяется{' '}
+            <GlossaryTooltipTerm
+              termItem={glossaryById['term-two-contour']}
+              displayText="двухконтурная модель (Контур А / Б)"
+              isPinned={pinnedGlossaryId === 'term-two-contour'}
+              onPinToggle={handleToggleGlossaryPin}
+            />
+            .
+          </p>
+        </div>
+
+        {/* Interactive Glossary Index Grid (hover/focus tooltip per term card) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredGlossary.map((item) => {
+            const isActive = hoveredGlossaryId === item.id || pinnedGlossaryId === item.id;
+            return (
+              <div
+                key={item.id}
+                className="relative"
+                onMouseEnter={() => setHoveredGlossaryId(item.id)}
+                onMouseLeave={() =>
+                  setHoveredGlossaryId((prev) => (prev === item.id ? null : prev))
+                }
+              >
+                <button
+                  type="button"
+                  onClick={() => handleToggleGlossaryPin(item)}
+                  onFocus={() => setHoveredGlossaryId(item.id)}
+                  onBlur={() =>
+                    setHoveredGlossaryId((prev) => (prev === item.id ? null : prev))
+                  }
+                  aria-describedby={`glossary-card-tip-${item.id}`}
+                  aria-expanded={isActive}
+                  className={`w-full text-left p-4 rounded-lg border transition-colors cursor-help focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                    isActive
+                      ? 'bg-slate-50 border-teal-700'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-baseline justify-between gap-2 text-[11px] text-slate-500">
+                    <span className="font-medium text-teal-800">{item.categoryLabel}</span>
+                    <span className="font-mono tabular-nums">{item.shortTag}</span>
+                  </div>
+                  <p className="mt-1.5 text-sm font-semibold text-slate-900 border-b border-dotted border-slate-400 inline-block">
+                    {item.term}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                    {item.definition}
+                  </p>
+                </button>
+
+                {/* Floating Definition Tooltip */}
+                <div
+                  id={`glossary-card-tip-${item.id}`}
+                  role="tooltip"
+                  className={`absolute z-30 bottom-full left-0 right-0 mb-2 p-4 rounded-lg bg-slate-900 text-white shadow-lg border border-slate-700 transition-[opacity,transform] duration-150 ${
+                    isActive
+                      ? 'opacity-100 translate-y-0 pointer-events-auto'
+                      : 'opacity-0 translate-y-1 pointer-events-none'
+                  }`}
+                >
+                  <p className="text-[11px] font-mono text-teal-300 tabular-nums">
+                    {item.categoryLabel} · {item.shortTag}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">{item.term}</p>
+                  <p className="mt-1.5 text-xs text-slate-200 leading-relaxed">
+                    {item.definition}
+                  </p>
+                  <p className="mt-2 pt-2 border-t border-slate-700/80 text-[11px] text-slate-300 leading-snug">
+                    {item.contextNote}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {/* Frequently Asked Questions (FAQ) on Certification Procedure */}
