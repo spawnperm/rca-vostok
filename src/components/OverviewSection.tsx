@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import {
   ATTESTATION_FAQ,
+  ATTESTATION_TIMELINE_2025_2030,
   EMPIRICAL_TABLE,
   EXPERT_TESTIMONIALS,
   HERO_IMAGE,
@@ -30,10 +31,22 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   const [faqCategory, setFaqCategory] = useState<'all' | 'procedure' | 'training' | 'region'>('all');
   const [openFaqIds, setOpenFaqIds] = useState<string[]>([ATTESTATION_FAQ[0].id]);
   const [expertIndex, setExpertIndex] = useState<number>(0);
+  const [timelineIndex, setTimelineIndex] = useState<number>(2); // Default to active 2026-2027 stage
   const [newsCategory, setNewsCategory] = useState<'all' | 'regulation' | 'rca' | 'market'>('all');
   const [expandedNewsIds, setExpandedNewsIds] = useState<string[]>([INDUSTRY_NEWS[0].id]);
 
   const activeExpert = EXPERT_TESTIMONIALS[expertIndex] ?? EXPERT_TESTIMONIALS[0];
+  const activeMilestone =
+    ATTESTATION_TIMELINE_2025_2030[timelineIndex] ?? ATTESTATION_TIMELINE_2025_2030[0];
+
+  const handleSelectTimeline = (idx: number) => {
+    const normalized = Math.max(0, Math.min(idx, ATTESTATION_TIMELINE_2025_2030.length - 1));
+    setTimelineIndex(normalized);
+    const chosen = ATTESTATION_TIMELINE_2025_2030[normalized];
+    if (chosen) {
+      tracker.trackCustomInteraction(`Таймлайн 2025–2030: ${chosen.period}`, chosen.phase);
+    }
+  };
 
   const handleSelectExpert = (nextIdx: number) => {
     const normalized =
@@ -442,6 +455,146 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
             Поскольку федеральная аттестация действует на всей территории РФ, ВВГУ и РЦА «Русский Восток» уже
             фактически выполняют роль межрегиональной площадки ДФО: треть аттестованных в октябре 2026 г. (11 из 26)
             прибыли из Хабаровского края и Камчатки.
+          </div>
+        </div>
+      </section>
+
+      {/* Horizontal Attestation Development Timeline 2025-2030 */}
+      <section aria-labelledby="timeline-2030-heading" className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-teal-700">Дорожная карта регулятора и ВВГУ</p>
+            <h2 id="timeline-2030-heading" className="text-xl font-bold text-slate-900">
+              Этапы развития аттестации 2025-2030
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-slate-500 tabular-nums mr-1">
+              {String(timelineIndex + 1).padStart(2, '0')} /{' '}
+              {String(ATTESTATION_TIMELINE_2025_2030.length).padStart(2, '0')}
+            </span>
+            <button
+              type="button"
+              disabled={timelineIndex === 0}
+              onClick={() => handleSelectTimeline(timelineIndex - 1)}
+              aria-label="Предыдущий этап таймлайна"
+              className="p-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            >
+              <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              disabled={timelineIndex === ATTESTATION_TIMELINE_2025_2030.length - 1}
+              onClick={() => handleSelectTimeline(timelineIndex + 1)}
+              aria-label="Следующий этап таймлайна"
+              className="p-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            >
+              <ChevronRight className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        {/* Horizontal Visual Timeline Ribbon */}
+        <div className="overflow-x-auto pb-2 -mx-2 px-2">
+          <div className="min-w-[820px] relative pt-2">
+            {/* Continuous horizontal axis rail */}
+            <div
+              aria-hidden="true"
+              className="absolute left-[8%] right-[8%] top-[25px] h-0.5 bg-slate-200"
+            >
+              <div
+                className="h-full w-full bg-teal-700 origin-left transition-transform duration-200"
+                style={{
+                  transform: `scaleX(${
+                    timelineIndex / Math.max(ATTESTATION_TIMELINE_2025_2030.length - 1, 1)
+                  })`,
+                }}
+              />
+            </div>
+
+            <ol className="grid grid-cols-6 gap-3 relative">
+              {ATTESTATION_TIMELINE_2025_2030.map((milestone, idx) => {
+                const isSelected = idx === timelineIndex;
+                const isPassed = idx < timelineIndex;
+                return (
+                  <li key={milestone.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTimeline(idx)}
+                      aria-current={isSelected ? 'step' : undefined}
+                      className="w-full text-center flex flex-col items-center gap-2.5 px-2 py-1 rounded-lg group cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                    >
+                      <span
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-mono font-bold tabular-nums border-2 transition-colors ${
+                          isSelected
+                            ? 'bg-teal-700 border-teal-700 text-white'
+                            : isPassed
+                            ? 'bg-slate-900 border-slate-900 text-white'
+                            : 'bg-white border-slate-300 text-slate-600 group-hover:border-teal-700 group-hover:text-teal-800'
+                        }`}
+                      >
+                        0{idx + 1}
+                      </span>
+
+                      <div className="space-y-0.5">
+                        <p
+                          className={`text-xs font-mono font-semibold tabular-nums whitespace-nowrap ${
+                            isSelected ? 'text-teal-800' : 'text-slate-900'
+                          }`}
+                        >
+                          {milestone.period}
+                        </p>
+                        <p className="text-[11px] text-slate-500 leading-snug">
+                          {milestone.phase}
+                        </p>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </div>
+
+        {/* Selected Milestone Detail Band */}
+        <div className="pt-6 border-t border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-7 space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span className="font-mono font-semibold text-teal-800 tabular-nums">
+                {activeMilestone.period}
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>{activeMilestone.phase}</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono tabular-nums text-slate-700">
+                {activeMilestone.checkpointMetric}
+              </span>
+            </div>
+
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
+              {activeMilestone.title}
+            </h3>
+
+            <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
+              {activeMilestone.summary}
+            </p>
+          </div>
+
+          <div className="lg:col-span-5 bg-slate-50 rounded-lg p-5 space-y-3">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+              Контрольные точки этапа
+            </p>
+            <ul className="space-y-2.5 text-xs text-slate-700 leading-relaxed">
+              {activeMilestone.keyTasks.map((task, tIdx) => (
+                <li key={task} className="flex items-start gap-2.5">
+                  <span className="font-mono font-semibold text-teal-700 tabular-nums shrink-0">
+                    0{tIdx + 1}.
+                  </span>
+                  <span>{task}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>
