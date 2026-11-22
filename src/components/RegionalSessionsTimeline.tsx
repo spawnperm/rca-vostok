@@ -44,7 +44,7 @@ export interface RegionalTimelineItem {
   checklist: string[];
 }
 
-const REGIONAL_SESSIONS_TIMELINE: RegionalTimelineItem[] = [
+export const REGIONAL_SESSIONS_TIMELINE: RegionalTimelineItem[] = [
   {
     id: 'tl-federal-1893',
     regionId: 'federal',

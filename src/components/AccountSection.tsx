@@ -19,6 +19,7 @@ import {
   AttestationProgressWidget,
   computeUserAttestationSummary,
 } from './AttestationProgressWidget';
+import { NotificationCenterWidget } from './NotificationCenterWidget';
 import {
   ApiError,
   ROLE_LABELS,
@@ -184,6 +185,15 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          <NotificationCenterWidget
+            user={user}
+            inquiries={inquiries}
+            inquiriesLoading={inquiriesLoading}
+            onRefreshInquiries={
+              hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
+            }
+            onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
+          />
           <ProfileCard user={user} onUpdated={handleAuthenticated} />
           <MyInquiriesSection
             canView={hasPermission(user, 'inquiries:view_own')}
