@@ -92,6 +92,27 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
     );
   `);
 
+  // The domain rewrites the whole bounded window on every saveStore call, so
+  // inserts must be idempotent. A natural key is required for that: without a
+  // unique constraint `ON CONFLICT DO NOTHING` silently does nothing and each
+  // save duplicates the entire window.
+  //
+  // Repair first: duplicates written before the natural key existed would make
+  // the unique index impossible to create (and inflate analytics counts).
+  // Keep the lowest id per (session_id, event_key).
+  await pool.query(`
+    DELETE FROM analytics_events a
+     USING analytics_events b
+     WHERE a.id > b.id
+       AND a.session_id = b.session_id
+       AND a.event_key = b.event_key;
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS analytics_events_natural_key
+      ON analytics_events (session_id, event_key);
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS analytics_events_session_idx
       ON analytics_events (session_id, id);

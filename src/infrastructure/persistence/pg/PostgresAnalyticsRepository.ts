@@ -186,7 +186,7 @@ export class PostgresAnalyticsRepository implements AnalyticsRepository {
              event_key, session_id, type, tab, occurred_at, elapsed_ms,
              label, target_tag, x_pct, y_pct, scroll_depth, detail
            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-           ON CONFLICT DO NOTHING`,
+           ON CONFLICT (session_id, event_key) DO NOTHING`,
           [
             ev.id,
             ev.sessionId,
