@@ -19,6 +19,7 @@ import { AccreditationRenewalLineChart } from './AccreditationRenewalLineChart';
 import { ActiveInquiriesDashboardWidget } from './ActiveInquiriesDashboardWidget';
 import { AttestationCommissionWidget } from './AttestationCommissionWidget';
 import { AttestationCostCalculator } from './AttestationCostCalculator';
+import { AttestationEventsCalendarWidget } from './AttestationEventsCalendarWidget';
 import { AttestationNewsFeed } from './AttestationNewsFeed';
 import { AttestationReadinessCheck } from './AttestationReadinessCheck';
 import { AttestationRoadmap } from './AttestationRoadmap';
@@ -889,6 +890,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Interactive Regional Sessions & Deadlines Timeline */}
       <RegionalSessionsTimeline
+        onApplyForSession={handleApplyForSession}
+        onContactCurator={openCuratorModal}
+      />
+
+      {/* Interactive Calendar of Upcoming Attestation Sessions & Webinars */}
+      <AttestationEventsCalendarWidget
         onApplyForSession={handleApplyForSession}
         onContactCurator={openCuratorModal}
       />
