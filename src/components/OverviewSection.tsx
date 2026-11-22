@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import { AttestationNewsFeed } from './AttestationNewsFeed';
 import { AttestationRoadmap } from './AttestationRoadmap';
 import {
   ATTESTATION_FAQ,
@@ -597,6 +598,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Candidate Attestation Roadmap */}
       <AttestationRoadmap onContactCurator={openCuratorModal} />
+
+      {/* Operational Certification Announcements & Regulatory Updates Feed */}
+      <AttestationNewsFeed onContactCurator={openCuratorModal} />
 
       {/* Center Accreditation & Licensing Status */}
       <section
