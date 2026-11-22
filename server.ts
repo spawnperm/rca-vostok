@@ -22,6 +22,52 @@ import type { AnalyticsRepository } from './src/domain/analytics/AnalyticsReposi
 import type { FeedbackRepository } from './src/domain/feedback/FeedbackRepository.ts';
 import type { InquiryRepository } from './src/domain/certification/InquiryRepository.ts';
 import { InMemoryDomainEventBus } from './src/infrastructure/events/InMemoryDomainEventBus.ts';
+import { createNatsBusFromEnv } from './src/infrastructure/events/NatsDomainEventBus.ts';
+import type { DomainEventBus } from './src/domain/shared/DomainError.ts';
+import type { SocialRepository } from './src/domain/social/SocialRepository.ts';
+import type { ChatRepository } from './src/domain/chat/ChatRepository.ts';
+import type { MediaRepository } from './src/domain/media/MediaRepository.ts';
+import { PostgresSocialRepository } from './src/infrastructure/persistence/pg/PostgresSocialRepository.ts';
+import { PostgresChatRepository } from './src/infrastructure/persistence/pg/PostgresChatRepository.ts';
+import { PostgresMediaRepository } from './src/infrastructure/persistence/pg/PostgresMediaRepository.ts';
+import { createObjectStorageFromEnv } from './src/infrastructure/storage/GarageObjectStorage.ts';
+import {
+  AddCommentUseCase,
+  CreatePostUseCase,
+  DeletePostUseCase,
+  FollowUserUseCase,
+  GetPostUseCase,
+  GetSocialProfileUseCase,
+  ListActivityUseCase,
+  ListFeedUseCase,
+  ToggleLikeUseCase,
+  UpdatePostUseCase,
+  UpdateSocialProfileUseCase,
+} from './src/application/social/SocialUseCases.ts';
+import {
+  CreateChannelUseCase,
+  DeleteMessageUseCase,
+  EditMessageUseCase,
+  JoinChannelUseCase,
+  ListChannelsUseCase,
+  ListMessagesUseCase,
+  SendMessageUseCase,
+  ToggleReactionUseCase,
+} from './src/application/chat/ChatUseCases.ts';
+import {
+  CreateAlbumUseCase,
+  DeleteAlbumUseCase,
+  DeleteAssetUseCase,
+  FindAlbumAccessUseCase,
+  FindAssetUseCase,
+  ListAlbumsUseCase,
+  ListAssetsUseCase,
+  RegisterAssetUseCase,
+} from './src/application/media/MediaUseCases.ts';
+import { createSocialRouter } from './src/infrastructure/http/SocialRouter.ts';
+import { createChatRouter } from './src/infrastructure/http/ChatRouter.ts';
+import { createMediaRouter } from './src/infrastructure/http/MediaRouter.ts';
+import { mountApiDocs } from './src/infrastructure/http/OpenApi.ts';
 import { JsonFileAnalyticsRepository } from './src/infrastructure/persistence/JsonFileAnalyticsRepository.ts';
 import { JsonFileFeedbackRepository } from './src/infrastructure/persistence/JsonFileFeedbackRepository.ts';
 import { JsonFileInquiryRepository } from './src/infrastructure/persistence/JsonFileInquiryRepository.ts';
@@ -106,7 +152,10 @@ async function startServer() {
   });
 
   // Composition Root: Infrastructure Adapters + Domain Event Bus + Use Cases
-  const eventBus = new InMemoryDomainEventBus();
+  // NATS is optional: when the broker is configured and reachable, domain
+  // events also fan out across processes; otherwise the in-memory bus is used.
+  const natsBus = await createNatsBusFromEnv();
+  const eventBus: DomainEventBus = natsBus ?? new InMemoryDomainEventBus();
 
   // Persistence adapter selection: PostgreSQL in production/containers, JSON
   // files for local development when no database is configured.
@@ -197,6 +246,66 @@ async function startServer() {
       setUserActive: new SetUserActiveUseCase(userRepo),
     })
   );
+
+  // ── Social, chat and media bounded contexts ───────────────────────────────
+  // These require PostgreSQL (they rely on relational joins and arrays). When
+  // no database is configured the routers are not mounted, so local dev of the
+  // cabinet still works without them.
+  if (pool) {
+    const socialRepo: SocialRepository = new PostgresSocialRepository(pool);
+    const chatRepo: ChatRepository = new PostgresChatRepository(pool);
+    const mediaRepo: MediaRepository = new PostgresMediaRepository(pool);
+    const objectStorage = createObjectStorageFromEnv();
+    console.info(
+      `[storage] media object storage: ${objectStorage ? 'S3/Garage' : 'disabled'}`
+    );
+
+    app.use(
+      createSocialRouter({
+        getProfile: new GetSocialProfileUseCase(socialRepo, userRepo),
+        updateProfile: new UpdateSocialProfileUseCase(socialRepo, userRepo, eventBus),
+        createPost: new CreatePostUseCase(socialRepo, eventBus),
+        updatePost: new UpdatePostUseCase(socialRepo),
+        deletePost: new DeletePostUseCase(socialRepo),
+        listFeed: new ListFeedUseCase(socialRepo),
+        getPost: new GetPostUseCase(socialRepo),
+        addComment: new AddCommentUseCase(socialRepo, eventBus),
+        toggleLike: new ToggleLikeUseCase(socialRepo, eventBus),
+        followUser: new FollowUserUseCase(socialRepo),
+        listActivity: new ListActivityUseCase(socialRepo),
+      })
+    );
+
+    app.use(
+      createChatRouter({
+        createChannel: new CreateChannelUseCase(chatRepo),
+        listChannels: new ListChannelsUseCase(chatRepo),
+        joinChannel: new JoinChannelUseCase(chatRepo),
+        listMessages: new ListMessagesUseCase(chatRepo),
+        sendMessage: new SendMessageUseCase(chatRepo, eventBus),
+        editMessage: new EditMessageUseCase(chatRepo),
+        deleteMessage: new DeleteMessageUseCase(chatRepo),
+        toggleReaction: new ToggleReactionUseCase(chatRepo),
+      })
+    );
+
+    app.use(
+      createMediaRouter({
+        createAlbum: new CreateAlbumUseCase(mediaRepo, eventBus),
+        listAlbums: new ListAlbumsUseCase(mediaRepo),
+        listAssets: new ListAssetsUseCase(mediaRepo),
+        registerAsset: new RegisterAssetUseCase(mediaRepo, objectStorage, eventBus),
+        deleteAsset: new DeleteAssetUseCase(mediaRepo, objectStorage),
+        deleteAlbum: new DeleteAlbumUseCase(mediaRepo),
+        findAsset: new FindAssetUseCase(mediaRepo),
+        findAlbum: new FindAlbumAccessUseCase(mediaRepo),
+        storage: objectStorage,
+      })
+    );
+  }
+
+  // Interactive API documentation (Scalar) + raw OpenAPI document.
+  mountApiDocs(app);
 
   // Dynamic robots.txt
   app.get('/robots.txt', (req, res) => {

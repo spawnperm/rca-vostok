@@ -47,6 +47,16 @@ services:
       PORT: "3000"
       APP_URL: ${APP_URL:-http://46.173.16.90}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Domain event fan-out. Optional: the app falls back to an in-memory bus
+      # when the broker is unreachable, so chat/feed never depend on it.
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      # Media object storage (Garage speaks S3).
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://garage:3900}
+      S3_REGION: ${S3_REGION:-garage}
+      S3_BUCKET: ${S3_BUCKET:-rca-media}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-/media}
     expose:
       - "3000"
     healthcheck:
@@ -83,6 +93,27 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
+    networks:
+      - rca
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # NATS: lightweight event bus for cross-process domain event fan-out.
+  # The JetStream store is memory-only here — events are transient signals, and
+  # this keeps the footprint under ~30 MB on the 3.8 GB host.
+  nats:
+    image: nats:2.10-alpine
+    container_name: rca-nats
+    restart: unless-stopped
+    # JetStream on, monitoring port 8222. Memory store is bounded so the broker
+    # cannot grow unbounded on a 3.8 GB host (`-js` alone uses defaults).
+    command: ["-js", "-sd", "/tmp/nats", "-m", "8222"]
+    expose:
+      - "4222"
+      - "8222"
     networks:
       - rca
     logging:

@@ -12,6 +12,7 @@ import {
   Save,
 } from 'lucide-react';
 import { tracker } from '../utils/tracker';
+import { SocialProfileSection } from './social/SocialProfileSection';
 import {
   ApiError,
   ROLE_LABELS,
@@ -105,6 +106,13 @@ export function AccountSection() {
           {hasPermission(user, 'users:manage') && <UserAdminCard currentUserId={user.id} />}
         </div>
       </div>
+
+      {/* Social profile: feed, blog, chat and media library */}
+      <SocialProfileSection
+        userId={user.id}
+        currentUserId={user.id}
+        permissions={user.permissions}
+      />
     </div>
   );
 }
