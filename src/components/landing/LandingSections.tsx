@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BookOpen,
+  CalendarPlus,
   Camera,
+  Check,
   CheckCircle2,
   Compass,
   ExternalLink,
@@ -28,6 +30,12 @@ import {
   formatSessionRange,
   type LandingSection,
 } from '../../data/landingContent';
+import {
+  buildGoogleCalendarUrl,
+  buildScheduleSlotCalendarEvent,
+  downloadCalendarIcs,
+} from '../../utils/attestationCalendar';
+import { tracker } from '../../utils/tracker';
 
 /**
  * Landing sections imported from rca-vostok.ru.
@@ -189,15 +197,34 @@ export function PreparationSection() {
   );
 }
 
-/** «График аттестаций на 2027 год» plus the external ФСТР link. */
+/** «График аттестаций на 2027 год» plus .ics calendar export & external ФСТР link. */
 export function CertificationSection() {
+  const [selectedSlotIdx, setSelectedSlotIdx] = useState<number>(0);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+
+  const activeSlot = CERTIFICATION_SCHEDULE[selectedSlotIdx] ?? CERTIFICATION_SCHEDULE[0];
+  const activeEvent = buildScheduleSlotCalendarEvent(activeSlot, selectedSlotIdx);
+  const googleCalendarUrl = buildGoogleCalendarUrl(activeEvent);
+
+  const handleExportIcs = () => {
+    const fileName = downloadCalendarIcs(activeEvent, 1440);
+    const rangeLabel = formatSessionRange(activeSlot.start, activeSlot.end);
+    setExportNotice(
+      `Файл ${fileName} скачан (${rangeLabel}) — откройте для импорта в Google Календарь или Яндекс Календарь.`
+    );
+    tracker.trackCustomInteraction(
+      `График аттестаций · Добавить в календарь (.ics): ${rangeLabel}`,
+      activeSlot.start
+    );
+  };
+
   return (
     <section className="space-y-6">
       <SectionHeading
         id="certification"
         eyebrow="Аттестация"
-        title="График аттестаций на 2027 год"
-        lead="Сессии категории 1–4 КС. В каждой сессии доступны пешеходный, водный, горный и спелеологический виды, а также их комбинации."
+        title="График ближайших аттестаций на 2027 год"
+        lead="Сессии категории 1–4 КС. Выберите дату в таблице и нажмите «Добавить в календарь», чтобы экспортировать событие в формате .ics для Google или Яндекс Календаря."
       />
 
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -214,36 +241,123 @@ export function CertificationSection() {
               <th scope="col" className="text-left font-semibold px-5 py-3 hidden md:table-cell">
                 Виды туризма
               </th>
+              <th scope="col" className="text-right font-semibold px-5 py-3">
+                Выбор
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {CERTIFICATION_SCHEDULE.map((slot) => (
-              <tr key={slot.start} className="align-top">
-                <td className="px-5 py-3 font-medium text-slate-900 whitespace-nowrap">
-                  <span className="inline-flex items-center gap-2">
-                    <CalendarDays className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-                    {formatSessionRange(slot.start, slot.end)}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-slate-700 whitespace-nowrap">{slot.category}</td>
-                <td className="px-5 py-3 text-slate-600 hidden md:table-cell">
-                  {slot.disciplines.join('; ')}
-                </td>
-              </tr>
-            ))}
+            {CERTIFICATION_SCHEDULE.map((slot, idx) => {
+              const isSelected = idx === selectedSlotIdx;
+              const rangeLabel = formatSessionRange(slot.start, slot.end);
+              return (
+                <tr
+                  key={slot.start}
+                  onClick={() => {
+                    setSelectedSlotIdx(idx);
+                    setExportNotice(null);
+                  }}
+                  className={`align-top transition-colors cursor-pointer ${
+                    isSelected ? 'bg-teal-50/70' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <td className="px-5 py-3 font-medium text-slate-900 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-2">
+                      <CalendarDays
+                        className={`w-3.5 h-3.5 ${isSelected ? 'text-teal-700' : 'text-slate-400'}`}
+                        aria-hidden="true"
+                      />
+                      {rangeLabel}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-slate-700 whitespace-nowrap font-mono tabular-nums">
+                    {slot.category}
+                  </td>
+                  <td className="px-5 py-3 text-slate-600 hidden md:table-cell">
+                    {slot.disciplines.join('; ')}
+                  </td>
+                  <td className="px-5 py-3 text-right whitespace-nowrap">
+                    <button
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSlotIdx(idx);
+                        setExportNotice(null);
+                      }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-teal-700 border-teal-700 text-white'
+                          : 'bg-white border-slate-200 text-slate-700 hover:border-teal-600'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3 h-3" aria-hidden="true" />}
+                      {isSelected ? 'Выбрано' : 'Выбрать'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      <a
-        href={ATTESTATION_EXTERNAL.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors"
-      >
-        {ATTESTATION_EXTERNAL.label}
-        <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-      </a>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleExportIcs}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <CalendarPlus className="w-4 h-4" aria-hidden="true" />
+            <span>Добавить в календарь (.ics)</span>
+          </button>
+
+          <a
+            href={googleCalendarUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() =>
+              tracker.trackCustomInteraction(
+                `График аттестаций · Google Календарь: ${activeSlot.start}`,
+                activeSlot.category
+              )
+            }
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+          >
+            <span>Google Календарь</span>
+            <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+          </a>
+
+          <span className="text-xs text-slate-600">
+            Выбрано:{' '}
+            <strong className="font-semibold text-slate-900">
+              {formatSessionRange(activeSlot.start, activeSlot.end)}
+            </strong>{' '}
+            · файл <code className="font-mono text-[11px]">.ics</code> подходит для Google и Яндекс
+            Календаря
+          </span>
+        </div>
+
+        <a
+          href={ATTESTATION_EXTERNAL.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0"
+        >
+          {ATTESTATION_EXTERNAL.label}
+          <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+        </a>
+      </div>
+
+      {exportNotice && (
+        <p
+          role="status"
+          className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3.5 py-2.5 font-medium"
+        >
+          {exportNotice}
+        </p>
+      )}
     </section>
   );
 }

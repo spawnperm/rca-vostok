@@ -420,7 +420,7 @@ export const AttestationEventsCalendarWidget: React.FC<
                   className="px-3.5 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Скачать .ics (Apple / Outlook)</span>
+                  <span>Добавить в календарь (.ics)</span>
                 </button>
 
                 <a
@@ -438,6 +438,11 @@ export const AttestationEventsCalendarWidget: React.FC<
                   <span>Google Календарь</span>
                   <ExternalLink className="w-3 h-3 text-slate-500" aria-hidden="true" />
                 </a>
+
+                <span className="text-[11px] text-slate-500">
+                  Формат <code className="font-mono">.ics</code> поддерживается Google, Яндекс
+                  Календарём и Apple
+                </span>
 
                 <button
                   type="button"

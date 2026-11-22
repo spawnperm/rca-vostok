@@ -5,8 +5,10 @@ import {
   buildCalendarMonthCells,
   buildGoogleCalendarUrl,
   buildIcsEventContent,
+  buildScheduleSlotCalendarEvent,
   getEventsForDate,
 } from '../src/utils/attestationCalendar.ts';
+import { CERTIFICATION_SCHEDULE } from '../src/data/landingContent.ts';
 
 test('ATTESTATION_CALENDAR_EVENTS includes both upcoming attestation sessions and webinars', () => {
   const sessions = ATTESTATION_CALENDAR_EVENTS.filter((e) => e.kind === 'session');
@@ -80,4 +82,17 @@ test('buildGoogleCalendarUrl builds valid Google Calendar template URL with even
   assert.equal(parsed.searchParams.get('text'), session.title);
   assert.equal(parsed.searchParams.get('dates'), '20270415T230000Z/20270418T080000Z');
   assert.equal(parsed.searchParams.get('location'), session.location);
+});
+
+test('buildScheduleSlotCalendarEvent converts a landing CertificationSlot into exportable .ics event', () => {
+  const slot = CERTIFICATION_SCHEDULE[0];
+  const event = buildScheduleSlotCalendarEvent(slot, 0);
+  const ics = buildIcsEventContent(event, 1440, new Date('2026-11-22T10:00:00Z'));
+
+  assert.equal(event.startDateIso, slot.start);
+  assert.equal(event.endDateIso, slot.end);
+  assert.ok(ics.includes('BEGIN:VCALENDAR\r\n'));
+  assert.ok(ics.includes('DTSTART:20270415T230000Z\r\n'));
+  assert.ok(ics.includes('DTEND:20270418T080000Z\r\n'));
+  assert.ok(ics.includes('SUMMARY:Аттестация РЦА «Русский Восток»'));
 });

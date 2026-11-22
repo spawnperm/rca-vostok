@@ -411,3 +411,42 @@ export function downloadCalendarIcs(
 
   return fileName;
 }
+
+export interface ScheduleSlotLike {
+  start: string;
+  end: string;
+  category: string;
+  disciplines: readonly string[];
+}
+
+/** Converts a CertificationSlot or exam date window into an AttestationCalendarEvent for .ics export. */
+export function buildScheduleSlotCalendarEvent(
+  slot: ScheduleSlotLike,
+  index = 0
+): AttestationCalendarEvent {
+  const disciplinesLabel = slot.disciplines.join(', ');
+  return {
+    id: `session-${slot.start}-${index + 1}`,
+    kind: 'session',
+    kindLabel: 'Аттестационная сессия',
+    title: `Аттестация РЦА «Русский Восток» (${slot.category})`,
+    shortTitle: `Сессия ${slot.start} (${slot.category})`,
+    startDateIso: slot.start,
+    endDateIso: slot.end || slot.start,
+    startTimeVld: '09:00',
+    durationMinutes: 480,
+    regionLabel: 'Приморский край / весь ДФО',
+    formatLabel: `Очная сессия · ${slot.category}`,
+    location: 'г. Владивосток, ул. Гоголя, д. 41 (ВВГУ) и полигон Шкотовского р-на',
+    organizer: 'Комиссия РЦА «Русский Восток» (ВВГУ и ФСТР)',
+    description: `Направления: ${disciplinesLabel}. Регламент ПП РФ № 1003 и № 1893.`,
+    inquiryRegion: 'Приморский край',
+    inquiryTrack: 'Пешеходный туризм',
+  };
+}
+
+/** Builds a Yandex Calendar link with informational import guidance alongside .ics download. */
+export function buildYandexCalendarUrl(): string {
+  return 'https://calendar.yandex.ru/';
+}
+

@@ -193,6 +193,8 @@ export const DEFAULT_LOGIN_RULES: RateLimitRule[] = [
   // Behaviour tracking is batched by the client (one POST per few seconds of
   // activity), so the ceiling is much higher — but still bounded.
   { name: 'analytics-ip', windowMs: 60 * 1000, max: 60 },
+  // AI assistant support chat inside the personal cabinet.
+  { name: 'assistant-ip', windowMs: 60 * 1000, max: 20 },
 ];
 
 /** Blocks with a JSON 429 and a Retry-After header. */

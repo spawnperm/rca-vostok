@@ -24,6 +24,8 @@ import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
 import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
 import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
+import { InstructorPassportCard } from './InstructorPassportCard';
+import { RcaAssistantChatWidget } from './RcaAssistantChatWidget';
 import { CenterReviewForm } from './CenterReviewForm';
 import { ReviewStatsWidget } from './ReviewStatsWidget';
 import {
@@ -71,6 +73,17 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
     query: string;
     nonce: number;
   } | null>(null);
+  const [assistantRequest, setAssistantRequest] = useState<{
+    prompt?: string;
+    nonce: number;
+  } | null>(null);
+
+  const openAiAssistant = useCallback((prompt?: string) => {
+    setAssistantRequest((prev) => ({
+      prompt,
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
+  }, []);
 
   // A reset link lands on ?tab=account&reset=<token>, so the cabinet opens
   // straight into the "set a new password" step.
@@ -177,12 +190,27 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
 
   if (!user) {
     return (
-      <AuthPanel
-        mode={authMode}
-        onModeChange={setAuthMode}
-        onAuthenticated={handleAuthenticated}
-        onForgotPassword={() => setShowForgot(true)}
-      />
+      <div className="space-y-6">
+        <AuthPanel
+          mode={authMode}
+          onModeChange={setAuthMode}
+          onAuthenticated={handleAuthenticated}
+          onForgotPassword={() => setShowForgot(true)}
+        />
+        <AccountKnowledgeBaseWidget
+          user={null}
+          externalSearch={kbExternalSearch}
+          onNavigate={onNavigate}
+          onJumpToConsultant={() =>
+            openAiAssistant('Подскажите, какие документы нужны для аттестации?')
+          }
+        />
+        <RcaAssistantChatWidget
+          user={null}
+          progressSummary={null}
+          externalOpenRequest={assistantRequest}
+        />
+      </div>
     );
   }
 
@@ -222,6 +250,14 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
           }));
           scrollToElementById('account-knowledge-base');
         }}
+        onJumpToConsultant={() =>
+          openAiAssistant('Помогите разобраться с пробелами по итогам самопроверки.')
+        }
+      />
+      <InstructorPassportCard
+        user={user}
+        summary={effectiveProgressSummary}
+        inquiries={inquiries}
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -238,6 +274,7 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
             user={user}
             externalSearch={kbExternalSearch}
             onNavigate={onNavigate}
+            onJumpToConsultant={() => openAiAssistant()}
           />
           <ProfileCard user={user} onUpdated={handleAuthenticated} />
           <MyInquiriesSection
@@ -265,6 +302,13 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
         userId={user.id}
         currentUserId={user.id}
         permissions={user.permissions}
+      />
+
+      {/* Floating AI Support Widget */}
+      <RcaAssistantChatWidget
+        user={user}
+        progressSummary={effectiveProgressSummary}
+        externalOpenRequest={assistantRequest}
       />
     </div>
   );

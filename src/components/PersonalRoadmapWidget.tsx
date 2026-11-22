@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CalendarDays,
+  CalendarPlus,
   CheckCircle2,
   Circle,
   Clock,
@@ -17,6 +18,10 @@ import {
   type PreparationContour,
   type RoadmapMilestoneStatus,
 } from '../utils/personalRoadmap';
+import {
+  buildScheduleSlotCalendarEvent,
+  downloadCalendarIcs,
+} from '../utils/attestationCalendar';
 import { tracker } from '../utils/tracker';
 
 interface PersonalRoadmapWidgetProps {
@@ -70,6 +75,7 @@ export const PersonalRoadmapWidget: React.FC<PersonalRoadmapWidgetProps> = ({
   onExamDateChange,
 }) => {
   const [prefs, setPrefs] = useState(() => readStoredRoadmapPrefs(user.id));
+  const [icsNotice, setIcsNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const loaded = readStoredRoadmapPrefs(user.id);
@@ -87,11 +93,30 @@ export const PersonalRoadmapWidget: React.FC<PersonalRoadmapWidgetProps> = ({
     const next = { ...prefs, examDateIso: nextIso };
     setPrefs(next);
     writeStoredRoadmapPrefs(user.id, next);
+    setIcsNotice(null);
     onExamDateChange?.(nextIso);
     tracker.trackCustomInteraction(
       'Выбор даты экзамена в дорожной карте',
       `${nextIso} (${sourceLabel})`
     );
+  };
+
+  const handleExportExamIcs = () => {
+    const matchedSlot = OFFICIAL_EXAM_OPTIONS.find((opt) => opt.startIso === prefs.examDateIso);
+    const ev = buildScheduleSlotCalendarEvent(
+      {
+        start: prefs.examDateIso,
+        end: matchedSlot?.endIso ?? prefs.examDateIso,
+        category: matchedSlot?.category ?? '1–4 КС',
+        disciplines: ['пешеходный', 'водный', 'горный'],
+      },
+      0
+    );
+    const fileName = downloadCalendarIcs(ev, 1440);
+    setIcsNotice(
+      `Файл ${fileName} скачан (${plan.examDateFormatted}) — импортируйте его в Google или Яндекс Календарь.`
+    );
+    tracker.trackCustomInteraction('Дорожная карта · Добавить в календарь (.ics)', prefs.examDateIso);
   };
 
   const updateContour = (contour: PreparationContour) => {
@@ -153,7 +178,7 @@ export const PersonalRoadmapWidget: React.FC<PersonalRoadmapWidgetProps> = ({
           <span className="block text-xs font-semibold text-slate-700">
             Ближайшие сессии РЦА (1–4 КС)
           </span>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {OFFICIAL_EXAM_OPTIONS.map((slot) => {
               const active = prefs.examDateIso === slot.startIso;
               return (
@@ -172,7 +197,20 @@ export const PersonalRoadmapWidget: React.FC<PersonalRoadmapWidgetProps> = ({
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={handleExportExamIcs}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-teal-700 hover:bg-teal-800 text-white transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Добавить в календарь (.ics)</span>
+            </button>
           </div>
+          {icsNotice && (
+            <p role="status" className="text-[11px] text-teal-800 font-medium">
+              {icsNotice}
+            </p>
+          )}
         </div>
 
         <div className="lg:col-span-2 space-y-1.5">

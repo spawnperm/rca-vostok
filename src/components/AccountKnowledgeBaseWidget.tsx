@@ -26,7 +26,7 @@ import type { SiteTabId } from '../utils/seo';
 import { tracker } from '../utils/tracker';
 
 interface AccountKnowledgeBaseWidgetProps {
-  user: SessionUser;
+  user?: SessionUser | null;
   externalSearch?: { query: string; nonce: number } | null;
   onNavigate?: (tab: SiteTabId) => void;
   onJumpToChecklist?: () => void;
@@ -91,7 +91,7 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
       if (!exists) {
         tracker.trackCustomInteraction(
           `Кабинет FAQ: ${question.slice(0, 55)}`,
-          user.region
+          user?.region ?? 'account'
         );
       }
       return exists ? prev.filter((item) => item !== id) : [...prev, id];
@@ -190,11 +190,11 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
             <span>Справочник личного кабинета · ВВГУ и РЦА «Русский Восток»</span>
           </p>
           <h3 id="account-kb-heading" className="text-lg font-bold text-slate-900">
-            База знаний и FAQ
+            Часто задаваемые вопросы (FAQ) и база знаний
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Быстрые ответы на частые вопросы по аттестации и единый поиск по методическим
-            материалам, регламентам ДПО и нормативным терминам.
+            Быстрый поиск ответов по аттестации, нормативным требованиям (ПП РФ № 1003, № 1893,
+            № 760), регламентам ДПО ВВГУ и терминам.
           </p>
         </div>
 
@@ -214,8 +214,8 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Поиск по FAQ и методическим материалам: Контур А, паспорт маршрута, ПП № 1893, 27 200 ₽..."
-            aria-label="Поиск по базе знаний и методическим материалам"
+            placeholder="Быстрый поиск по FAQ и нормативам: Контур А, паспорт маршрута № 760, ПП № 1893, 27 200 ₽..."
+            aria-label="Быстрый поиск по FAQ, аттестации и нормативным требованиям"
             className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-700 focus:bg-white transition-colors"
           />
           {searchQuery && (

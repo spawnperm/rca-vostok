@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CalendarClock,
   CalendarDays,
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -10,6 +11,10 @@ import {
   MapPin,
   MessageSquare,
 } from 'lucide-react';
+import {
+  buildScheduleSlotCalendarEvent,
+  downloadCalendarIcs,
+} from '../utils/attestationCalendar';
 import { tracker } from '../utils/tracker';
 
 type TimelineRegionFilter =
@@ -314,6 +319,7 @@ export const RegionalSessionsTimeline: React.FC<RegionalSessionsTimelineProps> =
   const [regionFilter, setRegionFilter] = useState<TimelineRegionFilter>('all');
   const [kindFilter, setKindFilter] = useState<TimelineEventKindFilter>('all');
   const [selectedId, setSelectedId] = useState<string>('tl-primorye-dec-deadline');
+  const [calendarNotice, setCalendarNotice] = useState<string | null>(null);
 
   const filteredItems = useMemo(() => {
     return REGIONAL_SESSIONS_TIMELINE.filter((item) => {
@@ -338,10 +344,30 @@ export const RegionalSessionsTimeline: React.FC<RegionalSessionsTimelineProps> =
 
   const handleSelectItem = (item: RegionalTimelineItem) => {
     setSelectedId(item.id);
+    setCalendarNotice(null);
     tracker.trackCustomInteraction(
       `Шкала сессий ДФО: ${item.shortDate} (${item.regionLabel})`,
       item.kindLabel
     );
+  };
+
+  const handleExportActiveIcs = () => {
+    const ev = buildScheduleSlotCalendarEvent(
+      {
+        start: activeItem.isoTargetDate,
+        end: activeItem.isoTargetDate,
+        category: `${activeItem.regionLabel} · ${activeItem.kindLabel}`,
+        disciplines: [activeItem.tracks],
+      },
+      0
+    );
+    ev.title = activeItem.title;
+    ev.location = activeItem.venue;
+    const fileName = downloadCalendarIcs(ev, 1440);
+    setCalendarNotice(
+      `Файл ${fileName} скачан — импортируйте его в Google Календарь или Яндекс Календарь.`
+    );
+    tracker.trackCustomInteraction('Шкала ДФО · Добавить в календарь (.ics)', activeItem.isoTargetDate);
   };
 
   const handleStep = (delta: number) => {
@@ -648,38 +674,57 @@ export const RegionalSessionsTimeline: React.FC<RegionalSessionsTimelineProps> =
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() =>
-                onContactCurator(
-                  `Временная шкала (${activeItem.shortDate} · ${activeItem.regionLabel})`
-                )
-              }
-              className="px-3.5 py-2 bg-white border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <MessageSquare className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-              <span>Уточнить график у куратора</span>
-            </button>
+          <div className="pt-3 border-t border-slate-200 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportActiveIcs}
+                  className="px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <CalendarPlus className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
+                  <span>Добавить в календарь (.ics)</span>
+                </button>
 
-            {onApplyForSession && (
-              <button
-                type="button"
-                onClick={() => {
-                  onApplyForSession(
-                    activeItem.inquiryRegionValue,
-                    activeItem.inquiryTrackValue
-                  );
-                  tracker.trackCustomInteraction(
-                    `Запись с временной шкалы: ${activeItem.shortDate}`,
-                    activeItem.regionLabel
-                  );
-                }}
-                className="px-4 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <span>Записаться на этот поток</span>
-                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onContactCurator(
+                      `Временная шкала (${activeItem.shortDate} · ${activeItem.regionLabel})`
+                    )
+                  }
+                  className="px-3.5 py-2 bg-white border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                  <span>Уточнить график у куратора</span>
+                </button>
+              </div>
+
+              {onApplyForSession && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onApplyForSession(
+                      activeItem.inquiryRegionValue,
+                      activeItem.inquiryTrackValue
+                    );
+                    tracker.trackCustomInteraction(
+                      `Запись с временной шкалы: ${activeItem.shortDate}`,
+                      activeItem.regionLabel
+                    );
+                  }}
+                  className="px-4 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <span>Записаться на этот поток</span>
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {calendarNotice && (
+              <p role="status" className="text-[11px] text-teal-800 font-medium">
+                {calendarNotice}
+              </p>
             )}
           </div>
         </div>

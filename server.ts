@@ -139,6 +139,10 @@ import {
 import { appLogger } from './src/infrastructure/logging/Logger.ts';
 import { createRequestLoggerMiddleware } from './src/infrastructure/http/RequestLogger.ts';
 import { getFarEastHubsWeather } from './src/utils/hubsWeather.ts';
+import {
+  AssistantServiceError,
+  generateRcaAssistantReply,
+} from './src/infrastructure/ai/RcaAssistantService.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -363,6 +367,7 @@ async function startServer() {
   const inquiryRateLimit = createRateLimit(rateLimiter, 'inquiry-ip');
   const feedbackRateLimit = createRateLimit(rateLimiter, 'feedback-ip');
   const analyticsRateLimit = createRateLimit(rateLimiter, 'analytics-ip');
+  const assistantRateLimit = createRateLimit(rateLimiter, 'assistant-ip');
   const loginRateLimit = createLoginRateLimit({
     limiter: loginLimiter,
     perIpRule: 'login-ip',
@@ -598,6 +603,29 @@ async function startServer() {
       const forceRefresh = req.query.refresh === '1';
       res.json(await getFarEastHubsWeather(forceRefresh));
     } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  // Personal Cabinet AI Support Assistant (Gemini, server-side API key)
+  app.post('/api/assistant/chat', assistantRateLimit, async (req, res) => {
+    try {
+      const body = (req.body || {}) as Record<string, unknown>;
+      const result = await generateRcaAssistantReply({
+        messages: body.messages,
+        context:
+          body.context && typeof body.context === 'object'
+            ? body.context
+            : req.authUser
+              ? { region: req.authUser.region }
+              : undefined,
+      });
+      res.json(result);
+    } catch (err) {
+      if (err instanceof AssistantServiceError) {
+        res.status(err.statusCode).json({ error: err.message, code: err.code });
+        return;
+      }
       handleDomainError(err, res);
     }
   });
