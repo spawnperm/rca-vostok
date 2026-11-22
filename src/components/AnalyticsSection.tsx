@@ -15,8 +15,9 @@ import {
   type LiveSeoAuditResult,
   type SiteTabId,
 } from '../utils/seo';
+import { DFO_REGIONS_DISTRIBUTION } from '../data/researchData';
 import { tracker, type ClientBehaviorEvent } from '../utils/tracker';
-import { DfoDemandForecastChart } from './DfoDemandForecastChart';
+import { DfoDemandForecastChart, type DfoRegionFilterId } from './DfoDemandForecastChart';
 import { DfoRegionsDistributionMap } from './DfoRegionsDistributionMap';
 
 interface SessionRecord {
@@ -123,6 +124,7 @@ export const AnalyticsSection: React.FC = () => {
   const [replayIndex, setReplayIndex] = useState<number>(-1);
   const [isReplaying, setIsReplaying] = useState<boolean>(false);
   const [heatmapFilterTab, setHeatmapFilterTab] = useState<string>('all');
+  const [dfoRegionFilter, setDfoRegionFilter] = useState<DfoRegionFilterId>('all');
 
   // SEO state
   const [seoAudit, setSeoAudit] = useState<LiveSeoAuditResult>(() => runLiveDomSeoAudit());
@@ -539,11 +541,105 @@ export const AnalyticsSection: React.FC = () => {
                 </div>
               </section>
 
+              {/* Synchronized DFO Regional Filter Bar */}
+              <section
+                aria-labelledby="dfo-filter-heading"
+                className="bg-white border border-slate-200 rounded-xl p-6 space-y-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-teal-700">
+                      Синхронизированный региональный срез
+                    </p>
+                    <h2 id="dfo-filter-heading" className="text-base sm:text-lg font-bold text-slate-900">
+                      Фильтр по регионам ДФО для графиков и карт
+                    </h2>
+                  </div>
+
+                  {dfoRegionFilter !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDfoRegionFilter('all');
+                        tracker.trackCustomInteraction('Фильтр регионов ДФО: Все субъекты');
+                      }}
+                      className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      Сбросить фильтр (весь ДФО)
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDfoRegionFilter('all');
+                      tracker.trackCustomInteraction('Фильтр регионов ДФО: Все субъекты');
+                    }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                      dfoRegionFilter === 'all'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Все регионы ДФО ({DFO_REGIONS_DISTRIBUTION.length})
+                  </button>
+                  {DFO_REGIONS_DISTRIBUTION.map((reg) => (
+                    <button
+                      key={reg.id}
+                      type="button"
+                      onClick={() => {
+                        setDfoRegionFilter(reg.id as DfoRegionFilterId);
+                        tracker.trackCustomInteraction(`Фильтр регионов ДФО: ${reg.shortName}`);
+                      }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                        dfoRegionFilter === reg.id
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {reg.shortName}
+                    </button>
+                  ))}
+                </div>
+
+                {dfoRegionFilter !== 'all' &&
+                  (() => {
+                    const chosen = DFO_REGIONS_DISTRIBUTION.find((r) => r.id === dfoRegionFilter);
+                    if (!chosen) return null;
+                    const deficit = Math.max(0, chosen.estimatedDemand - chosen.certifiedInRegistry);
+                    return (
+                      <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                        <span className="font-semibold text-slate-900">{chosen.name}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono tabular-nums">
+                          В реестре: <strong className="text-teal-800">{chosen.certifiedInRegistry} чел.</strong>
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono tabular-nums">
+                          Спрос 2025: <strong className="text-slate-900">{chosen.estimatedDemand.toLocaleString('ru-RU')} чел.</strong>
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono tabular-nums">
+                          Кадровый разрыв: <strong className="text-slate-900">{deficit.toLocaleString('ru-RU')} чел.</strong>
+                        </span>
+                      </div>
+                    );
+                  })()}
+              </section>
+
               {/* DFO Regional Demand Forecast through 2030 (Recharts) */}
-              <DfoDemandForecastChart />
+              <DfoDemandForecastChart
+                regionFilter={dfoRegionFilter}
+                onResetRegionFilter={() => setDfoRegionFilter('all')}
+              />
 
               {/* DFO Geographic Distribution of Certified Guides (SVG) */}
-              <DfoRegionsDistributionMap />
+              <DfoRegionsDistributionMap
+                regionFilter={dfoRegionFilter}
+                onSelectRegionFilter={setDfoRegionFilter}
+              />
 
               {/* Top Clicked Elements + Devices/Referrers */}
               <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">

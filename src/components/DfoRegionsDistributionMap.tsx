@@ -2,18 +2,31 @@ import React, { useMemo, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { DFO_REGIONS_DISTRIBUTION, type DfoRegionDistribution } from '../data/researchData';
 import { tracker } from '../utils/tracker';
+import type { DfoRegionFilterId } from './DfoDemandForecastChart';
 
 type MapMetricMode = 'registry' | 'demand' | 'october2026';
 
-export const DfoRegionsDistributionMap: React.FC = () => {
+interface DfoRegionsDistributionMapProps {
+  regionFilter?: DfoRegionFilterId;
+  onSelectRegionFilter?: (regionId: DfoRegionFilterId) => void;
+}
+
+export const DfoRegionsDistributionMap: React.FC<DfoRegionsDistributionMapProps> = ({
+  regionFilter = 'all',
+  onSelectRegionFilter,
+}) => {
   const [metricMode, setMetricMode] = useState<MapMetricMode>('registry');
-  const [selectedId, setSelectedId] = useState<string>('primorye');
+  const [internalSelectedId, setInternalSelectedId] = useState<string>('primorye');
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const effectiveSelectedId = regionFilter === 'all' ? internalSelectedId : regionFilter;
+  const isFilteredSingle = regionFilter !== 'all';
 
   const activeRegion: DfoRegionDistribution = useMemo(
     () =>
-      DFO_REGIONS_DISTRIBUTION.find((r) => r.id === selectedId) ?? DFO_REGIONS_DISTRIBUTION[0],
-    [selectedId]
+      DFO_REGIONS_DISTRIBUTION.find((r) => r.id === effectiveSelectedId) ??
+      DFO_REGIONS_DISTRIBUTION[0],
+    [effectiveSelectedId]
   );
 
   const totalRegistry = useMemo(
@@ -30,7 +43,10 @@ export const DfoRegionsDistributionMap: React.FC = () => {
   );
 
   const handleSelectRegion = (region: DfoRegionDistribution) => {
-    setSelectedId(region.id);
+    setInternalSelectedId(region.id);
+    if (onSelectRegionFilter) {
+      onSelectRegionFilter(region.id as DfoRegionFilterId);
+    }
     tracker.trackCustomInteraction(`Карта ДФО: ${region.shortName}`, metricMode);
   };
 
@@ -51,7 +67,11 @@ export const DfoRegionsDistributionMap: React.FC = () => {
     return val > 0 ? Math.max(9, Math.min(22, val + 6)) : 5;
   };
 
-  const getRegionFill = (r: DfoRegionDistribution, isSelected: boolean, isHovered: boolean): string => {
+  const getRegionFill = (
+    r: DfoRegionDistribution,
+    isSelected: boolean,
+    isHovered: boolean
+  ): string => {
     if (isSelected) return '#CCFBF1';
     if (isHovered) return '#F0FDFA';
     if (metricMode === 'october2026' && r.october2026Certified > 0) return '#F0FDFA';
@@ -87,6 +107,7 @@ export const DfoRegionsDistributionMap: React.FC = () => {
         <div className="space-y-1 max-w-2xl">
           <p className="text-xs font-medium text-teal-700">
             Пространственная аналитика Дальнего Востока
+            {isFilteredSingle ? ` · Выбран: ${activeRegion.name}` : ''}
           </p>
           <h2 id="dfo-geo-map-heading" className="text-lg sm:text-xl font-bold text-slate-900">
             Географическое распределение аттестованных проводников по регионам ДФО
@@ -97,30 +118,42 @@ export const DfoRegionsDistributionMap: React.FC = () => {
           </p>
         </div>
 
-        <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0">
-          {(
-            [
-              { id: 'registry', label: `В реестре (${totalRegistry})` },
-              { id: 'demand', label: `Спрос (${totalDemand.toLocaleString('ru-RU')})` },
-              { id: 'october2026', label: `Сессия РЦА окт. 2026 (${totalOct2026})` },
-            ] as const
-          ).map((mode) => (
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {isFilteredSingle && onSelectRegionFilter && (
             <button
-              key={mode.id}
               type="button"
-              onClick={() => {
-                setMetricMode(mode.id);
-                tracker.trackCustomInteraction(`Режим карты ДФО: ${mode.label}`);
-              }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                metricMode === mode.id
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={() => onSelectRegionFilter('all')}
+              className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              {mode.label}
+              Показать весь ДФО
             </button>
-          ))}
+          )}
+
+          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            {(
+              [
+                { id: 'registry', label: `В реестре (${totalRegistry})` },
+                { id: 'demand', label: `Спрос (${totalDemand.toLocaleString('ru-RU')})` },
+                { id: 'october2026', label: `Сессия РЦА окт. 2026 (${totalOct2026})` },
+              ] as const
+            ).map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => {
+                  setMetricMode(mode.id);
+                  tracker.trackCustomInteraction(`Режим карты ДФО: ${mode.label}`);
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  metricMode === mode.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -128,7 +161,7 @@ export const DfoRegionsDistributionMap: React.FC = () => {
         {/* SVG Map Canvas (7 cols) */}
         <div className="lg:col-span-7 bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-6 flex flex-col justify-between gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500 pb-3 border-b border-slate-200">
-            <span>Выберите регион на карте для детального баланса кадров</span>
+            <span>Выберите регион на карте или в фильтре ДФО</span>
             <div className="flex flex-wrap items-center gap-4">
               {metricMode === 'registry' && (
                 <>
@@ -206,11 +239,13 @@ export const DfoRegionsDistributionMap: React.FC = () => {
               {DFO_REGIONS_DISTRIBUTION.map((region) => {
                 const isSelected = region.id === activeRegion.id;
                 const isHovered = region.id === hoveredId;
+                const dimNonSelected = isFilteredSingle && !isSelected && !isHovered;
                 return (
                   <path
                     key={region.id}
                     d={region.svgPath}
                     fill={getRegionFill(region, isSelected, isHovered)}
+                    fillOpacity={dimNonSelected ? 0.55 : 1}
                     stroke={isSelected ? '#0F766E' : '#94A3B8'}
                     strokeWidth={isSelected ? 2.2 : 1.3}
                     strokeLinejoin="round"
@@ -233,6 +268,8 @@ export const DfoRegionsDistributionMap: React.FC = () => {
               {/* Data bubbles + labels */}
               {DFO_REGIONS_DISTRIBUTION.map((region) => {
                 const isSelected = region.id === activeRegion.id;
+                const isHovered = region.id === hoveredId;
+                const dimNonSelected = isFilteredSingle && !isSelected && !isHovered;
                 const radius = getBubbleRadius(region);
                 const bubbleColor = getBubbleColor(region);
                 const val = getRegionMetricValue(region);
@@ -243,7 +280,8 @@ export const DfoRegionsDistributionMap: React.FC = () => {
                     onClick={() => handleSelectRegion(region)}
                     onMouseEnter={() => setHoveredId(region.id)}
                     onMouseLeave={() => setHoveredId((prev) => (prev === region.id ? null : prev))}
-                    className="cursor-pointer"
+                    opacity={dimNonSelected ? 0.45 : 1}
+                    className="cursor-pointer transition-opacity duration-150"
                   >
                     {isSelected && (
                       <circle
