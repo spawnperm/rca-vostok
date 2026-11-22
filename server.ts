@@ -18,15 +18,22 @@ import {
 } from './src/application/feedback/FeedbackUseCases.ts';
 import { GetSystemHealthUseCase } from './src/application/system/HealthCheckUseCase.ts';
 import { DomainError, NotFoundError, ValidationError } from './src/domain/shared/DomainError.ts';
+import type { AnalyticsRepository } from './src/domain/analytics/AnalyticsRepository.ts';
+import type { FeedbackRepository } from './src/domain/feedback/FeedbackRepository.ts';
+import type { InquiryRepository } from './src/domain/certification/InquiryRepository.ts';
 import { InMemoryDomainEventBus } from './src/infrastructure/events/InMemoryDomainEventBus.ts';
 import { JsonFileAnalyticsRepository } from './src/infrastructure/persistence/JsonFileAnalyticsRepository.ts';
 import { JsonFileFeedbackRepository } from './src/infrastructure/persistence/JsonFileFeedbackRepository.ts';
 import { JsonFileInquiryRepository } from './src/infrastructure/persistence/JsonFileInquiryRepository.ts';
+import { createPool, runMigrations } from './src/infrastructure/persistence/pg/PostgresPool.ts';
+import { PostgresAnalyticsRepository } from './src/infrastructure/persistence/pg/PostgresAnalyticsRepository.ts';
+import { PostgresFeedbackRepository } from './src/infrastructure/persistence/pg/PostgresFeedbackRepository.ts';
+import { PostgresInquiryRepository } from './src/infrastructure/persistence/pg/PostgresInquiryRepository.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DATA_DIR = path.resolve(__dirname, 'data');
 
@@ -72,9 +79,29 @@ async function startServer() {
 
   // Composition Root: Infrastructure Adapters + Domain Event Bus + Use Cases
   const eventBus = new InMemoryDomainEventBus();
-  const analyticsRepo = new JsonFileAnalyticsRepository(DATA_DIR);
-  const inquiryRepo = new JsonFileInquiryRepository(DATA_DIR);
-  const feedbackRepo = new JsonFileFeedbackRepository(DATA_DIR);
+
+  // Persistence adapter selection: PostgreSQL in production/containers, JSON
+  // files for local development when no database is configured.
+  const pool = createPool();
+  let analyticsRepo: AnalyticsRepository;
+  let inquiryRepo: InquiryRepository;
+  let feedbackRepo: FeedbackRepository;
+  let adapterName: string;
+
+  if (pool) {
+    await runMigrations(pool);
+    analyticsRepo = new PostgresAnalyticsRepository(pool);
+    inquiryRepo = new PostgresInquiryRepository(pool);
+    feedbackRepo = new PostgresFeedbackRepository(pool);
+    adapterName = 'postgresql';
+    console.info('[persistence] using PostgreSQL adapter');
+  } else {
+    analyticsRepo = new JsonFileAnalyticsRepository(DATA_DIR);
+    inquiryRepo = new JsonFileInquiryRepository(DATA_DIR);
+    feedbackRepo = new JsonFileFeedbackRepository(DATA_DIR);
+    adapterName = 'json-file';
+    console.info('[persistence] no database configured, using JSON file adapter');
+  }
 
   // Contour 7: Observability subscriber (logs structured metadata without PII)
   eventBus.subscribe('certification.inquiry_submitted', (event) => {
@@ -109,7 +136,11 @@ async function startServer() {
   const getInquiryStatsUseCase = new GetInquiryStatsUseCase(inquiryRepo);
   const submitFeedbackUseCase = new SubmitFeedbackUseCase(feedbackRepo, eventBus);
   const getFeedbackStatsUseCase = new GetFeedbackStatsUseCase(feedbackRepo);
-  const getSystemHealthUseCase = new GetSystemHealthUseCase(inquiryRepo, analyticsRepo);
+  const getSystemHealthUseCase = new GetSystemHealthUseCase(
+    inquiryRepo,
+    analyticsRepo,
+    adapterName
+  );
 
   // Dynamic robots.txt
   app.get('/robots.txt', (req, res) => {
@@ -155,19 +186,19 @@ async function startServer() {
   });
 
   // Contour 7: System Health & DDD Bounded Context status
-  app.get('/api/health', (_req, res) => {
+  app.get('/api/health', async (_req, res) => {
     try {
-      res.json(getSystemHealthUseCase.execute());
+      res.json(await getSystemHealthUseCase.execute());
     } catch (err) {
       handleDomainError(err, res);
     }
   });
 
   // Bounded Context: Analytics
-  app.post('/api/analytics/collect', (req, res) => {
+  app.post('/api/analytics/collect', async (req, res) => {
     try {
       const body = req.body as Record<string, unknown>;
-      const result = collectBehaviorUseCase.execute({
+      const result = await collectBehaviorUseCase.execute({
         sessionId: body?.sessionId,
         visitorId: body?.visitorId,
         viewport: body?.viewport,
@@ -182,25 +213,25 @@ async function startServer() {
     }
   });
 
-  app.get('/api/analytics/summary', (_req, res) => {
+  app.get('/api/analytics/summary', async (_req, res) => {
     try {
-      res.json(getAnalyticsSummaryUseCase.execute());
+      res.json(await getAnalyticsSummaryUseCase.execute());
     } catch (err) {
       handleDomainError(err, res);
     }
   });
 
-  app.get('/api/analytics/sessions/:sessionId', (req, res) => {
+  app.get('/api/analytics/sessions/:sessionId', async (req, res) => {
     try {
-      res.json(getSessionDetailsUseCase.execute(req.params.sessionId));
+      res.json(await getSessionDetailsUseCase.execute(req.params.sessionId));
     } catch (err) {
       handleDomainError(err, res);
     }
   });
 
-  app.delete('/api/analytics/reset', (_req, res) => {
+  app.delete('/api/analytics/reset', async (_req, res) => {
     try {
-      res.json(resetAnalyticsUseCase.execute());
+      res.json(await resetAnalyticsUseCase.execute());
     } catch (err) {
       handleDomainError(err, res);
     }
@@ -220,18 +251,18 @@ async function startServer() {
   });
 
   // Bounded Context: Certification Inquiries
-  app.get('/api/inquiries/stats', (_req, res) => {
+  app.get('/api/inquiries/stats', async (_req, res) => {
     try {
-      res.json(getInquiryStatsUseCase.execute());
+      res.json(await getInquiryStatsUseCase.execute());
     } catch (err) {
       handleDomainError(err, res);
     }
   });
 
-  app.post('/api/inquiries', (req, res) => {
+  app.post('/api/inquiries', async (req, res) => {
     try {
       const body = (req.body || {}) as Record<string, unknown>;
-      const result = submitInquiryUseCase.execute({
+      const result = await submitInquiryUseCase.execute({
         fullName: body.fullName,
         email: body.email,
         contactChannel: body.contactChannel,
@@ -247,18 +278,18 @@ async function startServer() {
   });
 
   // Bounded Context: Platform Feedback
-  app.get('/api/feedback/stats', (_req, res) => {
+  app.get('/api/feedback/stats', async (_req, res) => {
     try {
-      res.json(getFeedbackStatsUseCase.execute());
+      res.json(await getFeedbackStatsUseCase.execute());
     } catch (err) {
       handleDomainError(err, res);
     }
   });
 
-  app.post('/api/feedback', (req, res) => {
+  app.post('/api/feedback', async (req, res) => {
     try {
       const body = (req.body || {}) as Record<string, unknown>;
-      const result = submitFeedbackUseCase.execute({
+      const result = await submitFeedbackUseCase.execute({
         senderName: body.senderName,
         email: body.email,
         feedbackType: body.feedbackType,
@@ -287,9 +318,31 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
   });
+
+  // Graceful shutdown so container restarts drain cleanly and the pool closes.
+  const shutdown = (signal: string) => {
+    console.log(`[shutdown] received ${signal}`);
+    server.close(() => {
+      void (async () => {
+        try {
+          if (pool) {
+            await pool.end();
+          }
+        } catch (err) {
+          console.error('[shutdown] pool close failed', err);
+        }
+        process.exit(0);
+      })();
+    });
+    // Do not hang forever on stuck connections.
+    setTimeout(() => process.exit(1), 10_000).unref();
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 startServer().catch((err) => {

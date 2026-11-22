@@ -6,6 +6,10 @@ import type {
 import type { InquiryRepository } from '../../domain/certification/InquiryRepository.ts';
 import { atomicWriteJson, ensureDirectory, resolveConfinedPath } from './PathConfinement.ts';
 
+/**
+ * File-backed inquiry adapter. Used for local development and tests.
+ * Production runs the PostgreSQL adapter instead.
+ */
 export class JsonFileInquiryRepository implements InquiryRepository {
   private readonly dataDir: string;
   private readonly fileName: string;
@@ -17,7 +21,7 @@ export class JsonFileInquiryRepository implements InquiryRepository {
     this.tempFileName = `${fileName}.tmp`;
   }
 
-  loadAll(): InquiryRecordDTO[] {
+  async loadAll(): Promise<InquiryRecordDTO[]> {
     ensureDirectory(this.dataDir);
     const targetPath = resolveConfinedPath(this.dataDir, this.fileName);
     if (!fs.existsSync(targetPath)) {
@@ -32,15 +36,15 @@ export class JsonFileInquiryRepository implements InquiryRepository {
     }
   }
 
-  save(inquiry: CertificationInquiry): InquiryRecordDTO[] {
-    const records = this.loadAll();
+  async save(inquiry: CertificationInquiry): Promise<InquiryRecordDTO[]> {
+    const records = await this.loadAll();
     records.push(inquiry.toDTO());
     const bounded = records.slice(-1000);
     atomicWriteJson(this.dataDir, this.fileName, this.tempFileName, bounded);
     return bounded;
   }
 
-  count(): number {
-    return this.loadAll().length;
+  async count(): Promise<number> {
+    return (await this.loadAll()).length;
   }
 }

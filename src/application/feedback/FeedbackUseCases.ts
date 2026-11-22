@@ -14,14 +14,14 @@ export class SubmitFeedbackUseCase {
     this.eventBus = eventBus;
   }
 
-  execute(input: CreatePlatformFeedbackInput): {
+  async execute(input: CreatePlatformFeedbackInput): Promise<{
     ok: true;
     id: string;
     createdAt: string;
     totalFeedback: number;
-  } {
+  }> {
     const feedback = PlatformFeedback.create(input);
-    const allRecords = this.feedbackRepo.save(feedback);
+    const allRecords = await this.feedbackRepo.save(feedback);
 
     this.eventBus.publish({
       eventName: 'platform.feedback_submitted',
@@ -51,9 +51,9 @@ export class GetFeedbackStatsUseCase {
     this.feedbackRepo = feedbackRepo;
   }
 
-  execute(): { totalFeedback: number } {
+  async execute(): Promise<{ totalFeedback: number }> {
     return {
-      totalFeedback: this.feedbackRepo.count(),
+      totalFeedback: await this.feedbackRepo.count(),
     };
   }
 }

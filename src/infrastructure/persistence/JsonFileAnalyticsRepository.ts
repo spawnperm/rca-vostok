@@ -7,6 +7,10 @@ import type {
 } from '../../domain/analytics/BehaviorModels.ts';
 import { atomicWriteJson, ensureDirectory, resolveConfinedPath } from './PathConfinement.ts';
 
+/**
+ * File-backed analytics adapter. Used for local development and tests.
+ * Production runs the PostgreSQL adapter instead.
+ */
 export class JsonFileAnalyticsRepository implements AnalyticsRepository {
   private readonly dataDir: string;
   private readonly fileName: string;
@@ -19,7 +23,7 @@ export class JsonFileAnalyticsRepository implements AnalyticsRepository {
     this.tempFileName = `${fileName}.tmp`;
   }
 
-  loadStore(): AnalyticsStoreData {
+  async loadStore(): Promise<AnalyticsStoreData> {
     if (this.cache) {
       return this.cache;
     }
@@ -43,7 +47,7 @@ export class JsonFileAnalyticsRepository implements AnalyticsRepository {
     }
   }
 
-  saveStore(store: AnalyticsStoreData): void {
+  async saveStore(store: AnalyticsStoreData): Promise<void> {
     const sessionEntries = Object.entries(store.sessions)
       .sort((a, b) => (a[1].lastSeenAt < b[1].lastSeenAt ? 1 : -1))
       .slice(0, 500);
@@ -58,16 +62,16 @@ export class JsonFileAnalyticsRepository implements AnalyticsRepository {
     atomicWriteJson(this.dataDir, this.fileName, this.tempFileName, boundedStore);
   }
 
-  reset(): void {
+  async reset(): Promise<void> {
     const empty: AnalyticsStoreData = { sessions: {}, events: [] };
     this.cache = empty;
     atomicWriteJson(this.dataDir, this.fileName, this.tempFileName, empty);
   }
 
-  getSession(
+  async getSession(
     sessionId: string
-  ): { session: VisitorSessionDTO; events: BehaviorEventDTO[] } | null {
-    const store = this.loadStore();
+  ): Promise<{ session: VisitorSessionDTO; events: BehaviorEventDTO[] } | null> {
+    const store = await this.loadStore();
     const session = store.sessions[sessionId];
     if (!session) return null;
     const events = store.events.filter((e) => e.sessionId === sessionId);

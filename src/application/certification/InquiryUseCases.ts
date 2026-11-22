@@ -14,14 +14,14 @@ export class SubmitInquiryUseCase {
     this.eventBus = eventBus;
   }
 
-  execute(input: CreateInquiryInput): {
+  async execute(input: CreateInquiryInput): Promise<{
     ok: true;
     id: string;
     createdAt: string;
     totalSubscriptions: number;
-  } {
+  }> {
     const inquiry = CertificationInquiry.create(input);
-    const allRecords = this.inquiryRepo.save(inquiry);
+    const allRecords = await this.inquiryRepo.save(inquiry);
 
     this.eventBus.publish({
       eventName: 'certification.inquiry_submitted',
@@ -51,9 +51,9 @@ export class GetInquiryStatsUseCase {
     this.inquiryRepo = inquiryRepo;
   }
 
-  execute(): { totalSubscriptions: number } {
+  async execute(): Promise<{ totalSubscriptions: number }> {
     return {
-      totalSubscriptions: this.inquiryRepo.count(),
+      totalSubscriptions: await this.inquiryRepo.count(),
     };
   }
 }

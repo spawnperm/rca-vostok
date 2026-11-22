@@ -1,0 +1,29 @@
+# Static Traefik configuration.
+# Routing is declared in traefik-dynamic.yml (file provider) instead of the
+# Docker provider: Docker Engine 29 rejects the API version Traefik's bundled
+# client negotiates, and this also avoids mounting docker.sock into the proxy.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+  format: common
+
+accessLog:
+  format: common
+
+api:
+  dashboard: true
+  # Serves the dashboard on :8080, published only on 127.0.0.1.
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+
+providers:
+  file:
+    filename: /etc/traefik/traefik-dynamic.yml
+    watch: true

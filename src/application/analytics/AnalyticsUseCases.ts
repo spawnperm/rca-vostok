@@ -31,7 +31,7 @@ export class CollectBehaviorUseCase {
     this.eventBus = eventBus;
   }
 
-  execute(cmd: CollectBehaviorCommand): { ok: true; accepted: number } {
+  async execute(cmd: CollectBehaviorCommand): Promise<{ ok: true; accepted: number }> {
     const sessionId = SanitizedText.sanitizeRaw(cmd.sessionId, 64);
     const visitorId = SanitizedText.sanitizeRaw(cmd.visitorId, 64) || sessionId;
     if (!sessionId) {
@@ -58,7 +58,7 @@ export class CollectBehaviorUseCase {
     const utmSource = SanitizedText.sanitizeRaw(cmd.utmSource, 64);
     const nowIso = new Date().toISOString();
 
-    const store = this.analyticsRepo.loadStore();
+    const store = await this.analyticsRepo.loadStore();
     if (!store.sessions[sessionId]) {
       const firstTab =
         SanitizedText.sanitizeRaw((rawEvents[0] as { tab?: unknown })?.tab, 32) || 'overview';
@@ -104,7 +104,7 @@ export class CollectBehaviorUseCase {
         nowIso,
         viewport
       );
-      this.analyticsRepo.saveStore(store);
+      await this.analyticsRepo.saveStore(store);
 
       this.eventBus.publish({
         eventName: 'analytics.behavior_collected',
@@ -129,8 +129,8 @@ export class GetAnalyticsSummaryUseCase {
     this.analyticsRepo = analyticsRepo;
   }
 
-  execute(): AnalyticsSummaryDTO {
-    const store = this.analyticsRepo.loadStore();
+  async execute(): Promise<AnalyticsSummaryDTO> {
+    const store = await this.analyticsRepo.loadStore();
     return AnalyticsAggregationService.summarize(store);
   }
 }
@@ -142,9 +142,11 @@ export class GetSessionDetailsUseCase {
     this.analyticsRepo = analyticsRepo;
   }
 
-  execute(sessionIdRaw: string): { session: VisitorSessionDTO; events: BehaviorEventDTO[] } {
+  async execute(
+    sessionIdRaw: string
+  ): Promise<{ session: VisitorSessionDTO; events: BehaviorEventDTO[] }> {
     const sessionId = SanitizedText.sanitizeRaw(sessionIdRaw, 64);
-    const result = this.analyticsRepo.getSession(sessionId);
+    const result = await this.analyticsRepo.getSession(sessionId);
     if (!result) {
       throw new NotFoundError('Session not found');
     }
@@ -159,8 +161,8 @@ export class ResetAnalyticsUseCase {
     this.analyticsRepo = analyticsRepo;
   }
 
-  execute(): { ok: true } {
-    this.analyticsRepo.reset();
+  async execute(): Promise<{ ok: true }> {
+    await this.analyticsRepo.reset();
     return { ok: true };
   }
 }

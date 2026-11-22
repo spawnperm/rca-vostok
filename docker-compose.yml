@@ -1,0 +1,184 @@
+name: rca-vostok
+
+# Production stack for РЦА «Русский Восток».
+#
+#   traefik   :80 public entrypoint, Docker label-based routing
+#   app       : Express + Vite bundle, PostgreSQL-backed DDD contexts
+#   postgres  : system of record for analytics / inquiries / feedback
+#   garage    : S3-compatible store for database and artifact backups
+#   forgejo   : self-hosted Git (source of truth for deploys)
+#
+# Secrets come from .env (see .env.example). Nothing sensitive is committed.
+
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: rca-traefik
+    restart: unless-stopped
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    ports:
+      - "80:80"
+      # Dashboard only on loopback; reach it through an SSH tunnel.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./deploy/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./deploy/traefik-dynamic.yml:/etc/traefik/traefik-dynamic.yml:ro
+    networks:
+      - rca
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rca-vostok:latest
+    container_name: rca-vostok-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      APP_URL: ${APP_URL:-http://46.173.16.90}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    networks:
+      - rca
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: rca-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - rca-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - rca
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  garage:
+    image: dxflrs/garage:v1.0.1
+    container_name: rca-garage
+    restart: unless-stopped
+    # Garage reads /etc/garage.toml by default; no --config flag needed.
+    command: ["/garage", "server"]
+    volumes:
+      - ./deploy/garage.toml:/etc/garage.toml:ro
+      - rca-garage-meta:/var/lib/garage/meta
+      - rca-garage-data:/var/lib/garage/data
+    networks:
+      - rca
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # One-shot: creates the Forgejo database before Forgejo boots.
+  # Idempotent, so it is safe to run on every `up`.
+  postgres-init:
+    image: postgres:17-alpine
+    container_name: rca-postgres-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      FORGEJO_DB_NAME: ${FORGEJO_DB_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        psql -h postgres -U "$$POSTGRES_USER" -d postgres -tAc \
+          "SELECT 1 FROM pg_database WHERE datname='$$FORGEJO_DB_NAME'" | grep -q 1 \
+          || psql -h postgres -U "$$POSTGRES_USER" -d postgres -c \
+             "CREATE DATABASE \"$$FORGEJO_DB_NAME\""
+    restart: "no"
+    networks:
+      - rca
+
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:9
+    container_name: rca-forgejo
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-init:
+        condition: service_completed_successfully
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: postgres:5432
+      FORGEJO__database__NAME: ${FORGEJO_DB_NAME}
+      FORGEJO__database__USER: ${POSTGRES_USER}
+      FORGEJO__database__PASSWD: ${POSTGRES_PASSWORD}
+      FORGEJO__server__DOMAIN: ${FORGEJO_DOMAIN:-46.173.16.90}
+      FORGEJO__server__ROOT_URL: ${FORGEJO_ROOT_URL:-http://46.173.16.90/git/}
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__server__ROOT_URL_PATH: /git/
+      FORGEJO__server__SSH_DOMAIN: ${FORGEJO_DOMAIN:-46.173.16.90}
+      FORGEJO__server__START_SSH_SERVER: "false"
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__repository__DEFAULT_BRANCH: main
+      FORGEJO__log__LEVEL: info
+    volumes:
+      - rca-forgejo-data:/data
+    # Not published on the host: Traefik routes it under /git/.
+    expose:
+      - "3000"
+    networks:
+      - rca
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  rca:
+    driver: bridge
+
+volumes:
+  rca-pgdata:
+  rca-garage-meta:
+  rca-garage-data:
+  rca-forgejo-data:

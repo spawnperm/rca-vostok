@@ -1,0 +1,28 @@
+# Garage S3-compatible object storage (single node).
+# Used for database dumps and repository/artifact backups.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+block_size = "1M"
+
+# Single-node deployment: every object has exactly one replica.
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "CHANGE_ME_GARAGE_RPC_SECRET"
+
+[s3_api]
+api_bind_addr = "[::]:3900"
+s3_region = "garage"
+root_domain = ".s3.garage"
+
+[s3_web]
+bind_addr = "[::]:3902"
+root_domain = ".web.garage"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "CHANGE_ME_GARAGE_ADMIN_TOKEN"
+metrics_token = "CHANGE_ME_GARAGE_METRICS_TOKEN"

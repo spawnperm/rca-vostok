@@ -6,6 +6,10 @@ import type {
 import type { FeedbackRepository } from '../../domain/feedback/FeedbackRepository.ts';
 import { atomicWriteJson, ensureDirectory, resolveConfinedPath } from './PathConfinement.ts';
 
+/**
+ * File-backed feedback adapter. Used for local development and tests.
+ * Production runs the PostgreSQL adapter instead.
+ */
 export class JsonFileFeedbackRepository implements FeedbackRepository {
   private readonly dataDir: string;
   private readonly fileName: string;
@@ -17,7 +21,7 @@ export class JsonFileFeedbackRepository implements FeedbackRepository {
     this.tempFileName = `${fileName}.tmp`;
   }
 
-  loadAll(): PlatformFeedbackDTO[] {
+  async loadAll(): Promise<PlatformFeedbackDTO[]> {
     ensureDirectory(this.dataDir);
     const targetPath = resolveConfinedPath(this.dataDir, this.fileName);
     if (!fs.existsSync(targetPath)) {
@@ -32,15 +36,15 @@ export class JsonFileFeedbackRepository implements FeedbackRepository {
     }
   }
 
-  save(feedback: PlatformFeedback): PlatformFeedbackDTO[] {
-    const records = this.loadAll();
+  async save(feedback: PlatformFeedback): Promise<PlatformFeedbackDTO[]> {
+    const records = await this.loadAll();
     records.push(feedback.toDTO());
     const bounded = records.slice(-1000);
     atomicWriteJson(this.dataDir, this.fileName, this.tempFileName, bounded);
     return bounded;
   }
 
-  count(): number {
-    return this.loadAll().length;
+  async count(): Promise<number> {
+    return (await this.loadAll()).length;
   }
 }

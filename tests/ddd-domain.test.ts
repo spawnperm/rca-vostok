@@ -164,7 +164,7 @@ test('DemandForecastService: forecastDfoRegions2030 models 2025-2030 regional de
   );
 });
 
-test('Application UseCases + Persistence + DomainEventBus work end-to-end in isolated temp directory', () => {
+test('Application UseCases + Persistence + DomainEventBus work end-to-end in isolated temp directory', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-vostok-ddd-'));
   try {
     const eventBus = new InMemoryDomainEventBus();
@@ -175,7 +175,7 @@ test('Application UseCases + Persistence + DomainEventBus work end-to-end in iso
     const submitInquiry = new SubmitInquiryUseCase(inquiryRepo, eventBus);
     const getStats = new GetInquiryStatsUseCase(inquiryRepo);
 
-    const submitted = submitInquiry.execute({
+    const submitted = await submitInquiry.execute({
       fullName: 'Елена Морозова',
       email: 'elena@bikin.ru',
       region: 'Пожарский округ',
@@ -185,7 +185,7 @@ test('Application UseCases + Persistence + DomainEventBus work end-to-end in iso
 
     assert.equal(submitted.ok, true);
     assert.equal(submitted.totalSubscriptions, 1);
-    assert.equal(getStats.execute().totalSubscriptions, 1);
+    assert.equal((await getStats.execute()).totalSubscriptions, 1);
     assert.ok(publishedEvents.includes('certification.inquiry_submitted'));
 
     const analyticsRepo = new JsonFileAnalyticsRepository(tempDir);
@@ -193,7 +193,7 @@ test('Application UseCases + Persistence + DomainEventBus work end-to-end in iso
     const getSummary = new GetAnalyticsSummaryUseCase(analyticsRepo);
     const getSession = new GetSessionDetailsUseCase(analyticsRepo);
 
-    const collected = collectBehavior.execute({
+    const collected = await collectBehavior.execute({
       sessionId: 'sess-test-1',
       visitorId: 'vis-test-1',
       viewport: '1440x900',
@@ -207,14 +207,14 @@ test('Application UseCases + Persistence + DomainEventBus work end-to-end in iso
     });
 
     assert.equal(collected.accepted, 3);
-    const summary = getSummary.execute();
+    const summary = await getSummary.execute();
     assert.equal(summary.totals.sessions, 1);
     assert.equal(summary.totals.totalClicks, 1);
     assert.equal(summary.totals.avgScrollDepth, 72);
 
-    const details = getSession.execute('sess-test-1');
+    const details = await getSession.execute('sess-test-1');
     assert.equal(details.events.length, 3);
-    assert.throws(() => getSession.execute('missing-session'), NotFoundError);
+    await assert.rejects(() => getSession.execute('missing-session'), NotFoundError);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -225,7 +225,7 @@ test('PathConfinement rejects directory traversal attempts', () => {
   assert.throws(() => resolveConfinedPath(base, '../../etc/passwd'));
 });
 
-test('PlatformFeedback + FeedbackUseCases validate inputs, allow optional email, and persist records', () => {
+test('PlatformFeedback + FeedbackUseCases validate inputs, allow optional email, and persist records', async () => {
   assert.throws(
     () =>
       PlatformFeedback.create({
@@ -247,7 +247,7 @@ test('PlatformFeedback + FeedbackUseCases validate inputs, allow optional email,
     const submit = new SubmitFeedbackUseCase(repo, eventBus);
     const stats = new GetFeedbackStatsUseCase(repo);
 
-    const res = submit.execute({
+    const res = await submit.execute({
       senderName: 'Турклуб «Сихотэ-Алинь»',
       email: 'Club@Example.RU',
       feedbackType: 'suggestion',
@@ -259,7 +259,7 @@ test('PlatformFeedback + FeedbackUseCases validate inputs, allow optional email,
     assert.equal(res.ok, true);
     assert.ok(res.id.startsWith('fb-'));
     assert.equal(res.totalFeedback, 1);
-    assert.equal(stats.execute().totalFeedback, 1);
+    assert.equal((await stats.execute()).totalFeedback, 1);
     assert.ok(published.includes('platform.feedback_submitted'));
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

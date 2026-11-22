@@ -1,0 +1,26 @@
+# Build artifacts and dependencies
+node_modules
+dist
+build
+coverage
+
+# Local data stores created at runtime (root only: src/data holds source code)
+/data
+
+# VCS / tooling
+.git
+.gitignore
+.github
+
+# Wiki is documentation only; not needed inside the image
+wiki
+
+# Local env files and container overrides
+.env
+.env.*
+*.log
+
+# Editor / OS noise
+.DS_Store
+.vscode
+.idea

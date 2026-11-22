@@ -1,0 +1,47 @@
+# Dynamic Traefik configuration (file provider).
+#
+# Traefik runs inside the compose network, so services are addressed by their
+# compose service names. The app answers on :3000, Forgejo on :3000.
+
+http:
+  routers:
+    # The public site. Lowest priority so /git never lands here.
+    rca-web:
+      rule: PathPrefix(`/`)
+      entryPoints:
+        - web
+      priority: 1
+      service: rca-web
+      middlewares:
+        - rca-compress
+
+    # Self-hosted Git, mounted under /git.
+    rca-git:
+      rule: PathPrefix(`/git`)
+      entryPoints:
+        - web
+      priority: 100
+      service: rca-git
+      middlewares:
+        - rca-git-strip
+        - rca-compress
+
+  services:
+    rca-web:
+      loadBalancer:
+        servers:
+          - url: http://app:3000
+
+    rca-git:
+      loadBalancer:
+        servers:
+          - url: http://forgejo:3000
+
+  middlewares:
+    rca-compress:
+      compress: {}
+
+    rca-git-strip:
+      stripPrefix:
+        prefixes:
+          - /git

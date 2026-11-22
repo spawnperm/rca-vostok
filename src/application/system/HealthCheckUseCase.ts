@@ -8,6 +8,9 @@ export interface SystemHealthDTO {
     methodology: 'DDD + 11 Engineering Contours';
     boundedContexts: string[];
   };
+  persistence: {
+    adapter: string;
+  };
   metrics: {
     inquiriesCount: number;
     sessionsCount: number;
@@ -18,14 +21,20 @@ export interface SystemHealthDTO {
 export class GetSystemHealthUseCase {
   private readonly inquiryRepo: InquiryRepository;
   private readonly analyticsRepo: AnalyticsRepository;
+  private readonly adapterName: string;
 
-  constructor(inquiryRepo: InquiryRepository, analyticsRepo: AnalyticsRepository) {
+  constructor(
+    inquiryRepo: InquiryRepository,
+    analyticsRepo: AnalyticsRepository,
+    adapterName = 'unknown'
+  ) {
     this.inquiryRepo = inquiryRepo;
     this.analyticsRepo = analyticsRepo;
+    this.adapterName = adapterName;
   }
 
-  execute(): SystemHealthDTO {
-    const store = this.analyticsRepo.loadStore();
+  async execute(): Promise<SystemHealthDTO> {
+    const store = await this.analyticsRepo.loadStore();
     return {
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -33,8 +42,11 @@ export class GetSystemHealthUseCase {
         methodology: 'DDD + 11 Engineering Contours',
         boundedContexts: ['certification', 'analytics', 'research'],
       },
+      persistence: {
+        adapter: this.adapterName,
+      },
       metrics: {
-        inquiriesCount: this.inquiryRepo.count(),
+        inquiriesCount: await this.inquiryRepo.count(),
         sessionsCount: Object.keys(store.sessions).length,
         eventsCount: store.events.length,
       },
