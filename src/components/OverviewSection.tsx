@@ -27,6 +27,7 @@ import { CenterReadinessMiniQuiz } from './CenterReadinessMiniQuiz';
 import { DfoAttestationPointsWidget } from './DfoAttestationPointsWidget';
 import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
 import { DfoRegionalOfficesMap } from './DfoRegionalOfficesMap';
+import { ExpertProfileWidget } from './ExpertProfileWidget';
 import { KnowledgeBaseFaq } from './KnowledgeBaseFaq';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import { RegionalSessionsTimeline } from './RegionalSessionsTimeline';
@@ -609,6 +610,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Attestation Commission Experts Widget */}
       <AttestationCommissionWidget onContactCurator={openCuratorModal} />
+
+      {/* Expert Profile: Commission & Key Speakers */}
+      <ExpertProfileWidget
+        onContactCurator={openCuratorModal}
+        onApplyForSession={handleApplyForSession}
+      />
 
       {/* Candidate Attestation Roadmap */}
       <AttestationRoadmap onContactCurator={openCuratorModal} />

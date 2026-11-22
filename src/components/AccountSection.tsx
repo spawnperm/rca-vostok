@@ -22,6 +22,8 @@ import {
 } from './AttestationProgressWidget';
 import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
+import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
+import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
 import { CenterReviewForm } from './CenterReviewForm';
 import { ReviewStatsWidget } from './ReviewStatsWidget';
 import {
@@ -65,6 +67,10 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
   );
   const [selectedExamDate, setSelectedExamDate] = useState<string | undefined>(undefined);
   const [reviewsRefreshKey, setReviewsRefreshKey] = useState<number>(0);
+  const [kbExternalSearch, setKbExternalSearch] = useState<{
+    query: string;
+    nonce: number;
+  } | null>(null);
 
   // A reset link lands on ?tab=account&reset=<token>, so the cabinet opens
   // straight into the "set a new password" step.
@@ -183,6 +189,11 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
   const effectiveProgressSummary =
     liveProgressSummary ?? computeUserAttestationSummary(user, inquiries);
 
+  const scrollToElementById = (elementId: string) => {
+    const el = document.getElementById(elementId);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="space-y-6">
       <CabinetHeader user={user} onLogout={handleLogout} />
@@ -202,6 +213,16 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
         summary={effectiveProgressSummary}
         onExamDateChange={setSelectedExamDate}
       />
+      <QualificationSelfCheckWidget
+        user={user}
+        onJumpToKnowledgeBase={(query) => {
+          setKbExternalSearch((prev) => ({
+            query: query ?? '',
+            nonce: (prev?.nonce ?? 0) + 1,
+          }));
+          scrollToElementById('account-knowledge-base');
+        }}
+      />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <NotificationCenterWidget
@@ -212,6 +233,11 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
               hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
             }
             onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
+          />
+          <AccountKnowledgeBaseWidget
+            user={user}
+            externalSearch={kbExternalSearch}
+            onNavigate={onNavigate}
           />
           <ProfileCard user={user} onUpdated={handleAuthenticated} />
           <MyInquiriesSection
