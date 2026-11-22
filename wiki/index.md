@@ -2,6 +2,18 @@
 
 Единый индекс контекста диалога, исследовательской базы, архитектуры приложения и истории коммитов репозитория [`spawnperm/rca-vostok`](https://github.com/spawnperm/rca-vostok).
 
+**Текущее состояние:** платформа задеплоена на `46.173.16.90` (6 контейнеров: Traefik, приложение, PostgreSQL, Garage S3, Forgejo, NATS). Данные хранятся в PostgreSQL, медиа — в S3. Стек собирается на pnpm, CI проверяет типизацию, тесты, сборку, аудит зависимостей и интеграционные тесты с реальной БД.
+
+### Быстрый маршрут по задачам
+
+| Задача | Куда смотреть |
+|---|---|
+| Понять устройство кода | [`system-architecture.md`](./system-architecture.md), [`ddd-and-11-contours.md`](./ddd-and-11-contours.md) |
+| Задеплоить, откатить, настроить бэкапы | [`../deploy/README.md`](../deploy/README.md) |
+| Узнать, что и когда менялось | [`log.md`](./log.md) (append-only, новое в конце) |
+| Восстановить контекст диалога | [`dialogue-context.md`](./dialogue-context.md) |
+| Понять предметную область | [`economic-model-and-market.md`](./economic-model-and-market.md), [`entities-and-institutions.md`](./entities-and-institutions.md) |
+
 ## Навигация и регламент
 
 - [**SCHEMA.md**](./SCHEMA.md) — Конституция и правила ведения LLM Wiki (уровни источников, протоколы ingest/query/lint, запрет на хранение секретов).
@@ -9,17 +21,28 @@
 
 ## Контекст диалога и первоисточники
 
-- [**dialogue-context.md**](./dialogue-context.md) — Полная хронология пользовательских запросов (от изучения `rca-vostok.ru` и 6 исходных документов до вики-архивации), принятые инженерные и дизайн-решения, статусы проверок и Git-коммитов.
-- [**sources-synthesis.md**](./sources-synthesis.md) — Структурированный синтез материалов сайта `https://rca-vostok.ru/` и шести исходных аналитических файлов (`00_c77f6a30.txt` – `05_76353747.txt`).
+- [**dialogue-context.md**](./dialogue-context.md) — Хронология пользовательских запросов, принятые инженерные и дизайн-решения, статусы проверок и Git-коммитов.
+- [**sources-synthesis.md**](./sources-synthesis.md) — Синтез материалов сайта `https://rca-vostok.ru/` и шести исходных аналитических файлов (`00_c77f6a30.txt` – `05_76353747.txt`).
 
 ## Предметная область и исследование
 
 - [**entities-and-institutions.md**](./entities-and-institutions.md) — Институциональные субъекты (РЦА «Русский Восток», ВВГУ, ФСТР, Минтуризма ПК, Минэкономразвития РФ, ООПТ), руководство, программы ДПО, экспертные отзывы и хроника индустрии 2025–2026 гг.
-- [**economic-model-and-market.md**](./economic-model-and-market.md) — Экономико-математическая модель кадрового дефицита, эмпирическая таблица, межрегиональные срезы ДФО (Приморье, Камчатка, Хабаровский край), 8 округов Приморского края на карте активности и дорожная карта 2025–2030.
+- [**economic-model-and-market.md**](./economic-model-and-market.md) — Экономико-математическая модель кадрового дефицита, эмпирическая таблица, межрегиональные срезы ДФО, 8 округов Приморского края и дорожная карта 2025–2030.
 - [**dissertation-and-presentations.md**](./dissertation-and-presentations.md) — Каркас диссертации ВАК 5.2.3 (область 4.15), научная новизна, положения на защиту, сравнение с IFMGA и спецификация двух презентационных колод (18 и 10 слайдов).
-- [**digital-ecosystem-and-ux-seo.md**](./digital-ecosystem-and-ux-seo.md) — Аудит цифровой экосистемы аттестации Приморья (`visit-primorye.ru`, `attestation.tssr.ru/primorie`, `vvsu.ru`, `vk.com/rcaprm`, `@tourprimorsky`, `tour.primorsky.ru`), разрывы пути пользователя, UI/UX-слабости, SEO-каннибализация и рекомендации для «единого окна».
+- [**digital-ecosystem-and-ux-seo.md**](./digital-ecosystem-and-ux-seo.md) — Аудит цифровой экосистемы аттестации Приморья, разрывы пути пользователя, UI/UX-слабости, SEO-каннибализация и рекомендации для «единого окна».
 
 ## Техническая реализация
 
-- [**ddd-and-11-contours.md**](./ddd-and-11-contours.md) — Архитектура Domain-Driven Design (Bounded Contexts `certification`, `analytics`, Shared Kernel, Use Cases, Repositories, Domain Events) и матрица 11 контуров профессиональной разработки.
-- [**system-architecture.md**](./system-architecture.md) — Стек React 19 + Vite + Express (`server.ts`), компоненты интерфейса, SEO-инфраструктура (`/robots.txt`, `/sitemap.xml`, JSON-LD), трекинг поведения и карта кликов, форма заявок `/api/inquiries`, хранение данных в `/data/` и правила дизайн-системы.
+- [**system-architecture.md**](./system-architecture.md) — Стек и слои, HTTP-маршруты (включая identity, social, chat, media), RBAC, безопасность (CSP, HSTS, rate limiting, восстановление пароля), наблюдаемость (`/api/health`, `/api/metrics`), версионирование миграций, потоковая отдача медиа, SEO-инфраструктура.
+- [**ddd-and-11-contours.md**](./ddd-and-11-contours.md) — Восемь ограниченных контекстов (`certification`, `analytics`, `identity`, `social`, `chat`, `media` и Shared Kernel), порты и адаптеры, персистентность PostgreSQL, матрица 11 инженерных контуров.
+
+## Эксплуатация
+
+- [**deploy/README.md**](../deploy/README.md) — состав стека, установка, секреты, резервное копирование по расписанию, восстановление, деплой и откат (`release.sh`), tmux-сессии для прода и разработки, SMTP для восстановления пароля.
+
+## Что знать перед изменениями
+
+- **Node стрипает типы напрямую** — parameter properties (`constructor(private readonly x: T)`) запрещены, конструкторы объявляют поля явно.
+- **Права проверяются на сервере** — UI лишь скрывает недоступные действия; регрессия в `Rbac.ts` ломает и API, и интерфейс.
+- **Миграции версионированы** — новый шаг добавляется в `MIGRATION_STEPS` и `MIGRATION_STEP_COUNT` поднимается автоматически через длину массива; health заметит расхождение.
+- **Каждое изменение кода сопровождается записью в [`log.md`](./log.md)** и обновлением затронутой тематической страницы (регламент в [`SCHEMA.md`](./SCHEMA.md)).
