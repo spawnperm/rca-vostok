@@ -33,6 +33,8 @@ RUN npm install --no-audit --no-fund --omit=dev && npm cache clean --force
 # application / domain / infrastructure folders directly.
 COPY server.ts ./
 COPY src ./src
+# Operational scripts (e.g. `docker compose exec app node scripts/create-admin.ts`).
+COPY scripts ./scripts
 COPY --from=builder /app/dist ./dist
 
 # Persisted JSON stores (analytics, inquiries, feedback).
