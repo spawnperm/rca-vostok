@@ -220,6 +220,68 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
     CREATE INDEX IF NOT EXISTS user_sessions_expires_idx ON user_sessions (expires_at);
   `);
 
+  // Password-reset tokens: only the SHA-256 hash is stored, single use,
+  // fifteen-minute lifetime (enforced in the domain, indexed here).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      token_hash  TEXT PRIMARY KEY,
+      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ NOT NULL,
+      expires_at  TIMESTAMPTZ NOT NULL,
+      used_at     TIMESTAMPTZ
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx
+      ON password_reset_tokens (user_id);
+  `);
+
+  // Link inquiries to the account that submitted them, so the cabinet can show
+  // "my applications". Nullable: requests created before this migration, and
+  // anonymous submissions, have no owner.
+  await pool.query(`
+    ALTER TABLE certification_inquiries ADD COLUMN IF NOT EXISTS user_id TEXT;
+  `);
+
+  // Review lifecycle, surfaced in the cabinet. Existing rows start as 'new'.
+  await pool.query(`
+    ALTER TABLE certification_inquiries
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'new';
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conname = 'certification_inquiries_status_check'
+      ) THEN
+        ALTER TABLE certification_inquiries
+          ADD CONSTRAINT certification_inquiries_status_check
+          CHECK (status IN ('new', 'in_review', 'approved', 'rejected'));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'certification_inquiries_user_fk'
+      ) THEN
+        ALTER TABLE certification_inquiries
+          ADD CONSTRAINT certification_inquiries_user_fk
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS certification_inquiries_user_idx
+      ON certification_inquiries (user_id, created_at DESC);
+  `);
+
   await migrateSocial(pool);
   await migrateChat(pool);
   await migrateMedia(pool);

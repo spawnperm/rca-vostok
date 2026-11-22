@@ -15,6 +15,11 @@ import type {
   UpdatePostUseCase,
   UpdateSocialProfileUseCase,
 } from '../../application/social/SocialUseCases.ts';
+import type {
+  ListAllInquiriesUseCase,
+  ListMyInquiriesUseCase,
+  UpdateInquiryStatusUseCase,
+} from '../../application/certification/InquiryUseCases.ts';
 
 export interface SocialRouterDeps {
   getProfile: GetSocialProfileUseCase;
@@ -28,6 +33,9 @@ export interface SocialRouterDeps {
   toggleLike: ToggleLikeUseCase;
   followUser: FollowUserUseCase;
   listActivity: ListActivityUseCase;
+  listMyInquiries: ListMyInquiriesUseCase;
+  listAllInquiries: ListAllInquiriesUseCase;
+  updateInquiryStatus: UpdateInquiryStatusUseCase;
 }
 
 export function sendDomainError(err: unknown, res: express.Response): void {
@@ -185,6 +193,52 @@ export function createSocialRouter(deps: SocialRouterDeps): express.Router {
       sendDomainError(err, res);
     }
   });
+
+  // ── Certification requests: cabinet and curator views ─────────────────────
+  router.get(
+    '/api/account/inquiries',
+    requireAuth(),
+    requirePermission(PERMISSIONS.VIEW_OWN_INQUIRIES),
+    async (req, res) => {
+      try {
+        res.json({ inquiries: await deps.listMyInquiries.execute(req.authUser!) });
+      } catch (err) {
+        sendDomainError(err, res);
+      }
+    }
+  );
+
+  router.get(
+    '/api/admin/inquiries',
+    requireAuth(),
+    requirePermission(PERMISSIONS.VIEW_ALL_INQUIRIES),
+    async (req, res) => {
+      try {
+        res.json({ inquiries: await deps.listAllInquiries.execute(req.authUser!) });
+      } catch (err) {
+        sendDomainError(err, res);
+      }
+    }
+  );
+
+  router.patch(
+    '/api/admin/inquiries/:inquiryId',
+    requireAuth(),
+    requirePermission(PERMISSIONS.VIEW_ALL_INQUIRIES),
+    async (req, res) => {
+      try {
+        const body = (req.body || {}) as Record<string, unknown>;
+        res.json(
+          await deps.updateInquiryStatus.execute(req.authUser!, {
+            inquiryId: req.params.inquiryId,
+            status: body.status,
+          })
+        );
+      } catch (err) {
+        sendDomainError(err, res);
+      }
+    }
+  );
 
   return router;
 }

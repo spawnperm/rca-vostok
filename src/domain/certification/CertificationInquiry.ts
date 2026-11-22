@@ -10,10 +10,19 @@ export interface InquiryRecordDTO {
   track: string;
   experienceNote: string;
   consentAccepted: boolean;
+  /** Owning account, when the request came from an authenticated cabinet session. */
+  userId: string | null;
+  status: InquiryStatus;
   createdAt: string;
 }
 
+/** Lifecycle of a request, as shown in the personal cabinet. */
+export const INQUIRY_STATUSES = ['new', 'in_review', 'approved', 'rejected'] as const;
+export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
+
 export interface CreateInquiryInput {
+  /** Set by the application layer when the caller is authenticated. */
+  userId?: string | null;
   fullName: unknown;
   email: unknown;
   contactChannel?: unknown;
@@ -32,6 +41,8 @@ export class CertificationInquiry {
   readonly track: string;
   readonly experienceNote: SanitizedText;
   readonly consentAccepted: true;
+  readonly userId: string | null;
+  readonly status: InquiryStatus;
   readonly createdAt: string;
 
   private constructor(props: {
@@ -43,6 +54,8 @@ export class CertificationInquiry {
     track: string;
     experienceNote: SanitizedText;
     consentAccepted: true;
+    userId: string | null;
+    status: InquiryStatus;
     createdAt: string;
   }) {
     this.id = props.id;
@@ -53,6 +66,8 @@ export class CertificationInquiry {
     this.track = props.track;
     this.experienceNote = props.experienceNote;
     this.consentAccepted = props.consentAccepted;
+    this.userId = props.userId;
+    this.status = props.status;
     this.createdAt = props.createdAt;
   }
 
@@ -90,7 +105,56 @@ export class CertificationInquiry {
       track,
       experienceNote,
       consentAccepted: true,
+      userId: SanitizedText.sanitizeRaw(input.userId, 64) || null,
+      status: 'new',
       createdAt: new Date().toISOString(),
+    });
+  }
+
+
+  /** Rebuilds an aggregate from persistence without re-running field rules. */
+  static rehydrate(props: {
+    id: string;
+    fullName: string;
+    email: string;
+    contactChannel: string;
+    region: string;
+    track: string;
+    experienceNote: string;
+    consentAccepted: boolean;
+    userId: string | null;
+    status: InquiryStatus;
+    createdAt: string;
+  }): CertificationInquiry {
+    return new CertificationInquiry({
+      id: props.id,
+      fullName: SanitizedText.rehydrate(props.fullName),
+      email: EmailAddress.rehydrate(props.email),
+      contactChannel: SanitizedText.rehydrate(props.contactChannel),
+      region: props.region,
+      track: props.track,
+      experienceNote: SanitizedText.rehydrate(props.experienceNote),
+      consentAccepted: true,
+      userId: props.userId,
+      status: props.status,
+      createdAt: props.createdAt,
+    });
+  }
+
+  /** Changes the review status. Only a moderator reaches this path. */
+  withStatus(status: InquiryStatus): CertificationInquiry {
+    return new CertificationInquiry({
+      id: this.id,
+      fullName: this.fullName,
+      email: this.email,
+      contactChannel: this.contactChannel,
+      region: this.region,
+      track: this.track,
+      experienceNote: this.experienceNote,
+      consentAccepted: this.consentAccepted,
+      userId: this.userId,
+      status,
+      createdAt: this.createdAt,
     });
   }
 
@@ -104,6 +168,8 @@ export class CertificationInquiry {
       track: this.track,
       experienceNote: this.experienceNote.value,
       consentAccepted: this.consentAccepted,
+      userId: this.userId,
+      status: this.status,
       createdAt: this.createdAt,
     };
   }

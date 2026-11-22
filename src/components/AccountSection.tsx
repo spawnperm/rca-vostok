@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { tracker } from '../utils/tracker';
 import { SocialProfileSection } from './social/SocialProfileSection';
+import { MyInquiriesSection } from './social/MyInquiriesSection';
+import { ForgotPasswordForm, ResetPasswordForm } from './social/PasswordRecovery';
 import {
   ApiError,
   ROLE_LABELS,
@@ -42,6 +44,21 @@ export function AccountSection() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
+  /** Password recovery views: null = normal auth, 'forgot' = request, string = reset token. */
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [showForgot, setShowForgot] = useState<boolean>(false);
+
+  // A reset link lands on ?tab=account&reset=<token>, so the cabinet opens
+  // straight into the "set a new password" step.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('reset');
+      if (token) setResetToken(token);
+    } catch {
+      // ignore malformed URLs
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +92,17 @@ export function AccountSection() {
     }
   }, []);
 
+  const clearResetToken = useCallback(() => {
+    setResetToken(null);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('reset');
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore
+    }
+  }, []);
+
   if (loading) {
     return (
       <section className="bg-white border border-slate-200 rounded-xl p-8">
@@ -83,12 +111,21 @@ export function AccountSection() {
     );
   }
 
+  // Recovery flows take precedence over the normal auth panel.
+  if (resetToken) {
+    return <ResetPasswordForm token={resetToken} onDone={clearResetToken} />;
+  }
+  if (showForgot) {
+    return <ForgotPasswordForm onBack={() => setShowForgot(false)} />;
+  }
+
   if (!user) {
     return (
       <AuthPanel
         mode={authMode}
         onModeChange={setAuthMode}
         onAuthenticated={handleAuthenticated}
+        onForgotPassword={() => setShowForgot(true)}
       />
     );
   }
@@ -99,6 +136,7 @@ export function AccountSection() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <ProfileCard user={user} onUpdated={handleAuthenticated} />
+          <MyInquiriesSection canView={hasPermission(user, 'inquiries:view_own')} />
           <PasswordCard onChanged={() => setUser(null)} />
         </div>
         <div className="space-y-6">
@@ -123,10 +161,12 @@ function AuthPanel({
   mode,
   onModeChange,
   onAuthenticated,
+  onForgotPassword,
 }: {
   mode: AuthMode;
   onModeChange: (mode: AuthMode) => void;
   onAuthenticated: (user: SessionUser) => void;
+  onForgotPassword: () => void;
 }) {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
@@ -311,6 +351,16 @@ function AuthPanel({
             )}
             {busy ? 'Выполняется…' : isRegister ? 'Создать учётную запись' : 'Войти'}
           </button>
+
+          {!isRegister && (
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="w-full text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+            >
+              Забыли пароль?
+            </button>
+          )}
         </form>
       </div>
     </section>

@@ -10,7 +10,10 @@ import {
 } from './src/application/analytics/AnalyticsUseCases.ts';
 import {
   GetInquiryStatsUseCase,
+  ListAllInquiriesUseCase,
+  ListMyInquiriesUseCase,
   SubmitInquiryUseCase,
+  UpdateInquiryStatusUseCase,
 } from './src/application/certification/InquiryUseCases.ts';
 import {
   GetFeedbackStatsUseCase,
@@ -103,6 +106,22 @@ import {
 } from './src/application/identity/IdentityUseCases.ts';
 import { createIdentityRouter } from './src/infrastructure/http/IdentityRouter.ts';
 import { createAuthMiddleware } from './src/infrastructure/http/AuthMiddleware.ts';
+import {
+  DEFAULT_LOGIN_RULES,
+  RateLimiter,
+  createLoginRateLimit,
+} from './src/infrastructure/http/RateLimiter.ts';
+import {
+  ForgotPasswordUseCase,
+  ResetPasswordUseCase,
+} from './src/application/identity/PasswordResetUseCases.ts';
+import { PostgresPasswordResetRepository } from './src/infrastructure/persistence/pg/PostgresPasswordResetRepository.ts';
+import { InMemoryPasswordResetRepository } from './src/infrastructure/persistence/pg/PostgresPasswordResetRepository.ts';
+import type { PasswordResetRepository } from './src/domain/identity/PasswordReset.ts';
+import {
+  LoggingMailer,
+  createMailerFromEnv,
+} from './src/infrastructure/mail/Mailer.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -233,6 +252,40 @@ async function startServer() {
   const resolveSessionUseCase = new ResolveSessionUseCase(userRepo, sessionRepo, sessionTokens);
   app.use(createAuthMiddleware(resolveSessionUseCase));
 
+  // Credential-stuffing protection: one counter per IP, one per account.
+  const loginLimiter = new RateLimiter(DEFAULT_LOGIN_RULES);
+  const loginRateLimit = createLoginRateLimit({
+    limiter: loginLimiter,
+    perIpRule: 'login-ip',
+    perAccountRule: 'login-account',
+  });
+
+  // Password reset: mailer falls back to a logging transport when SMTP is not
+  // configured, so the endpoint still works locally and reports delivery status.
+  const mailer = createMailerFromEnv() ?? new LoggingMailer();
+  console.info(
+    `[mail] transport: ${mailer.delivers ? 'SMTP' : 'logging (no SMTP configured)'}`
+  );
+
+  const resetTokenRepo: PasswordResetRepository = pool
+    ? new PostgresPasswordResetRepository(pool)
+    : new InMemoryPasswordResetRepository();
+
+  const forgotPassword = new ForgotPasswordUseCase(
+    userRepo,
+    resetTokenRepo,
+    mailer,
+    eventBus,
+    process.env.APP_URL ?? 'http://localhost:3000'
+  );
+  const resetPassword = new ResetPasswordUseCase(
+    userRepo,
+    resetTokenRepo,
+    sessionRepo,
+    passwordHasher,
+    eventBus
+  );
+
   app.use(
     createIdentityRouter({
       registerUser: new RegisterUserUseCase(userRepo, passwordHasher, eventBus),
@@ -244,6 +297,15 @@ async function startServer() {
       listUsers: new ListUsersUseCase(userRepo),
       assignRole: new AssignRoleUseCase(userRepo, eventBus),
       setUserActive: new SetUserActiveUseCase(userRepo),
+      loginRateLimit,
+      forgotPassword,
+      resetPassword,
+      // Email flooding guard: five requests per address per hour.
+      forgotRateLimit: createLoginRateLimit({
+        limiter: loginLimiter,
+        perIpRule: 'forgot-ip',
+        perAccountRule: 'forgot-account',
+      }),
     })
   );
 
@@ -273,6 +335,9 @@ async function startServer() {
         toggleLike: new ToggleLikeUseCase(socialRepo, eventBus),
         followUser: new FollowUserUseCase(socialRepo),
         listActivity: new ListActivityUseCase(socialRepo),
+        listMyInquiries: new ListMyInquiriesUseCase(inquiryRepo),
+        listAllInquiries: new ListAllInquiriesUseCase(inquiryRepo),
+        updateInquiryStatus: new UpdateInquiryStatusUseCase(inquiryRepo, eventBus),
       })
     );
 
@@ -427,15 +492,19 @@ async function startServer() {
   app.post('/api/inquiries', async (req, res) => {
     try {
       const body = (req.body || {}) as Record<string, unknown>;
-      const result = await submitInquiryUseCase.execute({
-        fullName: body.fullName,
-        email: body.email,
-        contactChannel: body.contactChannel,
-        region: body.region,
-        track: body.track,
-        experienceNote: body.experienceNote,
-        consentAccepted: body.consentAccepted,
-      });
+      const result = await submitInquiryUseCase.execute(
+        {
+          fullName: body.fullName,
+          email: body.email,
+          contactChannel: body.contactChannel,
+          region: body.region,
+          track: body.track,
+          experienceNote: body.experienceNote,
+          consentAccepted: body.consentAccepted,
+        },
+        // Ownership comes from the session, never from the request body.
+        req.authUser ? { id: req.authUser.id } : null
+      );
       res.status(201).json(result);
     } catch (err) {
       handleDomainError(err, res);

@@ -12,6 +12,10 @@ import type {
   SetUserActiveUseCase,
   UpdateProfileUseCase,
 } from '../../application/identity/IdentityUseCases.ts';
+import type {
+  ForgotPasswordUseCase,
+  ResetPasswordUseCase,
+} from '../../application/identity/PasswordResetUseCases.ts';
 import {
   SESSION_COOKIE,
   readSessionCookie,
@@ -30,6 +34,12 @@ export interface IdentityRouterDeps {
   listUsers: ListUsersUseCase;
   assignRole: AssignRoleUseCase;
   setUserActive: SetUserActiveUseCase;
+  /** Guards /api/auth/login against credential stuffing. */
+  loginRateLimit?: express.RequestHandler;
+  /** Guards /api/auth/forgot-password against email flooding. */
+  forgotRateLimit?: express.RequestHandler;
+  forgotPassword?: ForgotPasswordUseCase;
+  resetPassword?: ResetPasswordUseCase;
 }
 
 function sendError(err: unknown, res: express.Response): void {
@@ -80,19 +90,23 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
     }
   });
 
-  router.post('/api/auth/login', async (req, res) => {
-    try {
-      const body = (req.body || {}) as Record<string, unknown>;
-      const auth = await deps.login.execute({
-        email: body.email,
-        password: body.password,
-      });
-      res.cookie(SESSION_COOKIE, auth.token, sessionCookieOptions(auth.expiresAt));
-      res.json({ ok: true, user: auth.user, expiresAt: auth.expiresAt });
-    } catch (err) {
-      sendError(err, res);
+  router.post(
+    '/api/auth/login',
+    ...(deps.loginRateLimit ? [deps.loginRateLimit] : []),
+    async (req, res) => {
+      try {
+        const body = (req.body || {}) as Record<string, unknown>;
+        const auth = await deps.login.execute({
+          email: body.email,
+          password: body.password,
+        });
+        res.cookie(SESSION_COOKIE, auth.token, sessionCookieOptions(auth.expiresAt));
+        res.json({ ok: true, user: auth.user, expiresAt: auth.expiresAt });
+      } catch (err) {
+        sendError(err, res);
+      }
     }
-  });
+  );
 
   router.post('/api/auth/logout', async (req, res) => {
     try {
@@ -103,6 +117,56 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
       sendError(err, res);
     }
   });
+
+  // ── Password recovery ─────────────────────────────────────────────────────
+  /**
+   * Requests a reset link.
+   *
+   * The response is identical whether or not the address belongs to an account,
+   * so this endpoint cannot be used to enumerate users. `delivered` is exposed
+   * only because the deployment currently has no SMTP transport; it is not an
+   * account-existence signal (it is false for unknown addresses too).
+   */
+  if (deps.forgotPassword) {
+    const handler: express.RequestHandler = async (req, res) => {
+      try {
+        const body = (req.body || {}) as Record<string, unknown>;
+        const result = await deps.forgotPassword!.execute({ email: body.email });
+        res.json({
+          ok: true,
+          message:
+            'Если адрес зарегистрирован, письмо со ссылкой восстановления отправлено.',
+          // Only meaningful for operators while no mail transport is configured.
+          delivered: result.delivered,
+        });
+      } catch (err) {
+        sendError(err, res);
+      }
+    };
+    router.post(
+      '/api/auth/forgot-password',
+      ...(deps.forgotRateLimit ? [deps.forgotRateLimit] : []),
+      handler
+    );
+  }
+
+  /** Completes the reset with a single-use token. */
+  if (deps.resetPassword) {
+    router.post('/api/auth/reset-password', async (req, res) => {
+      try {
+        const body = (req.body || {}) as Record<string, unknown>;
+        const result = await deps.resetPassword!.execute({
+          token: body.token,
+          password: body.password,
+        });
+        // Every session was revoked, so the client must sign in again.
+        res.clearCookie(SESSION_COOKIE, { path: '/' });
+        res.json({ ...result, reauthenticate: true });
+      } catch (err) {
+        sendError(err, res);
+      }
+    });
+  }
 
   /** Cheap endpoint the SPA uses to restore its session on page load. */
   router.get('/api/auth/session', (req, res) => {

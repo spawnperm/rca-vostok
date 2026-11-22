@@ -1,10 +1,22 @@
 import {
   CertificationInquiry,
   type CreateInquiryInput,
+  type InquiryRecordDTO,
+  type InquiryStatus,
 } from '../../domain/certification/CertificationInquiry.ts';
 import type { InquiryRepository } from '../../domain/certification/InquiryRepository.ts';
-import type { DomainEventBus } from '../../domain/shared/DomainError.ts';
+import { NotFoundError, ValidationError, type DomainEventBus } from '../../domain/shared/DomainError.ts';
+import { PERMISSIONS } from '../../domain/identity/Rbac.ts';
+import type { User } from '../../domain/identity/User.ts';
 
+/**
+ * Submits a certification request.
+ *
+ * Ownership: when the caller is authenticated the request is linked to the
+ * account, which is what makes "my applications" possible in the cabinet.
+ * Anonymous submissions still work (the public form is open) and simply have no
+ * owner.
+ */
 export class SubmitInquiryUseCase {
   private readonly inquiryRepo: InquiryRepository;
   private readonly eventBus: DomainEventBus;
@@ -14,13 +26,21 @@ export class SubmitInquiryUseCase {
     this.eventBus = eventBus;
   }
 
-  async execute(input: CreateInquiryInput): Promise<{
+  async execute(
+    input: CreateInquiryInput,
+    owner: { id: string } | null = null
+  ): Promise<{
     ok: true;
     id: string;
     createdAt: string;
     totalSubscriptions: number;
   }> {
-    const inquiry = CertificationInquiry.create(input);
+    // The owner is taken from the authenticated session, never from the body:
+    // otherwise a caller could claim someone else's requests.
+    const inquiry = CertificationInquiry.create({
+      ...input,
+      userId: owner?.id ?? null,
+    });
     const allRecords = await this.inquiryRepo.save(inquiry);
 
     this.eventBus.publish({
@@ -32,6 +52,7 @@ export class SubmitInquiryUseCase {
         region: inquiry.region,
         track: inquiry.track,
         totalSubscriptions: allRecords.length,
+        userId: inquiry.userId,
       },
     });
 
@@ -55,5 +76,79 @@ export class GetInquiryStatsUseCase {
     return {
       totalSubscriptions: await this.inquiryRepo.count(),
     };
+  }
+}
+
+/** «Мои заявки» — the signed-in user's own requests, newest first. */
+export class ListMyInquiriesUseCase {
+  private readonly inquiryRepo: InquiryRepository;
+
+  constructor(inquiryRepo: InquiryRepository) {
+    this.inquiryRepo = inquiryRepo;
+  }
+
+  async execute(actor: User): Promise<InquiryRecordDTO[]> {
+    actor.assertCan(PERMISSIONS.VIEW_OWN_INQUIRIES);
+    return this.inquiryRepo.findByUser(actor.id);
+  }
+}
+
+/** All requests, for curators and admins. */
+export class ListAllInquiriesUseCase {
+  private readonly inquiryRepo: InquiryRepository;
+
+  constructor(inquiryRepo: InquiryRepository) {
+    this.inquiryRepo = inquiryRepo;
+  }
+
+  async execute(actor: User): Promise<InquiryRecordDTO[]> {
+    actor.assertCan(PERMISSIONS.VIEW_ALL_INQUIRIES);
+    return this.inquiryRepo.loadAll();
+  }
+}
+
+/** Moves a request through its lifecycle. Curators and admins only. */
+export class UpdateInquiryStatusUseCase {
+  private readonly inquiryRepo: InquiryRepository;
+  private readonly eventBus: DomainEventBus;
+
+  constructor(inquiryRepo: InquiryRepository, eventBus: DomainEventBus) {
+    this.inquiryRepo = inquiryRepo;
+    this.eventBus = eventBus;
+  }
+
+  async execute(
+    actor: User,
+    input: { inquiryId: unknown; status: unknown }
+  ): Promise<InquiryRecordDTO> {
+    actor.assertCan(PERMISSIONS.VIEW_ALL_INQUIRIES);
+
+    const inquiryId = typeof input.inquiryId === 'string' ? input.inquiryId : '';
+    if (!inquiryId) {
+      throw new ValidationError('Не указана заявка.');
+    }
+
+    const allowed: InquiryStatus[] = ['new', 'in_review', 'approved', 'rejected'];
+    const status = input.status;
+    if (typeof status !== 'string' || !allowed.includes(status as InquiryStatus)) {
+      throw new ValidationError('Недопустимый статус заявки.');
+    }
+
+    const inquiry = await this.inquiryRepo.findById(inquiryId);
+    if (!inquiry) {
+      throw new NotFoundError('Заявка не найдена.');
+    }
+
+    const updated = inquiry.withStatus(status as InquiryStatus);
+    await this.inquiryRepo.saveOne(updated);
+
+    this.eventBus.publish({
+      eventName: 'certification.inquiry_status_changed',
+      occurredAt: new Date().toISOString(),
+      boundedContext: 'certification',
+      payload: { inquiryId: updated.id, status: updated.status, by: actor.id },
+    });
+
+    return updated.toDTO();
   }
 }
