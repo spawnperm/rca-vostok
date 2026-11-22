@@ -84,6 +84,14 @@ export interface PasswordResetRepository {
   markUsed(tokenHash: string, at: string): Promise<void>;
   /** Invalidates prior tokens when a new one is requested. */
   deleteForUser(userId: string): Promise<void>;
+  /**
+   * Removes tokens created before `cutoffIso` regardless of state.
+   *
+   * Without this the table only shrinks when a user requests a new link, so
+   * expired and used tokens accumulate forever. Implemented by the PostgreSQL
+   * and in-memory adapters; the housekeeping job calls it on an interval.
+   */
+  purgeExpired(cutoffIso: string): Promise<number>;
 }
 
 /**

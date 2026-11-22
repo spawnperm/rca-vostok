@@ -61,6 +61,14 @@ export class PostgresPasswordResetRepository implements PasswordResetRepository 
   async deleteForUser(userId: string): Promise<void> {
     await this.pool.query('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
   }
+
+  async purgeExpired(cutoffIso: string): Promise<number> {
+    const result = await this.pool.query(
+      'DELETE FROM password_reset_tokens WHERE created_at < $1',
+      [cutoffIso]
+    );
+    return result.rowCount ?? 0;
+  }
 }
 
 /** In-memory adapter for development and tests. */
@@ -89,5 +97,16 @@ export class InMemoryPasswordResetRepository implements PasswordResetRepository 
     for (const [hash, record] of this.tokens) {
       if (record.userId === userId) this.tokens.delete(hash);
     }
+  }
+
+  async purgeExpired(cutoffIso: string): Promise<number> {
+    let removed = 0;
+    for (const [hash, record] of this.tokens) {
+      if (record.createdAt < cutoffIso) {
+        this.tokens.delete(hash);
+        removed += 1;
+      }
+    }
+    return removed;
   }
 }

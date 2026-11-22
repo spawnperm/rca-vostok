@@ -20,6 +20,7 @@ import {
   SubmitFeedbackUseCase,
 } from './src/application/feedback/FeedbackUseCases.ts';
 import { GetSystemHealthUseCase } from './src/application/system/HealthCheckUseCase.ts';
+import { HousekeepingJob } from './src/application/system/HousekeepingJob.ts';
 import { DomainError, NotFoundError, ValidationError } from './src/domain/shared/DomainError.ts';
 import type { AnalyticsRepository } from './src/domain/analytics/AnalyticsRepository.ts';
 import type { FeedbackRepository } from './src/domain/feedback/FeedbackRepository.ts';
@@ -163,10 +164,45 @@ async function startServer() {
   app.set('trust proxy', true);
   app.use(express.json({ limit: '256kb' }));
 
-  // Contour 3: Security headers middleware
-  app.use((_req, res, next) => {
+  // Security headers.
+  //
+  // CSP notes: the SPA ships one hashed bundle, so `script-src 'self'` is
+  // enough — no inline scripts are used in the built output. `style-src` needs
+  // 'unsafe-inline' because React sets inline styles (widths of progress bars,
+  // SVG transforms) and the Tailwind runtime injects a style element; tightening
+  // this would require nonces for every server-rendered page and is tracked as
+  // a follow-up rather than pretended to be solved.
+  //
+  // The API documentation page (/api/docs) loads Scalar from a CDN, so its CSP
+  // is relaxed inline; everything else gets the strict policy.
+  const API_DOCS_CSP =
+    "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; " +
+    "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: https:; " +
+    "connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'self'";
+
+  const APP_CSP =
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; " +
+    "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; " +
+    "frame-ancestors 'none'";
+
+  app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader(
+      'Content-Security-Policy',
+      req.path.startsWith('/api/docs') ? API_DOCS_CSP : APP_CSP
+    );
+
+    // HSTS only makes sense over TLS; sending it on plain HTTP would poison
+    // the browser for a deployment that cannot serve HTTPS yet.
+    const isHttps =
+      req.secure || req.headers['x-forwarded-proto'] === 'https';
+    if (isHttps) {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
     next();
   });
 
@@ -288,8 +324,7 @@ async function startServer() {
 
   app.use(
     createIdentityRouter({
-      registerUser: new RegisterUserUseCase(userRepo, passwordHasher, eventBus),
-      login: new LoginUseCase(userRepo, sessionRepo, passwordHasher, sessionTokens, eventBus),
+      registerUser: new RegisterUserUseCase(userRepo, passwordHasher, eventBus),      login: new LoginUseCase(userRepo, sessionRepo, passwordHasher, sessionTokens, eventBus),
       logout: new LogoutUseCase(sessionRepo, sessionTokens),
       getProfile: new GetProfileUseCase(),
       updateProfile: new UpdateProfileUseCase(userRepo, eventBus),
@@ -546,6 +581,18 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distDir = path.resolve(__dirname, 'dist');
+
+    // Unknown API routes must answer as JSON 404, not fall through to the SPA
+    // shell. Without this the catch-all below returned index.html with status
+    // 200 for any typo like /api/metrics, so clients silently received HTML
+    // where they expected JSON and error handling never triggered.
+    app.use('/api', (_req, res) => {
+      res.status(404).json({
+        error: 'Запрошенный метод API не найден.',
+        code: 'NOT_FOUND',
+      });
+    });
+
     app.use(express.static(distDir));
     app.get('*', (_req, res) => {
       res.sendFile(path.resolve(distDir, 'index.html'));
@@ -556,9 +603,18 @@ async function startServer() {
     console.log(`Server listening on http://0.0.0.0:${PORT}`);
   });
 
+  // Periodic cleanup of expired sessions and stale reset tokens. These tables
+  // grow forever without it — `purgeExpired` existed on the repository but was
+  // never called until now.
+  const housekeeping = new HousekeepingJob({
+    sessions: sessionRepo,
+    resetTokens: resetTokenRepo,
+  });
+
   // Graceful shutdown so container restarts drain cleanly and the pool closes.
   const shutdown = (signal: string) => {
     console.log(`[shutdown] received ${signal}`);
+    housekeeping.stop();
     server.close(() => {
       void (async () => {
         try {

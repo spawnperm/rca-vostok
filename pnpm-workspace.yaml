@@ -5,12 +5,10 @@
 # scripts in transitive packages. Every entry must be listed with a boolean —
 # an omitted package stays blocked.
 #
-# Why these three are needed:
-#   esbuild        downloads/links its platform binary in postinstall; without
-#                  it tsx and Vite's bundler cannot run
-#   @google/genai  declares a preinstall step in this version
-#   protobufjs     generates its runtime bundle in postinstall (genai dependency)
+# Why these are needed:
+#   esbuild      downloads/links its platform binary in postinstall; without it
+#                tsx and Vite's bundler cannot run
+#   protobufjs   generates its runtime bundle in postinstall (transitive)
 allowBuilds:
   esbuild: true
-  '@google/genai': true
   protobufjs: true
