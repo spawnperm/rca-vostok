@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calculator, MessageSquare, RotateCcw } from 'lucide-react';
 import { tracker } from '../utils/tracker';
+import { formatRub } from '../utils/format.ts';
 
 interface AttestationCostCalculatorProps {
   onContactCurator: (sourceLabel: string) => void;
@@ -106,8 +107,6 @@ const STATE_FEE_PRESETS = [
     note: 'Ориентир по ПП РФ № 891 при выездной комиссии и сложных маршрутах ДФО.',
   },
 ];
-
-const formatRub = (val: number) => `${Math.round(val).toLocaleString('ru-RU')} ₽`;
 
 export const AttestationCostCalculator: React.FC<AttestationCostCalculatorProps> = ({
   onContactCurator,

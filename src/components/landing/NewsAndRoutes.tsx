@@ -18,6 +18,7 @@ import {
 import { useNewsFeed, type NewsPost } from '../../utils/useNewsFeed';
 import { DISTRICT_TO_ROUTE_ID } from '../../utils/routeWeatherApi';
 import { RouteWeatherWidget } from './RouteWeatherWidget';
+import { formatDate } from '../../utils/format.ts';
 
 /**
  * «Новости» and «Маршруты» — the two site sections that were still placeholders
@@ -33,14 +34,6 @@ const NEWS_CATEGORY_LABELS: Record<IndustryNewsItem['category'], string> = {
   market: 'Рынок',
 };
 
-function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
 
 function NewsCard({ item }: { item: IndustryNewsItem }) {
   const [open, setOpen] = useState<boolean>(false);

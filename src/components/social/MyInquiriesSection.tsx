@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Clock, FileText, XCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { SocialApiError } from '../../utils/socialApi';
+import { formatDate } from '../../utils/format.ts';
 
 export interface InquiryRecord {
   id: string;
@@ -42,13 +43,6 @@ const STATUS_META: Record<
   },
 };
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
 
 /**
  * «Мои заявки» — the signed-in user's certification requests.

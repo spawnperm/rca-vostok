@@ -3,6 +3,7 @@ import { MapPin } from 'lucide-react';
 import { DFO_REGIONS_DISTRIBUTION, type DfoRegionDistribution } from '../data/researchData';
 import { tracker } from '../utils/tracker';
 import type { DfoRegionFilterId } from './DfoDemandForecastChart';
+import { registryRadius, demandRadius, shareRadius } from '../utils/dfoMapScale.ts';
 
 type MapMetricMode = 'registry' | 'demand' | 'october2026';
 
@@ -56,15 +57,12 @@ export const DfoRegionsDistributionMap: React.FC<DfoRegionsDistributionMapProps>
     return r.october2026Certified;
   };
 
+  // Shared with DfoComparisonSvgMap — see utils/dfoMapScale.
   const getBubbleRadius = (r: DfoRegionDistribution): number => {
     const val = getRegionMetricValue(r);
-    if (metricMode === 'registry') {
-      return Math.max(7, Math.min(26, Math.round(Math.sqrt(val) * 1.35)));
-    }
-    if (metricMode === 'demand') {
-      return Math.max(8, Math.min(28, Math.round(Math.sqrt(val) * 0.56)));
-    }
-    return val > 0 ? Math.max(9, Math.min(22, val + 6)) : 5;
+    if (metricMode === 'registry') return registryRadius(val);
+    if (metricMode === 'demand') return demandRadius(val);
+    return shareRadius(val);
   };
 
   const getRegionFill = (

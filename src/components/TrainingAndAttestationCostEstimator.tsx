@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calculator, CheckCircle2, Info, MapPin, RotateCcw, Users } from 'lucide-react';
 import { tracker } from '../utils/tracker';
+import { formatRub } from '../utils/format.ts';
 
 type GuideCategoryId =
   | 'contour_a_experienced'
@@ -218,8 +219,6 @@ const OPTIONAL_PREP_MODULES: OptionalPrepModule[] = [
     cost: 2800,
   },
 ];
-
-const formatRub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`;
 
 export const TrainingAndAttestationCostEstimator: React.FC = () => {
   const [categoryId, setCategoryId] = useState<GuideCategoryId>('water_rafting');

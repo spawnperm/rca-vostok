@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { DFO_REGIONS_DISTRIBUTION, type DfoRegionDistribution } from '../data/researchData';
 import { tracker } from '../utils/tracker';
+import { registryRadius, demandRadius, shareRadius } from '../utils/dfoMapScale.ts';
 
 export type ComparisonSlot = 'A' | 'B';
 export type DfoMapMetricMode = 'registry' | 'demand' | 'october2026';
@@ -55,15 +56,13 @@ export const DfoComparisonSvgMap: React.FC<DfoComparisonSvgMapProps> = ({
     return r.october2026Certified;
   };
 
+  // Sizing lives in utils/dfoMapScale so both bubble maps agree on what a
+  // given count looks like; the constants used to differ between them.
   const getBubbleRadius = (r: DfoRegionDistribution): number => {
     const val = getMetricValue(r);
-    if (metricMode === 'registry') {
-      return Math.max(7, Math.min(25, Math.round(Math.sqrt(val) * 1.32)));
-    }
-    if (metricMode === 'demand') {
-      return Math.max(8, Math.min(27, Math.round(Math.sqrt(val) * 0.54)));
-    }
-    return val > 0 ? Math.max(9, Math.min(21, val + 6)) : 5;
+    if (metricMode === 'registry') return registryRadius(val);
+    if (metricMode === 'demand') return demandRadius(val);
+    return shareRadius(val);
   };
 
   const getRegionFill = (

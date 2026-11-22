@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Info, Landmark, RotateCcw, Scale } from 'lucide-react';
 import { tracker } from '../utils/tracker';
+import { formatRub } from '../utils/format.ts';
 
 type ApplicantType = 'individual' | 'organization';
 type ProcedureKind =
@@ -88,8 +89,6 @@ const COMPLEXITY_MULTIPLIERS: {
     note: 'Высокий коэффициент сложности (автономные маршруты, оценка ПСР)',
   },
 ];
-
-const formatRub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`;
 
 export const StateDutyAttestationCalculator: React.FC = () => {
   const [applicantType, setApplicantType] = useState<ApplicantType>('individual');

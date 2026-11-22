@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts';
 import { tracker } from '../utils/tracker';
+import { formatRub } from '../utils/format.ts';
 
 type TrainingTrackId = 'hiking' | 'water' | 'expedition';
 
@@ -127,8 +128,6 @@ const TRACK_COST_PROFILES: TrackCostProfile[] = [
   },
 ];
 
-const formatRub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`;
-
 interface TooltipPayloadItem {
   name?: string;
   value?: number;
@@ -208,7 +207,16 @@ export const TrainingCostByComplexityChart: React.FC = () => {
     [activeTrack, applySubsidy]
   );
 
-  const delta1to3 = chartData[2].total - chartData[0].total;
+  // Cost difference between the hardest and easiest category.
+  //
+  // The indexes used to be hard-coded (chartData[2] - chartData[0]), which reads
+  // as a magic offset and throws "Cannot read properties of undefined" the
+  // moment a track ships with fewer than three rows. Reading the endpoints of
+  // the array says what is meant and cannot crash on a shorter track.
+  const delta1to3 =
+    chartData.length > 1
+      ? chartData[chartData.length - 1].total - chartData[0].total
+      : 0;
 
   return (
     <section
