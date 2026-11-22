@@ -11,6 +11,7 @@ const PORT = 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 const DATA_DIR = path.resolve(__dirname, 'data');
 const STORE_PATH = path.resolve(DATA_DIR, 'analytics-store.json');
+const INQUIRIES_PATH = path.resolve(DATA_DIR, 'inquiries.json');
 
 const ALLOWED_EVENT_TYPES = new Set([
   'session_start',
@@ -107,6 +108,48 @@ function saveStore(store: AnalyticsStore): void {
     'utf-8'
   );
   fs.renameSync(tmpPath, STORE_PATH);
+}
+
+interface InquiryRecord {
+  id: string;
+  fullName: string;
+  email: string;
+  contactChannel: string;
+  region: string;
+  track: string;
+  experienceNote: string;
+  consentAccepted: boolean;
+  createdAt: string;
+}
+
+function loadInquiries(): InquiryRecord[] {
+  ensureStoreDir();
+  if (!INQUIRIES_PATH.startsWith(DATA_DIR + path.sep)) {
+    throw new Error('Invalid inquiries store path');
+  }
+  if (!fs.existsSync(INQUIRIES_PATH)) {
+    return [];
+  }
+  try {
+    const raw = fs.readFileSync(INQUIRIES_PATH, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as InquiryRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveInquiries(records: InquiryRecord[]): void {
+  ensureStoreDir();
+  if (!INQUIRIES_PATH.startsWith(DATA_DIR + path.sep)) {
+    throw new Error('Invalid inquiries store path');
+  }
+  const tmpPath = path.resolve(DATA_DIR, 'inquiries.tmp.json');
+  if (!tmpPath.startsWith(DATA_DIR + path.sep)) {
+    throw new Error('Invalid temp path');
+  }
+  fs.writeFileSync(tmpPath, JSON.stringify(records.slice(-1000), null, 2), 'utf-8');
+  fs.renameSync(tmpPath, INQUIRIES_PATH);
 }
 
 function sanitizeStr(val: unknown, maxLen = 160): string {
@@ -453,6 +496,58 @@ async function startServer() {
       robotsConfigured: true,
       sitemapConfigured: true,
       indexedRoutes: 6,
+    });
+  });
+
+  // Instructor certification inquiry subscription (POST) & aggregate count (GET, no PII)
+  app.get('/api/inquiries/stats', (_req, res) => {
+    const inquiries = loadInquiries();
+    res.json({ totalSubscriptions: inquiries.length });
+  });
+
+  app.post('/api/inquiries', (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const fullName = sanitizeStr(body.fullName, 120);
+    const email = sanitizeStr(body.email, 160).toLowerCase();
+    const contactChannel = sanitizeStr(body.contactChannel, 100);
+    const region = sanitizeStr(body.region, 80);
+    const track = sanitizeStr(body.track, 100);
+    const experienceNote = sanitizeStr(body.experienceNote, 600);
+    const consentAccepted = body.consentAccepted === true;
+
+    if (fullName.length < 2) {
+      res.status(400).json({ error: 'Укажите имя или ФИО (не менее 2 символов).' });
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      res.status(400).json({ error: 'Укажите корректный адрес электронной почты.' });
+      return;
+    }
+    if (!consentAccepted) {
+      res.status(400).json({ error: 'Необходимо подтвердить согласие на получение уведомлений.' });
+      return;
+    }
+
+    const inquiries = loadInquiries();
+    const newRecord: InquiryRecord = {
+      id: `inq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      fullName,
+      email,
+      contactChannel,
+      region: region || 'Приморский край',
+      track: track || 'Пешеходный туризм',
+      experienceNote,
+      consentAccepted: true,
+      createdAt: new Date().toISOString(),
+    };
+    inquiries.push(newRecord);
+    saveInquiries(inquiries);
+
+    res.status(201).json({
+      ok: true,
+      id: newRecord.id,
+      createdAt: newRecord.createdAt,
+      totalSubscriptions: inquiries.length,
     });
   });
 
