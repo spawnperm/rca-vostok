@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { AccreditationRegistryTable } from './AccreditationRegistryTable';
+import { AccreditationRenewalLineChart } from './AccreditationRenewalLineChart';
 import { ActiveInquiriesDashboardWidget } from './ActiveInquiriesDashboardWidget';
 import { AttestationCommissionWidget } from './AttestationCommissionWidget';
 import { AttestationCostCalculator } from './AttestationCostCalculator';
@@ -778,6 +779,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Accreditation & Licensing Status Registry Table */}
       <AccreditationRegistryTable />
+
+      {/* Yearly Licensing & Accreditation Renewal Dynamics (Recharts LineChart) */}
+      <AccreditationRenewalLineChart />
 
       {/* Visual Comparison: Demand vs Registry & Interregional Results */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">

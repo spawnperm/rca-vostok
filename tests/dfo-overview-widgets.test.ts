@@ -2,14 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ACCREDITATION_REGISTRY_ENTRIES,
+  ACCREDITATION_RENEWAL_DYNAMICS,
   DFO_ATTESTATION_POINTS,
   DFO_REGIONAL_TRAINING_OFFICES,
   filterAccreditationEntries,
   filterAttestationPoints,
+  getAccreditationRenewalSeries,
   getAccreditationSummaryStats,
   getOfficesByRegionId,
 } from '../src/data/dfoOverviewRegistryData.ts';
 import { DFO_REGIONS_DISTRIBUTION } from '../src/data/researchData.ts';
+import { buildAccreditationExportPayload } from '../src/utils/accreditationRegistryPdf.ts';
 
 test('DFO_REGIONAL_TRAINING_OFFICES covers all 7 DFO macro-regions with valid contacts', () => {
   for (const region of DFO_REGIONS_DISTRIBUTION) {
@@ -66,4 +69,54 @@ test('ACCREDITATION_REGISTRY_ENTRIES tracks RF legal norms and category/status f
 
   const registryOnly = filterAccreditationEntries('registry');
   assert.ok(registryOnly.some((e) => e.legalNorm.includes('152-ФЗ')));
+});
+
+test('buildAccreditationExportPayload prepares summary counts and Cyrillic metadata for PDF export', () => {
+  const fixedDate = new Date('2026-11-22T12:00:00.000Z');
+  const fullPayload = buildAccreditationExportPayload(
+    ACCREDITATION_REGISTRY_ENTRIES,
+    'Все записи',
+    fixedDate
+  );
+  assert.equal(fullPayload.exportedAtIso, '2026-11-22');
+  assert.equal(fullPayload.totalCount, ACCREDITATION_REGISTRY_ENTRIES.length);
+  assert.ok(fullPayload.docNumber.startsWith('РЦА-2026/РА-1122-'));
+  assert.equal(
+    fullPayload.verifiedCount + fullPayload.inProgressCount,
+    fullPayload.totalCount
+  );
+
+  const attOnly = filterAccreditationEntries('attestation');
+  const filteredPayload = buildAccreditationExportPayload(
+    attOnly,
+    'Полномочия РЦА и ФСТР',
+    fixedDate
+  );
+  assert.equal(filteredPayload.totalCount, attOnly.length);
+  assert.equal(filteredPayload.filterLabel, 'Полномочия РЦА и ФСТР');
+  assert.equal(filteredPayload.inProgressCount, 0);
+});
+
+test('getAccreditationRenewalSeries filters yearly licensing dynamics and references valid registry IDs', () => {
+  const validIds = new Set(ACCREDITATION_REGISTRY_ENTRIES.map((e) => e.id));
+  assert.equal(ACCREDITATION_RENEWAL_DYNAMICS.length, 7);
+
+  for (const pt of ACCREDITATION_RENEWAL_DYNAMICS) {
+    assert.ok(pt.registryIds.length >= 2);
+    for (const id of pt.registryIds) {
+      assert.ok(validIds.has(id), `Unknown registry id ${id} in year ${pt.year}`);
+    }
+  }
+
+  const factOnly = getAccreditationRenewalSeries('fact');
+  assert.deepEqual(
+    factOnly.map((p) => p.year),
+    ['2024', '2025', '2026']
+  );
+
+  const forecastOnly = getAccreditationRenewalSeries('forecast');
+  assert.deepEqual(
+    forecastOnly.map((p) => p.year),
+    ['2026', '2027', '2028', '2029', '2030']
+  );
 });

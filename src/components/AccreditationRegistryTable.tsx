@@ -4,6 +4,7 @@ import {
   Clock,
   ExternalLink,
   FileCheck2,
+  FileDown,
   Scale,
   ShieldCheck,
 } from 'lucide-react';
@@ -14,7 +15,15 @@ import {
   type AccreditationRegistryEntry,
 } from '../data/dfoOverviewRegistryData';
 import { CENTER_ACCREDITATION_STATUS } from '../data/researchData';
+import { exportAccreditationRegistryPdf } from '../utils/accreditationRegistryPdf';
 import { tracker } from '../utils/tracker';
+
+const CATEGORY_LABELS: Record<'all' | AccreditationRegistryEntry['category'], string> = {
+  all: 'Все записи',
+  education: 'Лицензия ДПО (ВВГУ)',
+  attestation: 'Полномочия РЦА и ФСТР',
+  registry: 'Реестр МЭР и ПДн',
+};
 
 const renderStatusBadge = (entry: AccreditationRegistryEntry) => {
   if (entry.status === 'active') {
@@ -45,12 +54,36 @@ export const AccreditationRegistryTable: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<
     'all' | AccreditationRegistryEntry['category']
   >('all');
+  const [exportStatus, setExportStatus] = useState<{
+    fileName: string;
+    count: number;
+  } | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const summary = useMemo(() => getAccreditationSummaryStats(), []);
   const rows = useMemo(
     () => filterAccreditationEntries(categoryFilter),
     [categoryFilter]
   );
+
+  const handleExportPdf = () => {
+    setExportError(null);
+    try {
+      const label = CATEGORY_LABELS[categoryFilter];
+      const result = exportAccreditationRegistryPdf(rows, label);
+      setExportStatus({ fileName: result.fileName, count: rows.length });
+      tracker.trackCustomInteraction(
+        'Экспорт реестра аккредитации в PDF',
+        `${label} (${rows.length} зап.)`
+      );
+    } catch (err) {
+      setExportError(
+        err instanceof Error
+          ? err.message
+          : 'Не удалось сформировать PDF-файл реестра аккредитации.'
+      );
+    }
+  };
 
   return (
     <section
@@ -73,16 +106,51 @@ export const AccreditationRegistryTable: React.FC = () => {
           </p>
         </div>
 
-        <a
-          href={CENTER_ACCREDITATION_STATUS.officialPortal}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-3.5 py-2 text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
-        >
-          <span>Сверить на rca-vostok.ru</span>
-          <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-        </a>
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleExportPdf}
+            className="px-4 py-2 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <FileDown className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>Экспорт в PDF</span>
+          </button>
+
+          <a
+            href={CENTER_ACCREDITATION_STATUS.officialPortal}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 py-2 text-xs font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+          >
+            <span>Сверить на rca-vostok.ru</span>
+            <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+          </a>
+        </div>
       </div>
+
+      {exportStatus && (
+        <div
+          role="status"
+          className="px-4 py-2.5 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-900 flex flex-wrap items-center justify-between gap-2"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
+            <span>
+              PDF-выписка <strong className="font-mono">{exportStatus.fileName}</strong>{' '}
+              сохранена ({exportStatus.count} записей о лицензировании и аккредитации).
+            </span>
+          </span>
+        </div>
+      )}
+
+      {exportError && (
+        <div
+          role="alert"
+          className="px-4 py-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800"
+        >
+          {exportError}
+        </div>
+      )}
 
       {/* KPI Strip + Category Filter */}
       <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-200">

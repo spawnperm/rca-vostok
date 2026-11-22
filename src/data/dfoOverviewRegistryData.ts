@@ -656,3 +656,117 @@ export function getAccreditationSummaryStats(): {
     inProgressCount,
   };
 }
+
+export interface AccreditationRenewalYearPoint {
+  year: string;
+  phase: 'факт' | 'план';
+  activeContours: number;
+  renewalsAndUpdates: number;
+  plannedExpansions: number;
+  milestoneTitle: string;
+  milestoneDetails: string;
+  registryIds: string[];
+}
+
+export const ACCREDITATION_RENEWAL_DYNAMICS: AccreditationRenewalYearPoint[] = [
+  {
+    year: '2024',
+    phase: 'факт',
+    activeContours: 2,
+    renewalsAndUpdates: 2,
+    plannedExpansions: 0,
+    milestoneTitle: 'Базовая лицензия ДПО ВВГУ и контур ПДн',
+    milestoneDetails:
+      'Подтверждение бессрочной лицензии ВВГУ на ДПО (Л035-00115-25/00097028) и регламент обработки ПДн по ФЗ № 152-ФЗ.',
+    registryIds: ['reg-vvgu-dpo-license', 'reg-fz152-pdn-contour'],
+  },
+  {
+    year: '2025',
+    phase: 'факт',
+    activeContours: 4,
+    renewalsAndUpdates: 2,
+    plannedExpansions: 0,
+    milestoneTitle: 'Запуск полномочий РЦА и интеграция с МЭР РФ',
+    milestoneDetails:
+      'Заключение соглашения ВВГУ + ФСТР (ПП № 1003) и подключение выгрузки в Единый федеральный реестр сроком на 5 лет.',
+    registryIds: ['reg-rca-fstr-authority', 'reg-mer-federal-registry'],
+  },
+  {
+    year: '2026',
+    phase: 'факт',
+    activeContours: 6,
+    renewalsAndUpdates: 3,
+    plannedExpansions: 1,
+    milestoneTitle: 'Переход на ПП РФ № 1893 и паспортизация полигонов',
+    milestoneDetails:
+      'Внедрение обновлённых билетов (протокол № 03-2026), акты полигонов Шкотовского р-на и ООПТ «Бикин» до 31.12.2028; в проекте — автотуризм.',
+    registryIds: [
+      'reg-pp1893-exam-update',
+      'reg-shkotovo-bikin-polygons',
+      'reg-autotourism-track-2027',
+    ],
+  },
+  {
+    year: '2027',
+    phase: 'план',
+    activeContours: 7,
+    renewalsAndUpdates: 2,
+    plannedExpansions: 0,
+    milestoneTitle: 'Лицензирование автотуризма и ежегодный аудит РЦА',
+    milestoneDetails:
+      'Запуск модуля ДПО «Автомобильный и экспедиционный туризм» (I кв. 2027) и плановая верификация полномочий с ФСТР.',
+    registryIds: ['reg-autotourism-track-2027', 'reg-rca-fstr-authority'],
+  },
+  {
+    year: '2028',
+    phase: 'план',
+    activeContours: 7,
+    renewalsAndUpdates: 3,
+    plannedExpansions: 0,
+    milestoneTitle: 'Перепаспортизация полигонов (срок до 31.12.2028)',
+    milestoneDetails:
+      'Продление актов пригодности природных полигонов Приморья и ООПТ «Бикин» + плановый аудит ФСТР и Рособрнадзора.',
+    registryIds: ['reg-shkotovo-bikin-polygons', 'reg-rca-fstr-authority'],
+  },
+  {
+    year: '2029',
+    phase: 'план',
+    activeContours: 7,
+    renewalsAndUpdates: 2,
+    plannedExpansions: 0,
+    milestoneTitle: 'Ежегодное подтверждение межрегионального приёма ДФО',
+    milestoneDetails:
+      'Аудит программ ДПО ВВГУ и регламентов защиты ПДн при масштабировании выездных сессий на Хабаровск, Камчатку и Сахалин.',
+    registryIds: ['reg-vvgu-dpo-license', 'reg-fz152-pdn-contour'],
+  },
+  {
+    year: '2030',
+    phase: 'план',
+    activeContours: 7,
+    renewalsAndUpdates: 5,
+    plannedExpansions: 0,
+    milestoneTitle: 'Завершение 5-летнего цикла записей Единого реестра',
+    milestoneDetails:
+      'Массовое продление 5-летних аттестационных статусов выпускников 2025–2026 гг. в реестре МЭР РФ и ре-аккредитация контуров РЦА.',
+    registryIds: [
+      'reg-mer-federal-registry',
+      'reg-rca-fstr-authority',
+      'reg-pp1893-exam-update',
+    ],
+  },
+];
+
+export type AccreditationHorizonFilter = 'all' | 'fact' | 'forecast';
+
+export function getAccreditationRenewalSeries(
+  horizon: AccreditationHorizonFilter = 'all'
+): AccreditationRenewalYearPoint[] {
+  if (horizon === 'fact') {
+    return ACCREDITATION_RENEWAL_DYNAMICS.filter((pt) => pt.phase === 'факт');
+  }
+  if (horizon === 'forecast') {
+    return ACCREDITATION_RENEWAL_DYNAMICS.filter((pt) => Number(pt.year) >= 2026);
+  }
+  return ACCREDITATION_RENEWAL_DYNAMICS;
+}
+
