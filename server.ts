@@ -182,21 +182,33 @@ async function startServer() {
   //
   // The API documentation page (/api/docs) loads Scalar from a CDN, so its CSP
   // is relaxed inline; everything else gets the strict policy.
+  const isAiStudioPreview =
+    !IS_PROD ||
+    process.env.DISABLE_HMR === 'true' ||
+    Boolean(process.env.K_SERVICE) ||
+    (process.env.APP_URL ?? '').includes('.run.app');
+
+  const scriptSrc = !IS_PROD ? "script-src 'self' 'unsafe-inline'" : "script-src 'self'";
+  const frameAncestors = isAiStudioPreview
+    ? "frame-ancestors 'self' https://aistudio.google.com https://*.google.com https://*.googleusercontent.com"
+    : "frame-ancestors 'none'";
+
   const API_DOCS_CSP =
     "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; " +
     "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data: https:; " +
     "connect-src 'self' https:; object-src 'none'; base-uri 'none'; form-action 'self'";
 
   const APP_CSP =
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ` +
     "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://*.tile.opentopomap.org; media-src 'self' blob:; font-src 'self' data: https://fonts.gstatic.com; " +
-    "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; " +
-    "frame-ancestors 'none'";
+    `connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; ${frameAncestors}`;
 
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('X-Frame-Options', 'DENY');
+    if (!isAiStudioPreview) {
+      res.setHeader('X-Frame-Options', 'DENY');
+    }
     res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
     res.setHeader(
       'Content-Security-Policy',

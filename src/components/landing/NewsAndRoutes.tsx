@@ -16,6 +16,8 @@ import {
   type IndustryNewsItem,
 } from '../../data/researchData';
 import { useNewsFeed, type NewsPost } from '../../utils/useNewsFeed';
+import { DISTRICT_TO_ROUTE_ID } from '../../utils/routeWeatherApi';
+import { RouteWeatherWidget } from './RouteWeatherWidget';
 
 /**
  * «Новости» and «Маршруты» — the two site sections that were still placeholders
@@ -373,6 +375,8 @@ export function RoutesSection() {
           </article>
         )}
       </div>
+
+      <RouteWeatherWidget suggestedRouteId={DISTRICT_TO_ROUTE_ID[active?.id ?? '']} />
 
       <p className="text-xs text-slate-500 inline-flex items-start gap-1.5">
         <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />

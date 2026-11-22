@@ -4,6 +4,9 @@ import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
 import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
 import { DfoRegionalForecastModule } from './DfoRegionalForecastModule';
 import { TrainingAndAttestationCostEstimator } from './TrainingAndAttestationCostEstimator';
+import { TrainingCostByComplexityChart } from './TrainingCostByComplexityChart';
+import { StateDutyAttestationCalculator } from './StateDutyAttestationCalculator';
+import { AttestationKnowledgeQuiz } from './AttestationKnowledgeQuiz';
 
 export const CalculatorSection: React.FC = () => {
   const [activePresetId, setActivePresetId] = useState<string>(DEMAND_PRESETS[0].id);
@@ -569,6 +572,15 @@ export const CalculatorSection: React.FC = () => {
 
       {/* Training & Attestation Cost Estimator by Guide Category and DFO Region */}
       <TrainingAndAttestationCostEstimator />
+
+      {/* Recharts stacked bar chart of training cost across 1-3 complexity categories */}
+      <TrainingCostByComplexityChart />
+
+      {/* Interactive state duty & PP RF 891 fee calculator */}
+      <StateDutyAttestationCalculator />
+
+      {/* 5-question interactive self-check quiz with instant feedback */}
+      <AttestationKnowledgeQuiz />
     </div>
   );
 };

@@ -5,7 +5,8 @@ export type FeedbackType =
   | 'suggestion'
   | 'question'
   | 'data_correction'
-  | 'technical_issue';
+  | 'technical_issue'
+  | 'center_review';
 
 export interface PlatformFeedbackDTO {
   id: string;
@@ -32,6 +33,7 @@ const VALID_FEEDBACK_TYPES = new Set<FeedbackType>([
   'question',
   'data_correction',
   'technical_issue',
+  'center_review',
 ]);
 
 export class PlatformFeedback {

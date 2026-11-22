@@ -18,8 +18,11 @@ import { ForgotPasswordForm, ResetPasswordForm } from './social/PasswordRecovery
 import {
   AttestationProgressWidget,
   computeUserAttestationSummary,
+  type UserAttestationSummary,
 } from './AttestationProgressWidget';
+import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
+import { CenterReviewForm } from './CenterReviewForm';
 import {
   ApiError,
   ROLE_LABELS,
@@ -56,6 +59,10 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
   const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
   const [inquiriesLoading, setInquiriesLoading] = useState<boolean>(false);
   const [inquiriesError, setInquiriesError] = useState<string | null>(null);
+  const [liveProgressSummary, setLiveProgressSummary] = useState<UserAttestationSummary | null>(
+    null
+  );
+  const [selectedExamDate, setSelectedExamDate] = useState<string | undefined>(undefined);
 
   // A reset link lands on ?tab=account&reset=<token>, so the cabinet opens
   // straight into the "set a new password" step.
@@ -171,6 +178,9 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
     );
   }
 
+  const effectiveProgressSummary =
+    liveProgressSummary ?? computeUserAttestationSummary(user, inquiries);
+
   return (
     <div className="space-y-6">
       <CabinetHeader user={user} onLogout={handleLogout} />
@@ -178,10 +188,17 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
         user={user}
         inquiries={inquiries}
         inquiriesLoading={inquiriesLoading}
+        selectedExamDate={selectedExamDate}
+        onSummaryChange={setLiveProgressSummary}
         onRefreshInquiries={
           hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
         }
         onOpenApplication={onNavigate ? () => onNavigate('overview') : undefined}
+      />
+      <PersonalRoadmapWidget
+        user={user}
+        summary={effectiveProgressSummary}
+        onExamDateChange={setSelectedExamDate}
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -202,6 +219,7 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
             error={inquiriesError}
             onRefresh={() => void loadInquiries()}
           />
+          <CenterReviewForm user={user} />
           <PasswordCard onChanged={() => setUser(null)} />
         </div>
         <div className="space-y-6">

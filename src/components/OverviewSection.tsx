@@ -10,7 +10,6 @@ import {
   ExternalLink,
   MessageSquare,
   Quote,
-  Search,
   Send,
   ShieldCheck,
   X,
@@ -21,11 +20,12 @@ import { AttestationCostCalculator } from './AttestationCostCalculator';
 import { AttestationNewsFeed } from './AttestationNewsFeed';
 import { AttestationReadinessCheck } from './AttestationReadinessCheck';
 import { AttestationRoadmap } from './AttestationRoadmap';
+import { CenterReadinessMiniQuiz } from './CenterReadinessMiniQuiz';
 import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
+import { KnowledgeBaseFaq } from './KnowledgeBaseFaq';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import { RegionalSessionsTimeline } from './RegionalSessionsTimeline';
 import {
-  ATTESTATION_FAQ,
   ATTESTATION_TIMELINE_2025_2030,
   CENTER_ACCREDITATION_STATUS,
   EMPIRICAL_TABLE,
@@ -109,9 +109,6 @@ interface OverviewSectionProps {
 export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) => {
   const [heroImgFailed, setHeroImgFailed] = useState(false);
   const [tableFilter, setTableFilter] = useState<'all' | 'core'>('all');
-  const [faqCategory, setFaqCategory] = useState<'all' | 'procedure' | 'training' | 'region'>('all');
-  const [faqSearch, setFaqSearch] = useState<string>('');
-  const [openFaqIds, setOpenFaqIds] = useState<string[]>([ATTESTATION_FAQ[0].id]);
   const [expertIndex, setExpertIndex] = useState<number>(0);
   const [timelineIndex, setTimelineIndex] = useState<number>(2); // Default to active 2026-2027 stage
   const [newsCategory, setNewsCategory] = useState<'all' | 'regulation' | 'rca' | 'market'>('all');
@@ -386,28 +383,6 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
     }
   };
 
-  const normalizedFaqQuery = faqSearch.trim().toLowerCase();
-  const filteredFaq = ATTESTATION_FAQ.filter((item) => {
-    const matchesCategory = faqCategory === 'all' || item.category === faqCategory;
-    if (!matchesCategory) return false;
-    if (!normalizedFaqQuery) return true;
-    return (
-      item.question.toLowerCase().includes(normalizedFaqQuery) ||
-      item.answer.toLowerCase().includes(normalizedFaqQuery) ||
-      item.categoryLabel.toLowerCase().includes(normalizedFaqQuery)
-    );
-  });
-
-  const toggleFaq = (id: string, question: string) => {
-    setOpenFaqIds((prev) => {
-      const exists = prev.includes(id);
-      if (!exists) {
-        tracker.trackCustomInteraction(`FAQ раскрыт: ${question.slice(0, 60)}`);
-      }
-      return exists ? prev.filter((item) => item !== id) : [...prev, id];
-    });
-  };
-
   const visibleRows =
     tableFilter === 'core'
       ? EMPIRICAL_TABLE.filter((row) => row.highlight)
@@ -635,6 +610,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Candidate Readiness Self-Check */}
       <AttestationReadinessCheck onContactCurator={openCuratorModal} />
+
+      {/* 5-Question Mini Interactive Readiness Quiz */}
+      <CenterReadinessMiniQuiz
+        onContactCurator={openCuratorModal}
+        onApplyForSession={scrollToInquiryForm}
+      />
 
       {/* Operational Certification Announcements & Regulatory Updates Feed */}
       <AttestationNewsFeed onContactCurator={openCuratorModal} />
@@ -1437,172 +1418,8 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
       </section>
 
-      {/* Frequently Asked Questions (FAQ) on Certification Procedure */}
-      <section aria-labelledby="faq-heading" className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-teal-700">
-              Ответы для кандидатов · Снижение нагрузки на кураторов
-            </p>
-            <h2 id="faq-heading" className="text-xl font-bold text-slate-900">
-              Часто задаваемые вопросы о процедуре аттестации
-            </h2>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
-              {(
-                [
-                  { id: 'all', label: `Все (${ATTESTATION_FAQ.length})` },
-                  { id: 'procedure', label: 'Процедура и сроки' },
-                  { id: 'training', label: 'Обучение и стоимость' },
-                  { id: 'region', label: 'Требования ДФО' },
-                ] as const
-              ).map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setFaqCategory(cat.id)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    faqCategory === cat.id
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
-            {filteredFaq.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const allVisibleIds = filteredFaq.map((f) => f.id);
-                  const allOpen = allVisibleIds.every((id) => openFaqIds.includes(id));
-                  setOpenFaqIds(allOpen ? [] : allVisibleIds);
-                }}
-                className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                {filteredFaq.every((f) => openFaqIds.includes(f.id))
-                  ? 'Свернуть все'
-                  : 'Раскрыть все'}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Live Search Bar for Candidate Self-Service */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-xl">
-            <Search
-              className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-              aria-hidden="true"
-            />
-            <input
-              type="search"
-              value={faqSearch}
-              onChange={(e) => setFaqSearch(e.target.value)}
-              placeholder="Поиск по вопросам: документы, МКК, пересдача, 27 200 ₽, ДПО..."
-              aria-label="Поиск по часто задаваемым вопросам"
-              className="w-full pl-10 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-700 focus:bg-white transition-colors"
-            />
-            {faqSearch && (
-              <button
-                type="button"
-                onClick={() => setFaqSearch('')}
-                aria-label="Очистить поиск по FAQ"
-                className="p-1 text-slate-400 hover:text-slate-700 absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            )}
-          </div>
-          <p className="text-xs font-mono text-slate-500 tabular-nums shrink-0">
-            Показано вопросов: {filteredFaq.length} / {ATTESTATION_FAQ.length}
-          </p>
-        </div>
-
-        <div className="divide-y divide-slate-200 border-t border-slate-200">
-          {filteredFaq.length === 0 ? (
-            <div className="py-8 text-center space-y-3">
-              <p className="text-sm font-medium text-slate-800">
-                По запросу «{faqSearch}» в выбранной категории ответов не найдено.
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFaqCategory('all');
-                    setFaqSearch('');
-                  }}
-                  className="px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  Сбросить фильтр и поиск
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openCuratorModal('FAQ: ответ не найден')}
-                  className="px-3.5 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Задать вопрос куратору</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            filteredFaq.map((item) => {
-              const isOpen = openFaqIds.includes(item.id);
-              return (
-                <div key={item.id} className="py-4">
-                  <button
-                    type="button"
-                    aria-expanded={isOpen}
-                    onClick={() => toggleFaq(item.id, item.question)}
-                    className="w-full text-left flex items-start justify-between gap-4 py-1 cursor-pointer group focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-700"
-                  >
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-medium text-teal-700">
-                        {item.categoryLabel}
-                      </span>
-                      <h3 className="text-sm sm:text-base font-semibold text-slate-900 group-hover:text-teal-800 transition-colors">
-                        {item.question}
-                      </h3>
-                    </div>
-                    <ChevronDown
-                      className={`w-4 h-4 text-slate-500 mt-1 shrink-0 transition-transform duration-200 ${
-                        isOpen ? 'rotate-180 text-teal-700' : ''
-                      }`}
-                      aria-hidden="true"
-                    />
-                  </button>
-
-                  {isOpen && (
-                    <p className="mt-3 text-xs sm:text-sm text-slate-600 leading-relaxed max-w-4xl">
-                      {item.answer}
-                    </p>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        <div className="pt-5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4">
-          <p className="text-xs text-slate-600">
-            Не нашли ответ на нестандартный случай по походному опыту или пересдаче? Передайте
-            вопрос дежурному куратору РЦА.
-          </p>
-          <button
-            type="button"
-            onClick={() => openCuratorModal('FAQ кандидатов')}
-            className="px-4 py-2 bg-white border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Связаться с куратором</span>
-          </button>
-        </div>
-      </section>
+      {/* Knowledge Base with Searchable FAQ Accordion */}
+      <KnowledgeBaseFaq onContactCurator={openCuratorModal} />
 
       {/* Instructor Feedback & Certification Updates Form */}
       <section

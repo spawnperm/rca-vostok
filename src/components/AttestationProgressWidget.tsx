@@ -6,12 +6,20 @@ import {
   CheckCircle2,
   Circle,
   Compass,
+  Download,
+  Eye,
+  FileCheck2,
   FileText,
   RefreshCw,
   RotateCcw,
+  X,
 } from 'lucide-react';
 import { ROLE_LABELS, type SessionUser } from '../utils/identityApi';
 import { tracker } from '../utils/tracker';
+import {
+  generateCandidateCertificatePdf,
+  type GeneratedPdfResult,
+} from '../utils/candidateCertificatePdf';
 import type { InquiryRecord } from './social/MyInquiriesSection';
 
 export type AttestationStageId = 'application' | 'training' | 'exam' | 'certificate';
@@ -307,6 +315,8 @@ interface AttestationProgressWidgetProps {
   user: SessionUser;
   inquiries: InquiryRecord[];
   inquiriesLoading?: boolean;
+  selectedExamDate?: string;
+  onSummaryChange?: (summary: UserAttestationSummary) => void;
   onRefreshInquiries?: () => void;
   onOpenApplication?: () => void;
 }
@@ -315,10 +325,16 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
   user,
   inquiries,
   inquiriesLoading = false,
+  selectedExamDate,
+  onSummaryChange,
   onRefreshInquiries,
   onOpenApplication,
 }) => {
   const [stored, setStored] = useState<StoredProgress>(() => readStoredProgress(user.id));
+  const [pdfBusy, setPdfBusy] = useState<boolean>(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfResult, setPdfResult] = useState<GeneratedPdfResult | null>(null);
+  const [previewOpen, setPreviewOpen] = useState<boolean>(false);
 
   useEffect(() => {
     setStored(readStoredProgress(user.id));
@@ -330,6 +346,28 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [user, inquiries, stored]
   );
+
+  useEffect(() => {
+    onSummaryChange?.(summary);
+  }, [summary, onSummaryChange]);
+
+  useEffect(() => {
+    const url = pdfResult?.pdfBlobUrl;
+    return () => {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [pdfResult?.pdfBlobUrl]);
+
+  useEffect(() => {
+    if (!previewOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [previewOpen]);
 
   const selectedStageId: AttestationStageId =
     stored.selectedStageId && ATTESTATION_STAGES.some((s) => s.id === stored.selectedStageId)
@@ -427,6 +465,30 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
     tracker.trackCustomInteraction('Сброс прогресса аттестации', 'account');
   };
 
+  const handleGenerateCertificatePdf = () => {
+    setPdfBusy(true);
+    setPdfError(null);
+    try {
+      const result = generateCandidateCertificatePdf(
+        user,
+        summary,
+        inquiries,
+        selectedExamDate
+      );
+      setPdfResult(result);
+      tracker.trackCustomInteraction(
+        'Генерация справки о статусе кандидата (PDF)',
+        `${summary.percent}% · ${result.data.docNumber}`
+      );
+    } catch (err) {
+      setPdfError(
+        err instanceof Error ? err.message : 'Не удалось сформировать PDF-справку.'
+      );
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   const statusText =
     summary.percent === 100
       ? 'Аттестация завершена · Свидетельство активно'
@@ -504,8 +566,8 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
         </div>
       </div>
 
-      {/* Overall Linear Progress Bar */}
-      <div className="space-y-2">
+      {/* Overall Linear Progress Bar + Certificate PDF Action */}
+      <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
           <span className="font-semibold text-slate-800">{statusText}</span>
           <span className="font-mono text-slate-500 tabular-nums">
@@ -541,6 +603,61 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
             className="absolute left-3/4 top-0 bottom-0 w-px bg-white/80"
           />
         </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <p className="text-xs text-slate-500">
+            Данные прогресс-бара ({summary.percent}%, {summary.completedTasks}/{summary.totalTasks}{' '}
+            шагов) автоматически включаются в официальную PDF-справку с печатью РЦА.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleGenerateCertificatePdf}
+            disabled={pdfBusy}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <FileCheck2 className="w-4 h-4" aria-hidden="true" />
+            {pdfBusy ? 'Формируем PDF…' : 'Справка о статусе кандидата (PDF)'}
+          </button>
+        </div>
+
+        {pdfError && (
+          <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {pdfError}
+          </p>
+        )}
+
+        {pdfResult && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 bg-teal-50/70 border border-teal-200 rounded-lg text-xs">
+            <div className="flex items-center gap-2 text-teal-950">
+              <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
+              <span>
+                Справка{' '}
+                <span className="font-mono font-semibold">{pdfResult.data.docNumber}</span>{' '}
+                сформирована ({pdfResult.data.overallPercent}%).
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(true)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-teal-300 text-teal-900 font-semibold rounded-md hover:bg-teal-50 transition-colors cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                Просмотр и печать РЦА
+              </button>
+              <a
+                href={pdfResult.pdfBlobUrl}
+                download={pdfResult.fileName}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-teal-700 text-white font-semibold rounded-md hover:bg-teal-800 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                Скачать PDF
+              </a>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 4-Stage Pipeline Selector */}
@@ -729,6 +846,57 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
           })}
         </div>
       </div>
+
+      {/* Preview Modal for generated Candidate Status Certificate PDF */}
+      {previewOpen && pdfResult && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="certificate-preview-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+        >
+          <div className="bg-white border border-slate-200 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div>
+                <h4 id="certificate-preview-title" className="text-sm font-bold text-slate-900">
+                  Справка о статусе кандидата · {pdfResult.data.docNumber}
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Форма А4 с текущим прогрессом ({pdfResult.data.overallPercent}%) и печатью РЦА
+                  «Русский Восток»
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={pdfResult.pdfBlobUrl}
+                  download={pdfResult.fileName}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                  Скачать PDF
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen(false)}
+                  aria-label="Закрыть предпросмотр"
+                  className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-100 flex justify-center">
+              <img
+                src={pdfResult.previewDataUrl}
+                alt={`Справка о статусе кандидата ${pdfResult.data.candidateName}`}
+                className="max-w-full h-auto border border-slate-300 shadow-sm bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
