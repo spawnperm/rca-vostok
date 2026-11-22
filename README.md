@@ -26,3 +26,8 @@ npm run dev
 npm run build
 npm run start
 ```
+
+## База знаний проекта (LLM Wiki)
+
+Полный контекст диалога, синтез исходных материалов (`rca-vostok.ru` и корпус `00–04.txt`), формулы модели, архитектурные решения и хронологический журнал изменений сохранены в директории [`/wiki/`](./wiki/index.md) (точка входа — [`wiki/index.md`](./wiki/index.md), регламент — [`wiki/SCHEMA.md`](./wiki/SCHEMA.md)).
+
