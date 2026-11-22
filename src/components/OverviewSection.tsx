@@ -22,6 +22,7 @@ import { AttestationReadinessCheck } from './AttestationReadinessCheck';
 import { AttestationRoadmap } from './AttestationRoadmap';
 import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
+import { RegionalSessionsTimeline } from './RegionalSessionsTimeline';
 import {
   ATTESTATION_FAQ,
   ATTESTATION_TIMELINE_2025_2030,
@@ -203,6 +204,13 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  };
+
+  const handleApplyForSession = (targetRegion: string, targetTrack: string) => {
+    setRegion(targetRegion);
+    setTrack(targetTrack);
+    setFormSuccess(null);
+    scrollToInquiryForm();
   };
 
   // Curator consultation modal state
@@ -874,6 +882,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Compact Interactive DFO Map with Hover Registry & Session Info */}
       <DfoOverviewHoverMap onOpenMarket={() => onNavigate('market')} />
+
+      {/* Interactive Regional Sessions & Deadlines Timeline */}
+      <RegionalSessionsTimeline
+        onApplyForSession={handleApplyForSession}
+        onContactCurator={openCuratorModal}
+      />
 
       {/* Horizontal Attestation Development Timeline 2025-2030 */}
       <section aria-labelledby="timeline-2030-heading" className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
