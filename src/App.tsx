@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, X, UserRound } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Menu, UserRound, X } from 'lucide-react';
 import { OverviewSection } from './components/OverviewSection';
 import { CalculatorSection } from './components/CalculatorSection';
 import { MarketSection } from './components/MarketSection';
@@ -8,16 +8,50 @@ import { PresentationsSection } from './components/PresentationsSection';
 import { AnalyticsSection } from './components/AnalyticsSection';
 import { AccountSection } from './components/AccountSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import {
+  LandingHero,
+  LearningSection,
+  PreparationSection,
+  CertificationSection,
+  ConsultingSection,
+  ContactsSection,
+} from './components/landing/LandingSections';
+import { LANDING_SECTIONS } from './data/landingContent';
 import { applySectionSeo, SECTION_SEO_MAP, type SiteTabId } from './utils/seo';
 import { tracker } from './utils/tracker';
 
-const NAV_ITEMS: { id: SiteTabId; label: string }[] = [
+/**
+ * Navigation is split in two, mirroring the product's two halves:
+ *
+ *   top     — the public landing, with the same sections as rca-vostok.ru
+ *   sidebar — the analytical platform sections (right-hand rail)
+ *
+ * `home` is the landing hub: it renders the hero plus every site section.
+ */
+const TOP_NAV: { id: SiteTabId; label: string }[] = [
+  { id: 'home', label: 'Главная' },
+  ...LANDING_SECTIONS.map((s) => ({ id: s.id as SiteTabId, label: s.label })),
+];
+
+const SIDEBAR_NAV: { id: SiteTabId; label: string }[] = [
   { id: 'overview', label: 'Обзор центра' },
   { id: 'calculator', label: 'Калькулятор' },
   { id: 'market', label: 'Рынок ДФО' },
   { id: 'dissertation', label: 'Диссертация' },
+  { id: 'presentations', label: 'Презентации' },
   { id: 'analytics', label: 'SEO и аналитика' },
+  { id: 'account', label: 'Личный кабинет' },
 ];
+
+/** Landing tabs are the site sections; the rest belong to the platform. */
+const LANDING_TABS = new Set<SiteTabId>([
+  'home',
+  'learning',
+  'preparation',
+  'certification',
+  'consulting',
+  'contacts',
+]);
 
 function getInitialTab(): SiteTabId {
   try {
@@ -29,12 +63,14 @@ function getInitialTab(): SiteTabId {
   } catch {
     // fallback
   }
-  return 'overview';
+  return 'home';
 }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<SiteTabId>(getInitialTab);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const cleanup = tracker.init(activeTab);
@@ -60,6 +96,7 @@ export default function App() {
   const navigateTo = (tab: SiteTabId) => {
     setActiveTab(tab);
     setMobileMenuOpen(false);
+    setMobileSidebarOpen(false);
     tracker.trackTabChange(tab, SECTION_SEO_MAP[tab].name);
 
     const nextUrl =
@@ -70,23 +107,33 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  /** Jumps to an anchor inside the landing hub. */
+  const scrollToSection = (id: string) => {
+    if (activeTab !== 'home') {
+      setActiveTab('home');
+      window.history.pushState({ tab: 'home' }, '', `${window.location.pathname}?tab=home`);
+    }
+    // Wait for the section to mount before scrolling.
+    window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      {/* Strict 1-row, 3-zone Top Bar Contract */}
+      {/* Top bar: brand, public landing sections, account action */}
       <header className="no-print sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-slate-200">
-        <div className="max-w-[1240px] mx-auto px-6 h-16 flex items-center justify-between gap-8">
-          {/* Zone 1: Single text element wordmark */}
+        <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center justify-between gap-6">
           <button
             type="button"
-            onClick={() => navigateTo('overview')}
+            onClick={() => navigateTo('home')}
             className="text-lg font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
             РЦА «Русский Восток»
           </button>
 
-          {/* Zone 2: 5 concise single-line text nav links */}
-          <nav aria-label="Основная навигация" className="hidden md:flex items-center gap-6">
-            {NAV_ITEMS.map((item) => {
+          <nav aria-label="Разделы сайта" className="hidden lg:flex items-center gap-5">
+            {TOP_NAV.map((item) => {
               const active = activeTab === item.id;
               return (
                 <button
@@ -105,13 +152,12 @@ export default function App() {
             })}
           </nav>
 
-          {/* Zone 3: 1 primary action + account entry + mobile menu button */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => navigateTo('account')}
               aria-label="Личный кабинет"
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
                 activeTab === 'account'
                   ? 'bg-teal-50 border-teal-300 text-teal-800'
                   : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
@@ -121,45 +167,33 @@ export default function App() {
               <span className="hidden sm:inline">Кабинет</span>
             </button>
 
+            {/* Sidebar toggle doubles as the platform menu on small screens. */}
             <button
               type="button"
-              onClick={() => navigateTo('presentations')}
-              className={`hidden sm:inline-flex px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 ${
-                activeTab === 'presentations'
-                  ? 'bg-teal-700 text-white hover:bg-teal-800'
-                  : 'bg-slate-900 text-white hover:bg-slate-800'
-              }`}
+              onClick={() => setMobileSidebarOpen((o) => !o)}
+              aria-label={mobileSidebarOpen ? 'Закрыть меню платформы' : 'Открыть меню платформы'}
+              aria-expanded={mobileSidebarOpen}
+              className="lg:hidden p-2 text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer"
             >
-              Режим защиты
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen((o) => !o)}
-              aria-label={mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
-              className="md:hidden p-2 text-slate-700 hover:bg-slate-100 rounded-lg cursor-pointer"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {mobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile Drawer */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white px-6 py-4 space-y-2">
-            {[
-              ...NAV_ITEMS,
-              { id: 'account' as SiteTabId, label: 'Личный кабинет' },
-              { id: 'presentations' as SiteTabId, label: 'Презентации (Режим защиты)' },
-            ].map((item) => {
+        {/* Landing navigation on narrow screens */}
+        <div className="lg:hidden border-t border-slate-200 bg-white px-4 py-2 overflow-x-auto">
+          <div className="flex items-center gap-4">
+            {TOP_NAV.map((item) => {
               const active = activeTab === item.id;
               return (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => navigateTo(item.id)}
-                  className={`block w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    active ? 'bg-teal-50 text-teal-800 font-semibold' : 'text-slate-700 hover:bg-slate-50'
+                  className={`py-1.5 text-sm font-medium whitespace-nowrap border-b-2 cursor-pointer ${
+                    active
+                      ? 'text-teal-800 border-teal-700'
+                      : 'text-slate-600 border-transparent'
                   }`}
                 >
                   {item.label}
@@ -167,27 +201,144 @@ export default function App() {
               );
             })}
           </div>
-        )}
+        </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-[1240px] w-full mx-auto px-6 py-10">
-        <ErrorBoundary onReset={() => navigateTo('overview')}>
-          {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
-          {activeTab === 'calculator' && <CalculatorSection />}
-          {activeTab === 'market' && <MarketSection />}
-          {activeTab === 'dissertation' && <DissertationSection />}
-          {activeTab === 'presentations' && <PresentationsSection />}
-          {activeTab === 'analytics' && <AnalyticsSection />}
-          {activeTab === 'account' && <AccountSection />}
-        </ErrorBoundary>
-      </main>
+      {/* Body: content + right-hand platform sidebar */}
+      <div className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-8 flex gap-6">
+        <main className="flex-1 min-w-0">
+          <ErrorBoundary onReset={() => navigateTo('home')}>
+            {activeTab === 'home' && (
+              <div className="space-y-16">
+                <LandingHero onNavigate={scrollToSection} />
+                <LearningSection />
+                <PreparationSection />
+                <CertificationSection />
+                <ConsultingSection />
+                <ContactsSection />
+              </div>
+            )}
+            {activeTab === 'learning' && <LearningSection />}
+            {activeTab === 'preparation' && <PreparationSection />}
+            {activeTab === 'certification' && <CertificationSection />}
+            {activeTab === 'consulting' && <ConsultingSection />}
+            {activeTab === 'contacts' && <ContactsSection />}
 
-      {/* Quiet Institutional Footer */}
+            {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
+            {activeTab === 'calculator' && <CalculatorSection />}
+            {activeTab === 'market' && <MarketSection />}
+            {activeTab === 'dissertation' && <DissertationSection />}
+            {activeTab === 'presentations' && <PresentationsSection />}
+            {activeTab === 'analytics' && <AnalyticsSection />}
+            {activeTab === 'account' && <AccountSection />}
+          </ErrorBoundary>
+        </main>
+
+        {/* Right sidebar: analytical platform */}
+        <aside
+          className={`no-print shrink-0 transition-all duration-200 ${
+            sidebarOpen ? 'w-60' : 'w-12'
+          } hidden lg:block`}
+        >
+          <div className="sticky top-24">
+            <div className="flex items-center justify-between mb-3">
+              {sidebarOpen && (
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Платформа
+                </h2>
+              )}
+              <button
+                type="button"
+                onClick={() => setSidebarOpen((o) => !o)}
+                aria-label={sidebarOpen ? 'Свернуть меню' : 'Развернуть меню'}
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded cursor-pointer"
+              >
+                {sidebarOpen ? (
+                  <ChevronRight className="w-4 h-4" />
+                ) : (
+                  <ChevronLeft className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+
+            <nav aria-label="Разделы платформы" className="space-y-0.5">
+              {SIDEBAR_NAV.map((item) => {
+                const active = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => navigateTo(item.id)}
+                    title={!sidebarOpen ? item.label : undefined}
+                    className={`block w-full text-left rounded-lg text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                      sidebarOpen ? 'px-3 py-2' : 'px-2 py-2 text-center'
+                    } ${
+                      active
+                        ? 'bg-teal-50 text-teal-900 font-semibold'
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {sidebarOpen ? item.label : item.label.slice(0, 1)}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
+      </div>
+
+      {/* Platform navigation drawer for small screens */}
+      {mobileSidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-40">
+          <button
+            type="button"
+            aria-label="Закрыть меню"
+            onClick={() => setMobileSidebarOpen(false)}
+            className="absolute inset-0 bg-slate-900/40"
+          />
+          <nav
+            aria-label="Разделы платформы"
+            className="absolute right-0 top-0 h-full w-72 bg-white shadow-xl p-4 space-y-1 overflow-y-auto"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Платформа
+              </h2>
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(false)}
+                aria-label="Закрыть"
+                className="p-1.5 text-slate-500 hover:bg-slate-100 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {SIDEBAR_NAV.map((item) => {
+              const active = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => navigateTo(item.id)}
+                  className={`block w-full text-left px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                    active
+                      ? 'bg-teal-50 text-teal-900 font-semibold'
+                      : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      )}
+
       <footer className="no-print border-t border-slate-200 bg-white mt-12">
-        <div className="max-w-[1240px] mx-auto px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="max-w-[1400px] mx-auto px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-500">
           <p>
-            РЦА Приморского края «Русский Восток» · База: ВВГУ и Федерация спортивного туризма России
+            РЦА Приморского края «Русский Восток» · База: ВВГУ и Федерация спортивного туризма
+            России
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <a
