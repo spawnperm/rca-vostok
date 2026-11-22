@@ -24,26 +24,74 @@ import { tracker } from './utils/tracker';
  * including Recharts and every analytical page — shipped as one 1.2 MB chunk
  * that had to be parsed before the landing could render.
  */
-const OverviewSection = lazy(() =>
-  import('./components/OverviewSection').then((m) => ({ default: m.OverviewSection }))
+/**
+ * Lazy import that survives a deploy.
+ *
+ * Vite emits hashed chunk names, so a tab left open across a release holds an
+ * index.html referencing chunks that no longer exist. The import then fails,
+ * and without handling, ErrorBoundary shows "Не удалось отобразить текущий
+ * блок" — which reads like a broken feature rather than a stale page.
+ *
+ * On failure this reloads once (a fresh index.html points at the current
+ * chunks). A sessionStorage flag stops a reload loop if the chunk is genuinely
+ * missing, in which case the error propagates and the boundary explains it.
+ */
+function lazyWithReload<T>(
+  factory: () => Promise<T>,
+  key: string
+): () => Promise<T> {
+  return async () => {
+    try {
+      return await factory();
+    } catch (err) {
+      const flag = `chunk-reload:${key}`;
+      if (!sessionStorage.getItem(flag)) {
+        sessionStorage.setItem(flag, '1');
+        window.location.reload();
+        // Return a never-resolving promise so React does not render an error
+        // while the page is navigating away.
+        return new Promise<T>(() => {});
+      }
+      sessionStorage.removeItem(flag);
+      throw err;
+    }
+  };
+}
+
+const OverviewSection = lazy(lazyWithReload(
+  () => import('./components/OverviewSection').then((m) => ({ default: m.OverviewSection })),
+  'OverviewSection'
+)
 );
-const CalculatorSection = lazy(() =>
-  import('./components/CalculatorSection').then((m) => ({ default: m.CalculatorSection }))
+const CalculatorSection = lazy(lazyWithReload(
+  () => import('./components/CalculatorSection').then((m) => ({ default: m.CalculatorSection })),
+  'CalculatorSection'
+)
 );
-const MarketSection = lazy(() =>
-  import('./components/MarketSection').then((m) => ({ default: m.MarketSection }))
+const MarketSection = lazy(lazyWithReload(
+  () => import('./components/MarketSection').then((m) => ({ default: m.MarketSection })),
+  'MarketSection'
+)
 );
-const DissertationSection = lazy(() =>
-  import('./components/DissertationSection').then((m) => ({ default: m.DissertationSection }))
+const DissertationSection = lazy(lazyWithReload(
+  () => import('./components/DissertationSection').then((m) => ({ default: m.DissertationSection })),
+  'DissertationSection'
+)
 );
-const PresentationsSection = lazy(() =>
-  import('./components/PresentationsSection').then((m) => ({ default: m.PresentationsSection }))
+const PresentationsSection = lazy(lazyWithReload(
+  () => import('./components/PresentationsSection').then((m) => ({ default: m.PresentationsSection })),
+  'PresentationsSection'
+)
 );
-const AnalyticsSection = lazy(() =>
-  import('./components/AnalyticsSection').then((m) => ({ default: m.AnalyticsSection }))
+const AnalyticsSection = lazy(lazyWithReload(
+  () => import('./components/AnalyticsSection').then((m) => ({ default: m.AnalyticsSection })),
+  'AnalyticsSection'
+)
 );
-const AccountSection = lazy(() =>
-  import('./components/AccountSection').then((m) => ({ default: m.AccountSection }))
+const AccountSection = lazy(lazyWithReload(
+  () => import('./components/AccountSection').then((m) => ({ default: m.AccountSection })),
+  'AccountSection'
+)
 );
 
 /** Placeholder shown while a lazy section is being fetched. */

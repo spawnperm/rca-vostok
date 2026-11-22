@@ -718,6 +718,53 @@ async function startServer() {
       });
     });
 
+    // Missing build assets must 404, never fall through to the SPA shell.
+    //
+    // Vite emits content-hashed filenames, so after every deploy the old
+    // /assets/index-<hash>.js no longer exists. A browser that still has the
+    // previous index.html (a tab left open across a release) requests the old
+    // chunk; the catch-all below used to answer 200 with index.html, and the
+    // browser then tried to execute HTML as JavaScript. The module failed to
+    // load and ErrorBoundary rendered "Не удалось отобразить текущий блок" —
+    // a crash that looks like a broken feature but is a stale-tab problem.
+    //
+    // Answering 404 lets the client detect the miss and reload into the new
+    // build instead of showing an error.
+    app.use(
+      '/assets',
+      express.static(path.resolve(distDir, 'assets'), {
+        // Hashed names never change content, so they can be cached forever.
+        immutable: true,
+        maxAge: '1y',
+        fallthrough: false,
+      })
+    );
+
+    // `fallthrough: false` raises an error for a missing file, which Express
+    // would render as its default HTML page. Answer plainly instead: the
+    // response is consumed by a script loader, not a reader.
+    app.use(
+      '/assets',
+      (
+        err: { status?: number; statusCode?: number },
+        _req: express.Request,
+        res: express.Response,
+        next: express.NextFunction
+      ) => {
+        const status = err?.status ?? err?.statusCode ?? 404;
+        if (status === 404) {
+          res.status(404).type('text/plain').send('Asset not found');
+          return;
+        }
+        next(err);
+      }
+    );
+
+    // Any other hashed asset request that reached this point is missing too.
+    app.use(/^\/(assets|src)\//, (_req, res) => {
+      res.status(404).type('text/plain').send('Asset not found');
+    });
+
     app.use(express.static(distDir));
     app.get('*', (_req, res) => {
       res.sendFile(path.resolve(distDir, 'index.html'));
