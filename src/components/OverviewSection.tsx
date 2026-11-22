@@ -1,9 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, CheckCircle2, ChevronDown, Compass, ExternalLink, Send } from 'lucide-react';
+import {
+  ArrowRight,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Compass,
+  ExternalLink,
+  Quote,
+  Send,
+} from 'lucide-react';
 import {
   ATTESTATION_FAQ,
   EMPIRICAL_TABLE,
+  EXPERT_TESTIMONIALS,
   HERO_IMAGE,
+  INDUSTRY_NEWS,
   RCA_PROFILE,
 } from '../data/researchData';
 import { tracker } from '../utils/tracker';
@@ -17,6 +29,36 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   const [tableFilter, setTableFilter] = useState<'all' | 'core'>('all');
   const [faqCategory, setFaqCategory] = useState<'all' | 'procedure' | 'training' | 'region'>('all');
   const [openFaqIds, setOpenFaqIds] = useState<string[]>([ATTESTATION_FAQ[0].id]);
+  const [expertIndex, setExpertIndex] = useState<number>(0);
+  const [newsCategory, setNewsCategory] = useState<'all' | 'regulation' | 'rca' | 'market'>('all');
+  const [expandedNewsIds, setExpandedNewsIds] = useState<string[]>([INDUSTRY_NEWS[0].id]);
+
+  const activeExpert = EXPERT_TESTIMONIALS[expertIndex] ?? EXPERT_TESTIMONIALS[0];
+
+  const handleSelectExpert = (nextIdx: number) => {
+    const normalized =
+      (nextIdx + EXPERT_TESTIMONIALS.length) % EXPERT_TESTIMONIALS.length;
+    setExpertIndex(normalized);
+    const chosen = EXPERT_TESTIMONIALS[normalized];
+    if (chosen) {
+      tracker.trackCustomInteraction(`Отзыв эксперта: ${chosen.author}`, chosen.region);
+    }
+  };
+
+  const filteredNews =
+    newsCategory === 'all'
+      ? INDUSTRY_NEWS
+      : INDUSTRY_NEWS.filter((item) => item.category === newsCategory);
+
+  const toggleNewsDetails = (id: string, title: string) => {
+    setExpandedNewsIds((prev) => {
+      const exists = prev.includes(id);
+      if (!exists) {
+        tracker.trackCustomInteraction(`Новость раскрыта: ${title.slice(0, 60)}`);
+      }
+      return exists ? prev.filter((item) => item !== id) : [...prev, id];
+    });
+  };
 
   // Certification updates inquiry form state
   const [fullName, setFullName] = useState<string>('');
@@ -464,6 +506,183 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* Expert Reviews Carousel */}
+      <section aria-labelledby="experts-heading" className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-teal-700">Позиция отрасли и комиссии</p>
+            <h2 id="experts-heading" className="text-xl font-bold text-slate-900">
+              Отзывы экспертов о необходимости аттестации в ДФО
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-slate-500 tabular-nums mr-1">
+              {String(expertIndex + 1).padStart(2, '0')} / {String(EXPERT_TESTIMONIALS.length).padStart(2, '0')}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleSelectExpert(expertIndex - 1)}
+              aria-label="Предыдущий отзыв эксперта"
+              className="p-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            >
+              <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectExpert(expertIndex + 1)}
+              aria-label="Следующий отзыв эксперта"
+              className="p-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            >
+              <ChevronRight className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        <div className="border-y border-slate-200 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-8 space-y-4">
+            <Quote className="w-6 h-6 text-teal-700/60" aria-hidden="true" />
+            <blockquote className="font-serif text-lg sm:text-xl text-slate-900 leading-relaxed">
+              «{activeExpert.quote}»
+            </blockquote>
+          </div>
+
+          <div className="lg:col-span-4 bg-slate-50 border border-slate-200 rounded-lg p-5 space-y-4">
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-slate-900">{activeExpert.author}</p>
+              <p className="text-xs text-slate-600 leading-snug">{activeExpert.role}</p>
+              <p className="text-xs font-medium text-teal-800 pt-1">
+                {activeExpert.organization} · {activeExpert.region}
+              </p>
+            </div>
+            <div className="pt-3 border-t border-slate-200 space-y-1">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                Практический результат
+              </p>
+              <p className="text-xs text-slate-800 leading-relaxed">{activeExpert.outcome}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Direct Expert Selector Strip */}
+        <div className="flex flex-wrap items-center gap-2">
+          {EXPERT_TESTIMONIALS.map((item, idx) => {
+            const isSelected = idx === expertIndex;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleSelectExpert(idx)}
+                className={`px-3 py-1.5 text-xs rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  isSelected
+                    ? 'bg-slate-900 text-white border-slate-900 font-semibold'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900'
+                }`}
+              >
+                0{idx + 1}. {item.author}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Industry News Chronological Feed */}
+      <section aria-labelledby="industry-news-heading" className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-teal-700">Хроника аттестации и рынка ДФО</p>
+            <h2 id="industry-news-heading" className="text-xl font-bold text-slate-900">
+              Новости индустрии
+            </h2>
+          </div>
+
+          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
+            {(
+              [
+                { id: 'all', label: `Все события (${INDUSTRY_NEWS.length})` },
+                { id: 'rca', label: 'Сессии РЦА и ВВГУ' },
+                { id: 'regulation', label: 'Нормативная база' },
+                { id: 'market', label: 'Рынок ДФО' },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setNewsCategory(tab.id);
+                  tracker.trackCustomInteraction(`Фильтр новостей: ${tab.label}`);
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  newsCategory === tab.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <ol className="divide-y divide-slate-200 border-t border-slate-200">
+          {filteredNews.map((item) => {
+            const isExpanded = expandedNewsIds.includes(item.id);
+            return (
+              <li key={item.id} className="py-5 first:pt-5 last:pb-1">
+                <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-8">
+                  <div className="md:w-44 shrink-0 space-y-1 pt-0.5">
+                    <time
+                      dateTime={item.isoDate}
+                      className="block text-sm font-mono font-semibold text-slate-900 tabular-nums"
+                    >
+                      {item.date}
+                    </time>
+                    <p className="text-xs text-teal-700 font-medium">{item.categoryLabel}</p>
+                  </div>
+
+                  <div className="flex-1 space-y-2.5">
+                    <h3 className="text-base font-semibold text-slate-900 leading-snug">
+                      {item.title}
+                    </h3>
+                    <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
+                      {item.summary}
+                    </p>
+
+                    {isExpanded && (
+                      <div className="pt-2.5 border-t border-slate-100 max-w-3xl">
+                        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                          {item.details}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="pt-1 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <span className="text-slate-500">
+                        Источник: {item.source}
+                      </span>
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        onClick={() => toggleNewsDetails(item.id, item.title)}
+                        className="font-medium text-teal-700 hover:text-teal-900 inline-flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                      >
+                        <span>{isExpanded ? 'Свернуть контекст' : 'Подробнее о событии'}</span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       </section>
 
       {/* Frequently Asked Questions (FAQ) on Certification Procedure */}
