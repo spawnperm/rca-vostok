@@ -4,7 +4,7 @@ import type { ActivityItemDTO, SocialProfile } from './SocialProfile.ts';
 export interface FeedQuery {
   /** When set, only this author's posts are returned (profile view). */
   authorId?: string;
-  kind?: 'update' | 'article';
+  kind?: 'update' | 'article' | 'news';
   tag?: string;
   limit: number;
   offset: number;

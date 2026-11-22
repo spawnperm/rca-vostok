@@ -5,7 +5,7 @@
  * wording instead of generic failure text.
  */
 
-export type PostKind = 'update' | 'article';
+export type PostKind = 'update' | 'article' | 'news';
 
 export interface FeedPost {
   id: string;

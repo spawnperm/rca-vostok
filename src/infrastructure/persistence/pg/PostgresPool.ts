@@ -275,9 +275,19 @@ async function migrateSocial(pool: pg.Pool): Promise<void> {
   await pool.query(`
     DO $$
     BEGIN
+      -- Drop and recreate so the constraint can gain values over time; the
+      -- IF NOT EXISTS form would silently keep an outdated list forever.
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conname = 'posts_kind_check'
+           AND pg_get_constraintdef(oid) NOT LIKE '%news%'
+      ) THEN
+        ALTER TABLE posts DROP CONSTRAINT posts_kind_check;
+      END IF;
+
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'posts_kind_check') THEN
         ALTER TABLE posts ADD CONSTRAINT posts_kind_check
-          CHECK (kind IN ('update', 'article'));
+          CHECK (kind IN ('update', 'article', 'news'));
       END IF;
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'posts_status_check') THEN
         ALTER TABLE posts ADD CONSTRAINT posts_status_check

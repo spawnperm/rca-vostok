@@ -19,7 +19,7 @@ import type { UserRepository } from '../../domain/identity/IdentityRepositories.
  */
 
 export const createPostSchema = z.object({
-  kind: z.enum(['update', 'article']).optional(),
+  kind: z.enum(['update', 'article', 'news']).optional(),
   title: z.string().max(200).optional(),
   body: z.string().min(1, 'Текст не может быть пустым').max(60000),
   coverAssetId: z.string().max(64).optional().nullable(),
@@ -36,7 +36,7 @@ export const updatePostSchema = z.object({
 
 export const feedQuerySchema = z.object({
   authorId: z.string().max(64).optional(),
-  kind: z.enum(['update', 'article']).optional(),
+  kind: z.enum(['update', 'article', 'news']).optional(),
   tag: z.string().max(40).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   offset: z.coerce.number().int().min(0).default(0),

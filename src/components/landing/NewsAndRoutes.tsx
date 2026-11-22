@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { CalendarDays, ChevronDown, MapPin, Route, ShieldCheck, Clock, Info } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronDown,
+  Newspaper,
+  Route,
+  ShieldCheck,
+  Clock,
+  Info,
+} from 'lucide-react';
 import {
   ATTESTATION_ANNOUNCEMENTS,
   INDUSTRY_NEWS,
@@ -7,6 +15,7 @@ import {
   type AttestationAnnouncement,
   type IndustryNewsItem,
 } from '../../data/researchData';
+import { useNewsFeed, type NewsPost } from '../../utils/useNewsFeed';
 
 /**
  * «Новости» and «Маршруты» — the two site sections that were still placeholders
@@ -100,8 +109,10 @@ function AnnouncementRow({ item }: { item: AttestationAnnouncement }) {
   );
 }
 
-/** «Новости» — industry news plus current attestation announcements. */
+/** «Новости» — cabinet-published news, industry news and attestation notices. */
 export function NewsSection() {
+  const { news, loading, reload } = useNewsFeed(6);
+
   const sessionAnnouncements = ATTESTATION_ANNOUNCEMENTS.filter((a) => a.kind === 'session');
   const regulationAnnouncements = ATTESTATION_ANNOUNCEMENTS.filter(
     (a) => a.kind === 'regulation'
@@ -115,10 +126,37 @@ export function NewsSection() {
           Новости аттестации и рынка
         </h2>
         <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-          Изменения нормативной базы, итоги сессий центра и события рынка активного туризма
+          Публикации центра, изменения нормативной базы и события рынка активного туризма
           Дальнего Востока.
         </p>
       </header>
+
+      {/* News published from the personal cabinet. Hidden while empty so the
+          landing page never shows an empty heading. */}
+      {(loading || news.length > 0) && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-base font-bold text-slate-900">Публикации центра</h3>
+            <button
+              type="button"
+              onClick={reload}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+            >
+              Обновить
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="text-sm text-slate-500">Загружаем публикации…</p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {news.map((item) => (
+                <LandingNewsCard key={item.id} item={item} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {INDUSTRY_NEWS.map((item) => (
@@ -147,6 +185,57 @@ export function NewsSection() {
         )}
       </div>
     </section>
+  );
+}
+
+/** Card for a news item published from the cabinet. */
+function LandingNewsCard({ item }: { item: NewsPost }) {
+  const [open, setOpen] = useState<boolean>(false);
+  const published = item.publishedAt ?? item.createdAt;
+
+  return (
+    <article className="bg-white border border-teal-200 rounded-xl p-5 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-semibold rounded">
+          <Newspaper className="w-3 h-3" aria-hidden="true" />
+          Новость центра
+        </span>
+        <span className="text-[11px] text-slate-500">{formatDate(published)}</span>
+      </div>
+
+      <h3 className="text-sm font-bold text-slate-900 leading-snug">{item.title}</h3>
+      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+        {open ? item.body : item.excerpt}
+      </p>
+
+      {item.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {item.tags.map((tag) => (
+            <span key={tag} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] rounded">
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <span className="text-[11px] text-slate-400">{item.authorName}</span>
+        {item.body.length > item.excerpt.length && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900 cursor-pointer"
+          >
+            {open ? 'Свернуть' : 'Читать полностью'}
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`}
+              aria-hidden="true"
+            />
+          </button>
+        )}
+      </div>
+    </article>
   );
 }
 

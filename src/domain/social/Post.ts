@@ -1,8 +1,14 @@
 import { InvariantViolationError, ValidationError } from '../shared/DomainError.ts';
 import { SanitizedText } from '../shared/ValueObjects.ts';
 
-/** A feed post can be a short update or a long-form blog article. */
-export const POST_KINDS = ['update', 'article'] as const;
+/**
+ * A feed post can be a short update, a long-form blog article, or a news item.
+ *
+ * `news` is a first-class kind rather than a tag because news is surfaced on the
+ * public landing page: it needs its own validation rules (a headline is
+ * mandatory) and its own query, and a tag could be mistyped silently.
+ */
+export const POST_KINDS = ['update', 'article', 'news'] as const;
 export type PostKind = (typeof POST_KINDS)[number];
 
 export const POST_VISIBILITIES = ['public', 'community'] as const;
@@ -106,23 +112,34 @@ export class Post {
   static create(input: CreatePostInput): Post {
     const kind = Post.isKind(input.kind) ? input.kind : 'update';
     const isArticle = kind === 'article';
+    const isNews = kind === 'news';
 
     const rawBody = SanitizedText.sanitizeRaw(
       input.body,
       isArticle ? ARTICLE_MAX_BODY : POST_MAX_BODY
     );
-    if (rawBody.replace(/\s+/g, '').length < (isArticle ? 200 : 2)) {
+
+    // News is a short announcement, so the floor is higher than a feed update
+    // but far below an article; the figure is what makes a headline useful.
+    const minBody = isArticle ? 200 : isNews ? 40 : 2;
+    if (rawBody.replace(/\s+/g, '').length < minBody) {
       throw new ValidationError(
         isArticle
           ? 'Статья должна содержать не менее 200 символов.'
-          : 'Запись слишком короткая.'
+          : isNews
+            ? 'Новость должна содержать не менее 40 символов.'
+            : 'Запись слишком короткая.'
       );
     }
 
-    // Articles are addressable content, so they need a heading.
+    // Articles and news are addressable content, so they need a heading.
     const rawTitle = SanitizedText.sanitizeRaw(input.title, 200);
-    if (isArticle && rawTitle.length < 3) {
-      throw new ValidationError('Для статьи обязателен заголовок (не менее 3 символов).');
+    if ((isArticle || isNews) && rawTitle.length < 3) {
+      throw new ValidationError(
+        isArticle
+          ? 'Для статьи обязателен заголовок (не менее 3 символов).'
+          : 'Для новости обязателен заголовок (не менее 3 символов).'
+      );
     }
 
     // Count distinct valid tags BEFORE truncation: normalizeTags caps the
@@ -243,6 +260,7 @@ export class Post {
     }
 
     const isArticle = this.kind === 'article';
+    const isNews = this.kind === 'news';
     const body =
       input.body === undefined
         ? this.body
@@ -251,18 +269,25 @@ export class Post {
             isArticle ? ARTICLE_MAX_BODY : POST_MAX_BODY
           );
 
-    if (body.replace(/\s+/g, '').length < (isArticle ? 200 : 2)) {
+    const minBody = isArticle ? 200 : isNews ? 40 : 2;
+    if (body.replace(/\s+/g, '').length < minBody) {
       throw new ValidationError(
         isArticle
           ? 'Статья должна содержать не менее 200 символов.'
-          : 'Запись слишком короткая.'
+          : isNews
+            ? 'Новость должна содержать не менее 40 символов.'
+            : 'Запись слишком короткая.'
       );
     }
 
     const title =
       input.title === undefined ? this.title : SanitizedText.sanitizeRaw(input.title, 200);
-    if (isArticle && title.length < 3) {
-      throw new ValidationError('Для статьи обязателен заголовок (не менее 3 символов).');
+    if ((isArticle || isNews) && title.length < 3) {
+      throw new ValidationError(
+        isArticle
+          ? 'Для статьи обязателен заголовок (не менее 3 символов).'
+          : 'Для новости обязателен заголовок (не менее 3 символов).'
+      );
     }
 
     return new Post({

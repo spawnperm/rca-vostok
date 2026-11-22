@@ -48,16 +48,21 @@ function FeedComposer({ onPublished, canPublish }: FeedComposerProps) {
     event.preventDefault();
     setError(null);
 
-    if (body.trim().length < (kind === 'article' ? 200 : 2)) {
+    // Mirrors the domain floors: an article needs 200 characters, a news item
+    // 40, and a plain update just a few words.
+    const minBody = kind === 'article' ? 200 : kind === 'news' ? 40 : 2;
+    if (body.trim().length < minBody) {
       setError(
         kind === 'article'
           ? 'Статья должна содержать не менее 200 символов.'
-          : 'Напишите хотя бы несколько слов.'
+          : kind === 'news'
+            ? 'Новость должна содержать не менее 40 символов.'
+            : 'Напишите хотя бы несколько слов.'
       );
       return;
     }
-    if (kind === 'article' && title.trim().length < 3) {
-      setError('Для статьи нужен заголовок.');
+    if ((kind === 'article' || kind === 'news') && title.trim().length < 3) {
+      setError(kind === 'article' ? 'Для статьи нужен заголовок.' : 'Для новости нужен заголовок.');
       return;
     }
 
@@ -70,7 +75,7 @@ function FeedComposer({ onPublished, canPublish }: FeedComposerProps) {
 
       const post = await socialApi.createPost({
         kind,
-        title: kind === 'article' ? title.trim() : undefined,
+        title: kind === 'article' || kind === 'news' ? title.trim() : undefined,
         body: body.trim(),
         tags,
       });
@@ -91,8 +96,8 @@ function FeedComposer({ onPublished, canPublish }: FeedComposerProps) {
       onSubmit={submit}
       className="bg-white border border-slate-200 rounded-xl p-5 space-y-3"
     >
-      <div className="flex items-center gap-2">
-        {(['update', 'article'] as PostKind[]).map((k) => (
+      <div className="flex flex-wrap items-center gap-2">
+        {(['update', 'article', 'news'] as PostKind[]).map((k) => (
           <button
             key={k}
             type="button"
@@ -103,17 +108,23 @@ function FeedComposer({ onPublished, canPublish }: FeedComposerProps) {
                 : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
             }`}
           >
-            {k === 'update' ? 'Запись' : 'Статья в блог'}
+            {k === 'update' ? 'Запись' : k === 'article' ? 'Статья в блог' : 'Новость на сайт'}
           </button>
         ))}
       </div>
 
-      {kind === 'article' && (
+      {kind === 'news' && (
+        <p className="text-[11px] text-teal-800 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+          Новость сразу появится на публичной странице в разделе «Новости».
+        </p>
+      )}
+
+      {(kind === 'article' || kind === 'news') && (
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Заголовок статьи"
+          placeholder={kind === 'article' ? 'Заголовок статьи' : 'Заголовок новости'}
           className="w-full px-3 py-2.5 text-sm font-medium border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
         />
       )}
