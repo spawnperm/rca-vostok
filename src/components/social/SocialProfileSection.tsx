@@ -200,7 +200,12 @@ export function SocialProfileSection({
         </p>
       )}
 
-      {tab === 'feed' && <FeedSection canInteract={Boolean(currentUserId)} />}
+      {tab === 'feed' && (
+        <FeedSection
+          canInteract={Boolean(currentUserId)}
+          canPublishNews={can('social:moderate')}
+        />
+      )}
 
       {tab === 'chat' && (
         <ChatSection

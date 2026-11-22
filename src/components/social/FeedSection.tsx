@@ -19,6 +19,12 @@ import {
 interface FeedComposerProps {
   onPublished: (post: FeedPost) => void;
   canPublish: boolean;
+  /**
+   * Publishing news means publishing to the public landing page, so the mode
+   * is only offered to moderators. The server enforces the same rule; hiding
+   * the button just avoids offering an action that would be rejected.
+   */
+  canPublishNews: boolean;
 }
 
 /**
@@ -28,7 +34,7 @@ interface FeedComposerProps {
  * `kind` switches the validation rules server-side (an article requires a
  * title and at least 200 characters).
  */
-function FeedComposer({ onPublished, canPublish }: FeedComposerProps) {
+function FeedComposer({ onPublished, canPublish, canPublishNews }: FeedComposerProps) {
   const [kind, setKind] = useState<PostKind>('update');
   const [title, setTitle] = useState<string>('');
   const [body, setBody] = useState<string>('');
@@ -97,7 +103,10 @@ function FeedComposer({ onPublished, canPublish }: FeedComposerProps) {
       className="bg-white border border-slate-200 rounded-xl p-5 space-y-3"
     >
       <div className="flex flex-wrap items-center gap-2">
-        {(['update', 'article', 'news'] as PostKind[]).map((k) => (
+        {(canPublishNews
+          ? (['update', 'article', 'news'] as PostKind[])
+          : (['update', 'article'] as PostKind[])
+        ).map((k) => (
           <button
             key={k}
             type="button"
@@ -414,7 +423,13 @@ function PostDetail({
   );
 }
 
-export function FeedSection({ canInteract }: { canInteract: boolean }) {
+export function FeedSection({
+  canInteract,
+  canPublishNews = false,
+}: {
+  canInteract: boolean;
+  canPublishNews?: boolean;
+}) {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [filter, setFilter] = useState<'all' | 'article'>('all');
@@ -480,6 +495,7 @@ export function FeedSection({ canInteract }: { canInteract: boolean }) {
 
       <FeedComposer
         canPublish={canInteract}
+        canPublishNews={canPublishNews}
         onPublished={(post) => setPosts((prev) => [post, ...prev])}
       />
 

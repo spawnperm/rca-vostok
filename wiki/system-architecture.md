@@ -96,7 +96,7 @@
 
 | Контекст | Домен | Таблицы | Ключевые правила |
 |---|---|---|---|
-| `social` | `Post`, `Comment`, `SocialProfile` | `posts`, `post_comments`, `post_likes`, `social_profiles`, `social_follows`, `social_activity` | Три вида: `update`, `article` (заголовок и ≥200 символов), `news` (заголовок и ≥40 символов, выводится на публичный лендинг); статья требует заголовок и ≥200 символов; теги дубликаты схлопываются, лимит 8; удаление записи мягкое (`status='removed'`) |
+| `social` | `Post`, `Comment`, `SocialProfile` | `posts`, `post_comments`, `post_likes`, `social_profiles`, `social_follows`, `social_activity` | Три вида: `update`, `article` (заголовок и ≥200 символов), `news` (заголовок и ≥40 символов, выводится на публичный лендинг; публикация и правка требуют права `social:moderate`, то есть доступны только кураторам и администраторам); статья требует заголовок и ≥200 символов; теги дубликаты схлопываются, лимит 8; удаление записи мягкое (`status='removed'`) |
 | `chat` | `Channel`, `ChatMessage` | `chat_channels`, `chat_members`, `chat_messages`, `chat_reactions` | Модель повторяет объекты Mattermost (`Channel`/`Member`/`Post`/`Reaction`); `rootId` превращает сообщение в ответ треда; реакции валидируются по белому списку эмодзи |
 | `media` | `Album`, `MediaAsset` | `media_albums`, `media_assets` | Тип выводится из MIME; лимиты 15 МБ (изображение), 300 МБ (видео), 50 МБ (аудио); приватный альбом отдаётся только владельцу |
 

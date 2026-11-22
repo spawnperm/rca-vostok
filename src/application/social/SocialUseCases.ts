@@ -176,6 +176,14 @@ export class CreatePostUseCase {
     actor.assertCan(PERMISSIONS.PUBLISH_POST);
     const input = parseOrThrow(createPostSchema, rawInput);
 
+    // News is rendered on the public landing page, so it is curated content:
+    // posting it requires the moderator capability, not merely the ability to
+    // write in the community feed. Without this a candidate could put arbitrary
+    // text on the site's front page.
+    if (input.kind === 'news') {
+      actor.assertCan(PERMISSIONS.MODERATE_CONTENT);
+    }
+
     const post = Post.create({
       authorId: actor.id,
       authorName: actor.fullName.value,
@@ -232,6 +240,14 @@ export class UpdatePostUseCase {
       actor.assertCan(PERMISSIONS.MODERATE_CONTENT);
     } else {
       actor.assertCan(PERMISSIONS.PUBLISH_POST);
+    }
+
+    // Editing a news item changes text that is already on the public landing
+    // page, so it needs the same moderator capability that publishing it does.
+    // Checking the stored kind (not the request) also prevents an author from
+    // publishing a plain update and later turning it into news.
+    if (post.kind === 'news') {
+      actor.assertCan(PERMISSIONS.MODERATE_CONTENT);
     }
 
     const input = parseOrThrow(updatePostSchema, rawInput);
