@@ -97,21 +97,35 @@ export async function runMigrations(pool: pg.Pool): Promise<void> {
   // unique constraint `ON CONFLICT DO NOTHING` silently does nothing and each
   // save duplicates the entire window.
   //
-  // Repair first: duplicates written before the natural key existed would make
-  // the unique index impossible to create (and inflate analytics counts).
-  // Keep the lowest id per (session_id, event_key).
-  await pool.query(`
-    DELETE FROM analytics_events a
-     USING analytics_events b
-     WHERE a.id > b.id
-       AND a.session_id = b.session_id
-       AND a.event_key = b.event_key;
-  `);
+  // Repair before indexing: pre-existing duplicates make the unique index
+  // impossible to create. The dedupe is a single ordered pass over a window
+  // function — a self-join (`DELETE ... USING analytics_events b`) degenerates
+  // into an O(n^2) scan without an index and hung production for 10+ minutes.
+  // Only run when the index is missing, so a healthy DB skips it entirely.
+  const hasNaturalKey = await pool.query<{ exists: boolean }>(
+    `SELECT to_regclass('analytics_events_natural_key') IS NOT NULL AS exists`
+  );
 
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS analytics_events_natural_key
-      ON analytics_events (session_id, event_key);
-  `);
+  if (!hasNaturalKey.rows[0]?.exists) {
+    await pool.query(`
+      DELETE FROM analytics_events
+       WHERE id IN (
+         SELECT id FROM (
+           SELECT id,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY session_id, event_key ORDER BY id
+                  ) AS rn
+             FROM analytics_events
+         ) ranked
+         WHERE rn > 1
+       );
+    `);
+
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS analytics_events_natural_key
+        ON analytics_events (session_id, event_key);
+    `);
+  }
 
   await pool.query(`
     CREATE INDEX IF NOT EXISTS analytics_events_session_idx
