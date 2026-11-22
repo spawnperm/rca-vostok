@@ -16,6 +16,7 @@ import {
   ConsultingSection,
   ContactsSection,
 } from './components/landing/LandingSections';
+import { NewsSection, RoutesSection } from './components/landing/NewsAndRoutes';
 import { LANDING_SECTIONS } from './data/landingContent';
 import { applySectionSeo, SECTION_SEO_MAP, type SiteTabId } from './utils/seo';
 import { tracker } from './utils/tracker';
@@ -50,6 +51,8 @@ const LANDING_TABS = new Set<SiteTabId>([
   'preparation',
   'certification',
   'consulting',
+  'news',
+  'routes',
   'contacts',
 ]);
 
@@ -215,6 +218,8 @@ export default function App() {
                 <PreparationSection />
                 <CertificationSection />
                 <ConsultingSection />
+                <NewsSection />
+                <RoutesSection />
                 <ContactsSection />
               </div>
             )}
@@ -222,6 +227,8 @@ export default function App() {
             {activeTab === 'preparation' && <PreparationSection />}
             {activeTab === 'certification' && <CertificationSection />}
             {activeTab === 'consulting' && <ConsultingSection />}
+            {activeTab === 'news' && <NewsSection />}
+            {activeTab === 'routes' && <RoutesSection />}
             {activeTab === 'contacts' && <ContactsSection />}
 
             {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}

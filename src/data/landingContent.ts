@@ -146,6 +146,8 @@ export const LANDING_SECTIONS: readonly LandingSection[] = [
   { id: 'preparation', label: 'Подготовка' },
   { id: 'certification', label: 'Аттестация' },
   { id: 'consulting', label: 'Консалтинг' },
+  { id: 'news', label: 'Новости' },
+  { id: 'routes', label: 'Маршруты' },
   { id: 'contacts', label: 'Связь' },
 ];
 
