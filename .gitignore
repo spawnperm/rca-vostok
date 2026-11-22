@@ -7,3 +7,12 @@ coverage/
 .env*
 !.env.example
 /data/
+
+# pnpm's local state
+.pnpm-store/
+.pnpm-debug.log*
+
+# Foreign lockfiles (the project builds with pnpm)
+package-lock.json
+yarn.lock
+bun.lock

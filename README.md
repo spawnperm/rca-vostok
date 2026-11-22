@@ -13,9 +13,14 @@
 
 ## Локальный запуск
 
+Проект использует **pnpm** (версия зафиксирована в поле `packageManager`).
+Если pnpm ещё не установлен, включите его через Corepack — Node сам поставит
+нужную версию:
+
 ```bash
-npm install
-npm run dev
+corepack enable
+pnpm install
+pnpm run dev
 ```
 
 Приложение запускается на порту `3000` (`server.ts` + Vite).
@@ -23,8 +28,16 @@ npm run dev
 ## Сборка и запуск в продакшене
 
 ```bash
-npm run build
-npm run start
+pnpm run build
+pnpm run start
+```
+
+## Проверки качества
+
+```bash
+pnpm run lint     # типизация (tsc --noEmit)
+pnpm test         # доменные и прикладные тесты
+pnpm run verify   # lint + test + build одной командой
 ```
 
 ## База знаний проекта (LLM Wiki)

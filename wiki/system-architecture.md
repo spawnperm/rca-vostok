@@ -97,6 +97,13 @@
 
 ## 4. Команды сборки и проверки
 
-- Разработка: `npm run dev` (`tsx server.ts`)
-- Проверка типов: `npm run lint` (`tsc --noEmit`)
-- Продакшен-сборка и запуск: `npm run build` (`vite build`) → `npm run start` (`node server.ts`)
+Менеджер пакетов — **pnpm** (зафиксирован в `packageManager`, запускается через Corepack). Локфайл `pnpm-lock.yaml` обязателен; `package-lock.json`, `yarn.lock` и `bun.lock` игнорируются.
+
+- Установка: `pnpm install` (в CI и Docker — `pnpm install --frozen-lockfile`)
+- Разработка: `pnpm run dev` (`tsx server.ts`)
+- Проверка типов: `pnpm run lint` (`tsc --noEmit`)
+- Тесты: `pnpm test` (`node --test tests/*.test.ts`)
+- Продакшен-сборка и запуск: `pnpm run build` (`vite build`) → `pnpm run start` (`node server.ts`)
+- Полный гейт: `pnpm run verify` (lint + test + build)
+
+**Разрешения на build-скрипты.** pnpm 11 по умолчанию не выполняет postinstall-скрипты зависимостей. Разрешённые пакеты перечислены явно в `pnpm-workspace.yaml` (`allowBuilds`): `esbuild` (скачивает платформенный бинарник), `@google/genai` и `protobufjs`. Без записи `esbuild: true` сборка и `tsx` падают; добавление новой зависимости со скриптом требует такой же записи, иначе pnpm завершится с `ERR_PNPM_IGNORED_BUILDS`.

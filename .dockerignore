@@ -4,6 +4,11 @@ dist
 build
 coverage
 
+# Foreign lockfiles: the image builds with pnpm only.
+package-lock.json
+yarn.lock
+bun.lock
+
 # Local data stores created at runtime (root only: src/data holds source code)
 /data
 

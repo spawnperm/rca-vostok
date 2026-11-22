@@ -28,11 +28,11 @@
 | 1 | **Предметное моделирование (DDD)** | Value Objects, Aggregate Root `CertificationInquiry`, Domain Services `DemandForecastService` и `AnalyticsAggregationService`, шина событий `DomainEventBus` |
 | 2 | **Слоистая / гексагональная архитектура** | Чёткое разделение `src/domain/` → `src/application/` → `src/infrastructure/` → HTTP-адаптер `server.ts` и React UI `src/components/` |
 | 3 | **Безопасность и валидация границ** | Строгая валидация DTO через Value Objects, изоляция путей [`PathConfinement.ts`](../src/infrastructure/persistence/PathConfinement.ts), заголовки `nosniff`/`Referrer-Policy`, отключение `X-Powered-By`, отсутствие ПДн в публичной статистике |
-| 4 | **Качество кода и статический анализ** | Строгая типизация TypeScript, `npm run lint` (`tsc --noEmit`), совместимость со strip-types Node 22 |
-| 5 | **Автоматизированное тестирование** | Нативный набор тестов `npm test` ([`tests/ddd-domain.test.ts`](../tests/ddd-domain.test.ts)) для инвариантов DDD, формулы потребности и Use Cases |
+| 4 | **Качество кода и статический анализ** | Строгая типизация TypeScript, `pnpm run lint` (`tsc --noEmit`), совместимость со strip-types Node 22 |
+| 5 | **Автоматизированное тестирование** | Нативный набор тестов `pnpm test` ([`tests/ddd-domain.test.ts`](../tests/ddd-domain.test.ts)) для инвариантов DDD, формулы потребности и Use Cases |
 | 6 | **Производительность и оптимизация** | Лимитирование буфера телеметрии (`500` сессий / `5000` событий), кэширование в `JsonFileAnalyticsRepository`, `useMemo` в UI, GPU-анимация (`transform: scaleX`) |
 | 7 | **Наблюдаемость и телеметрия** | Структурированное JSON-логирование доменных событий (без ПДн) через `InMemoryDomainEventBus` и health-check эндпоинт `GET /api/health` (`GetSystemHealthUseCase`) |
 | 8 | **Надёжность и отказоустойчивость** | React [`ErrorBoundary.tsx`](../src/components/ErrorBoundary.tsx), атомарная запись файлов через `.tmp` + `fs.renameSync`, устойчивый парсинг JSON с fallback |
 | 9 | **Доступность и UX-стандарты** | Единая дизайн-конституция, `tabular-nums`, `focus-visible`, `role="alert"`, WCAG AA контраст |
 | 10 | **Документация и управление знаниями** | Поддерживаемая [`LLM Wiki`](./index.md) с фиксацией схемы, контекста и архитектурных решений |
-| 11 | **CI/CD и инженерные гейты качества** | Скрипт `npm run verify` и workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) для автоматической проверки при пуше в `main` |
+| 11 | **CI/CD и инженерные гейты качества** | Скрипт `pnpm run verify` и workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) для автоматической проверки при пуше в `main` |

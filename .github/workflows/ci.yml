@@ -15,19 +15,27 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # pnpm must be set up before setup-node so the latter can use it as the
+      # cache key and report the resolved version.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'pnpm'
 
+      # --frozen-lockfile: CI must verify the committed lockfile, never
+      # silently re-resolve dependencies.
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: TypeScript static check
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Run DDD domain and application tests
-        run: npm test
+        run: pnpm test
 
       - name: Production bundle build
-        run: npm run build
+        run: pnpm run build
