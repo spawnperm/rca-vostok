@@ -5,6 +5,7 @@ import { tracker } from '../utils/tracker';
 
 interface CenterReviewFormProps {
   user: SessionUser;
+  onSubmitted?: () => void;
 }
 
 const SESSION_TRACKS = [
@@ -23,7 +24,10 @@ const RATING_LABELS: Record<number, string> = {
   5: 'Отлично',
 };
 
-export const CenterReviewForm: React.FC<CenterReviewFormProps> = ({ user }) => {
+export const CenterReviewForm: React.FC<CenterReviewFormProps> = ({
+  user,
+  onSubmitted,
+}) => {
   const [sessionTrack, setSessionTrack] = useState<string>(SESSION_TRACKS[0]);
   const [sessionRating, setSessionRating] = useState<number>(5);
   const [expertsRating, setExpertsRating] = useState<number>(5);
@@ -97,6 +101,7 @@ export const CenterReviewForm: React.FC<CenterReviewFormProps> = ({ user }) => {
         expertsRating,
       });
       setComment('');
+      onSubmitted?.();
       tracker.trackCustomInteraction(
         `Отзыв о центре из кабинета: сессия ${sessionRating}/5, эксперты ${expertsRating}/5`,
         sessionTrack

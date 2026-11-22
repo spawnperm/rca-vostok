@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Menu, UserRound, X } from 'lucide-react';
+import { Bell, ChevronLeft, ChevronRight, Menu, UserRound, X } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { NotificationsModal } from './components/NotificationsModal';
 import {
   LandingHero,
   LearningSection,
@@ -115,6 +116,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+  const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const cleanup = tracker.init(activeTab);
@@ -199,9 +201,28 @@ export default function App() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
+              onClick={() => {
+                setNotificationsOpen(true);
+                tracker.trackCustomInteraction('Открытие окна уведомлений', 'header');
+              }}
+              aria-label="Уведомления"
+              aria-haspopup="dialog"
+              aria-expanded={notificationsOpen}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                notificationsOpen
+                  ? 'bg-teal-50 border-teal-300 text-teal-800'
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Уведомления</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => navigateTo('account')}
               aria-label="Личный кабинет"
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
                 activeTab === 'account'
                   ? 'bg-teal-50 border-teal-300 text-teal-800'
                   : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
@@ -414,6 +435,12 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      <NotificationsModal
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        onNavigate={navigateTo}
+      />
     </div>
   );
 }

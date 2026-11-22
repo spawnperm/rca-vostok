@@ -23,6 +23,7 @@ import {
 import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
 import { CenterReviewForm } from './CenterReviewForm';
+import { ReviewStatsWidget } from './ReviewStatsWidget';
 import {
   ApiError,
   ROLE_LABELS,
@@ -63,6 +64,7 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
     null
   );
   const [selectedExamDate, setSelectedExamDate] = useState<string | undefined>(undefined);
+  const [reviewsRefreshKey, setReviewsRefreshKey] = useState<number>(0);
 
   // A reset link lands on ?tab=account&reset=<token>, so the cabinet opens
   // straight into the "set a new password" step.
@@ -219,7 +221,11 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
             error={inquiriesError}
             onRefresh={() => void loadInquiries()}
           />
-          <CenterReviewForm user={user} />
+          <ReviewStatsWidget refreshKey={reviewsRefreshKey} />
+          <CenterReviewForm
+            user={user}
+            onSubmitted={() => setReviewsRefreshKey((k) => k + 1)}
+          />
           <PasswordCard onChanged={() => setUser(null)} />
         </div>
         <div className="space-y-6">

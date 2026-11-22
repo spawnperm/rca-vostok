@@ -16,6 +16,7 @@ import {
   UpdateInquiryStatusUseCase,
 } from './src/application/certification/InquiryUseCases.ts';
 import {
+  GetCenterReviewsStatsUseCase,
   GetFeedbackStatsUseCase,
   SubmitFeedbackUseCase,
 } from './src/application/feedback/FeedbackUseCases.ts';
@@ -309,6 +310,7 @@ async function startServer() {
   const getInquiryStatsUseCase = new GetInquiryStatsUseCase(inquiryRepo);
   const submitFeedbackUseCase = new SubmitFeedbackUseCase(feedbackRepo, eventBus);
   const getFeedbackStatsUseCase = new GetFeedbackStatsUseCase(feedbackRepo);
+  const getCenterReviewsStatsUseCase = new GetCenterReviewsStatsUseCase(feedbackRepo);
   const getSystemHealthUseCase = new GetSystemHealthUseCase(
     inquiryRepo,
     analyticsRepo,
@@ -663,6 +665,14 @@ async function startServer() {
   app.get('/api/feedback/stats', async (_req, res) => {
     try {
       res.json(await getFeedbackStatsUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  app.get('/api/feedback/reviews-summary', async (_req, res) => {
+    try {
+      res.json(await getCenterReviewsStatsUseCase.execute());
     } catch (err) {
       handleDomainError(err, res);
     }
