@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { AttestationNewsFeed } from './AttestationNewsFeed';
 import { AttestationRoadmap } from './AttestationRoadmap';
+import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import {
   ATTESTATION_FAQ,
   ATTESTATION_TIMELINE_2025_2030,
@@ -1747,6 +1748,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           )}
         </div>
       </section>
+
+      {/* General Platform Feedback Form */}
+      <PlatformFeedbackForm onOpenCuratorModal={openCuratorModal} />
 
       {/* Curator Consultation Modal */}
       {curatorModalOpen && (

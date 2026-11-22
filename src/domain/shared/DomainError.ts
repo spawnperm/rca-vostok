@@ -29,7 +29,7 @@ export class NotFoundError extends DomainError {
 export interface DomainEvent<TPayload = Record<string, unknown>> {
   readonly eventName: string;
   readonly occurredAt: string;
-  readonly boundedContext: 'certification' | 'analytics' | 'research';
+  readonly boundedContext: 'certification' | 'analytics' | 'research' | 'feedback';
   readonly payload: TPayload;
 }
 

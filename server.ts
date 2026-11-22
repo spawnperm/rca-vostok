@@ -12,10 +12,15 @@ import {
   GetInquiryStatsUseCase,
   SubmitInquiryUseCase,
 } from './src/application/certification/InquiryUseCases.ts';
+import {
+  GetFeedbackStatsUseCase,
+  SubmitFeedbackUseCase,
+} from './src/application/feedback/FeedbackUseCases.ts';
 import { GetSystemHealthUseCase } from './src/application/system/HealthCheckUseCase.ts';
 import { DomainError, NotFoundError, ValidationError } from './src/domain/shared/DomainError.ts';
 import { InMemoryDomainEventBus } from './src/infrastructure/events/InMemoryDomainEventBus.ts';
 import { JsonFileAnalyticsRepository } from './src/infrastructure/persistence/JsonFileAnalyticsRepository.ts';
+import { JsonFileFeedbackRepository } from './src/infrastructure/persistence/JsonFileFeedbackRepository.ts';
 import { JsonFileInquiryRepository } from './src/infrastructure/persistence/JsonFileInquiryRepository.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -69,9 +74,22 @@ async function startServer() {
   const eventBus = new InMemoryDomainEventBus();
   const analyticsRepo = new JsonFileAnalyticsRepository(DATA_DIR);
   const inquiryRepo = new JsonFileInquiryRepository(DATA_DIR);
+  const feedbackRepo = new JsonFileFeedbackRepository(DATA_DIR);
 
   // Contour 7: Observability subscriber (logs structured metadata without PII)
   eventBus.subscribe('certification.inquiry_submitted', (event) => {
+    console.info(
+      JSON.stringify({
+        level: 'info',
+        event: event.eventName,
+        boundedContext: event.boundedContext,
+        occurredAt: event.occurredAt,
+        payload: event.payload,
+      })
+    );
+  });
+
+  eventBus.subscribe('platform.feedback_submitted', (event) => {
     console.info(
       JSON.stringify({
         level: 'info',
@@ -89,6 +107,8 @@ async function startServer() {
   const resetAnalyticsUseCase = new ResetAnalyticsUseCase(analyticsRepo);
   const submitInquiryUseCase = new SubmitInquiryUseCase(inquiryRepo, eventBus);
   const getInquiryStatsUseCase = new GetInquiryStatsUseCase(inquiryRepo);
+  const submitFeedbackUseCase = new SubmitFeedbackUseCase(feedbackRepo, eventBus);
+  const getFeedbackStatsUseCase = new GetFeedbackStatsUseCase(feedbackRepo);
   const getSystemHealthUseCase = new GetSystemHealthUseCase(inquiryRepo, analyticsRepo);
 
   // Dynamic robots.txt
@@ -219,6 +239,32 @@ async function startServer() {
         track: body.track,
         experienceNote: body.experienceNote,
         consentAccepted: body.consentAccepted,
+      });
+      res.status(201).json(result);
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  // Bounded Context: Platform Feedback
+  app.get('/api/feedback/stats', (_req, res) => {
+    try {
+      res.json(getFeedbackStatsUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  app.post('/api/feedback', (req, res) => {
+    try {
+      const body = (req.body || {}) as Record<string, unknown>;
+      const result = submitFeedbackUseCase.execute({
+        senderName: body.senderName,
+        email: body.email,
+        feedbackType: body.feedbackType,
+        platformModule: body.platformModule,
+        subject: body.subject,
+        message: body.message,
       });
       res.status(201).json(result);
     } catch (err) {

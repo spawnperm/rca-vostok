@@ -12,8 +12,13 @@ import {
   GetInquiryStatsUseCase,
   SubmitInquiryUseCase,
 } from '../src/application/certification/InquiryUseCases.ts';
+import {
+  GetFeedbackStatsUseCase,
+  SubmitFeedbackUseCase,
+} from '../src/application/feedback/FeedbackUseCases.ts';
 import { CertificationInquiry } from '../src/domain/certification/CertificationInquiry.ts';
 import { DemandForecastService } from '../src/domain/certification/DemandForecastService.ts';
+import { PlatformFeedback } from '../src/domain/feedback/PlatformFeedback.ts';
 import {
   InvariantViolationError,
   NotFoundError,
@@ -22,6 +27,7 @@ import {
 import { EmailAddress, SanitizedText } from '../src/domain/shared/ValueObjects.ts';
 import { InMemoryDomainEventBus } from '../src/infrastructure/events/InMemoryDomainEventBus.ts';
 import { JsonFileAnalyticsRepository } from '../src/infrastructure/persistence/JsonFileAnalyticsRepository.ts';
+import { JsonFileFeedbackRepository } from '../src/infrastructure/persistence/JsonFileFeedbackRepository.ts';
 import { JsonFileInquiryRepository } from '../src/infrastructure/persistence/JsonFileInquiryRepository.ts';
 import { resolveConfinedPath } from '../src/infrastructure/persistence/PathConfinement.ts';
 
@@ -158,4 +164,45 @@ test('Application UseCases + Persistence + DomainEventBus work end-to-end in iso
 test('PathConfinement rejects directory traversal attempts', () => {
   const base = path.resolve('/tmp/rca-safe-dir');
   assert.throws(() => resolveConfinedPath(base, '../../etc/passwd'));
+});
+
+test('PlatformFeedback + FeedbackUseCases validate inputs, allow optional email, and persist records', () => {
+  assert.throws(
+    () =>
+      PlatformFeedback.create({
+        senderName: 'А',
+        feedbackType: 'suggestion',
+        subject: 'Коротко',
+        message: 'Мало',
+      }),
+    ValidationError
+  );
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-vostok-fb-'));
+  try {
+    const eventBus = new InMemoryDomainEventBus();
+    const published: string[] = [];
+    eventBus.subscribe('*', (ev) => published.push(ev.eventName));
+
+    const repo = new JsonFileFeedbackRepository(tempDir);
+    const submit = new SubmitFeedbackUseCase(repo, eventBus);
+    const stats = new GetFeedbackStatsUseCase(repo);
+
+    const res = submit.execute({
+      senderName: 'Турклуб «Сихотэ-Алинь»',
+      email: 'Club@Example.RU',
+      feedbackType: 'suggestion',
+      platformModule: 'Калькулятор и симулятор ДФО',
+      subject: 'Экспорт расчёта по округам',
+      message: 'Добавить выгрузку таблицы расчётной потребности в CSV по выбранным округам Приморья.',
+    });
+
+    assert.equal(res.ok, true);
+    assert.ok(res.id.startsWith('fb-'));
+    assert.equal(res.totalFeedback, 1);
+    assert.equal(stats.execute().totalFeedback, 1);
+    assert.ok(published.includes('platform.feedback_submitted'));
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
