@@ -40,7 +40,7 @@ export class GetSystemHealthUseCase {
       timestamp: new Date().toISOString(),
       architecture: {
         methodology: 'DDD + 11 Engineering Contours',
-        boundedContexts: ['certification', 'analytics', 'research'],
+        boundedContexts: ['certification', 'analytics', 'research', 'feedback', 'identity'],
       },
       persistence: {
         adapter: this.adapterName,
