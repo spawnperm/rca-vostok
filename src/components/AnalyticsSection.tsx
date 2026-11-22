@@ -1,14 +1,21 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   Download,
   ExternalLink,
+  FileSpreadsheet,
+  FileText,
   Pause,
   Play,
   RefreshCw,
   Trash2,
 } from 'lucide-react';
+import {
+  exportDfoAnalyticsCsv,
+  exportDfoAnalyticsPdf,
+} from '../utils/dfoReportExport';
 import {
   runLiveDomSeoAudit,
   SECTION_SEO_MAP,
@@ -19,6 +26,7 @@ import { DFO_REGIONS_DISTRIBUTION } from '../data/researchData';
 import { tracker, type ClientBehaviorEvent } from '../utils/tracker';
 import { DfoDemandForecastChart, type DfoRegionFilterId } from './DfoDemandForecastChart';
 import { DfoHubsInteractiveMap } from './DfoHubsInteractiveMap';
+import { DfoRegionsComparisonTable } from './DfoRegionsComparisonTable';
 import { DfoRegionsDistributionMap } from './DfoRegionsDistributionMap';
 
 interface SessionRecord {
@@ -126,6 +134,11 @@ export const AnalyticsSection: React.FC = () => {
   const [isReplaying, setIsReplaying] = useState<boolean>(false);
   const [heatmapFilterTab, setHeatmapFilterTab] = useState<string>('all');
   const [dfoRegionFilter, setDfoRegionFilter] = useState<DfoRegionFilterId>('all');
+  const [compareRegionAId, setCompareRegionAId] = useState<string>('primorye');
+  const [compareRegionBId, setCompareRegionBId] = useState<string>('kamchatka');
+  const [exportMenuOpen, setExportMenuOpen] = useState<boolean>(false);
+  const [exportingPdf, setExportingPdf] = useState<boolean>(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // SEO state
   const [seoAudit, setSeoAudit] = useState<LiveSeoAuditResult>(() => runLiveDomSeoAudit());
@@ -221,6 +234,47 @@ export const AnalyticsSection: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [isReplaying, replayIndex, sessionEvents.length]);
 
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [exportMenuOpen]);
+
+  const handleExportDfoCsv = () => {
+    exportDfoAnalyticsCsv({
+      regionFilterId: dfoRegionFilter,
+      compareRegionAId,
+      compareRegionBId,
+      analyticsTotals: summary?.totals ?? null,
+    });
+    setExportMenuOpen(false);
+    tracker.trackCustomInteraction('Экспорт отчета ДФО: CSV', dfoRegionFilter);
+  };
+
+  const handleExportDfoPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      await exportDfoAnalyticsPdf({
+        regionFilterId: dfoRegionFilter,
+        compareRegionAId,
+        compareRegionBId,
+        analyticsTotals: summary?.totals ?? null,
+      });
+      tracker.trackCustomInteraction('Экспорт отчета ДФО: PDF', dfoRegionFilter);
+    } catch {
+      setErrorMsg('Не удалось сформировать PDF-отчет.');
+    } finally {
+      setExportingPdf(false);
+      setExportMenuOpen(false);
+    }
+  };
+
   const handleExportJson = () => {
     if (!summary) return;
     const blob = new Blob([JSON.stringify(summary, null, 2)], { type: 'application/json' });
@@ -301,6 +355,68 @@ export const AnalyticsSection: React.FC = () => {
               <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Обновить</span>
             </button>
+            <div ref={exportMenuRef} className="relative">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={exportMenuOpen}
+                onClick={() => setExportMenuOpen((prev) => !prev)}
+                className="px-3.5 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{exportingPdf ? 'Подготовка PDF…' : 'Экспорт отчета'}</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                    exportMenuOpen ? 'rotate-180' : ''
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+
+              {exportMenuOpen && (
+                <div
+                  role="menu"
+                  aria-label="Выбор формата экспорта отчета"
+                  className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-30 space-y-1"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={exportingPdf}
+                    onClick={() => {
+                      void handleExportDfoPdf();
+                    }}
+                    className="w-full px-3 py-2 text-left rounded-lg hover:bg-slate-50 transition-colors flex items-start gap-2.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <FileText className="w-4 h-4 text-teal-700 mt-0.5 shrink-0" aria-hidden="true" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">Отчет в PDF (А4)</p>
+                      <p className="text-[11px] text-slate-500">
+                        Сводка ДФО и парное сравнение
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleExportDfoCsv}
+                    className="w-full px-3 py-2 text-left rounded-lg hover:bg-slate-50 transition-colors flex items-start gap-2.5 cursor-pointer"
+                  >
+                    <FileSpreadsheet
+                      className="w-4 h-4 text-teal-700 mt-0.5 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900">Таблица в CSV (Excel)</p>
+                      <p className="text-[11px] text-slate-500">
+                        Реестр, спрос, дефицит, 2030 г.
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={handleExportJson}
@@ -646,6 +762,18 @@ export const AnalyticsSection: React.FC = () => {
               <DfoHubsInteractiveMap
                 regionFilter={dfoRegionFilter}
                 onSelectRegionFilter={setDfoRegionFilter}
+              />
+
+              {/* Two-Region DFO Certification Metrics Comparison Table */}
+              <DfoRegionsComparisonTable
+                regionAId={compareRegionAId}
+                regionBId={compareRegionBId}
+                onChangeRegionA={setCompareRegionAId}
+                onChangeRegionB={setCompareRegionBId}
+                onExportCsv={handleExportDfoCsv}
+                onExportPdf={() => {
+                  void handleExportDfoPdf();
+                }}
               />
 
               {/* Top Clicked Elements + Devices/Referrers */}
