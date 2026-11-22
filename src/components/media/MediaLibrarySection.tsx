@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Film, Image as ImageIcon, Music, Plus, Trash2, Upload, X } from 'lucide-react';
 import {
   SocialApiError,
@@ -7,6 +7,7 @@ import {
   type MediaAssetData,
 } from '../../utils/socialApi';
 import { MediaPlayer } from './MediaPlayer';
+import { PhotoViewer } from './PhotoViewer';
 
 const ACCEPTED = 'image/jpeg,image/png,image/webp,image/avif,image/gif,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/ogg,audio/wav';
 
@@ -80,8 +81,28 @@ export function MediaLibrarySection({
   const [activeAlbum, setActiveAlbum] = useState<MediaAlbum | null>(null);
   const [assets, setAssets] = useState<MediaAssetData[]>([]);
   const [playerAsset, setPlayerAsset] = useState<MediaAssetData | null>(null);
+  /** Photo currently open in the viewer (images never go to MediaPlayer). */
+  const [viewerPhoto, setViewerPhoto] = useState<MediaAssetData | null>(null);
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Images open in the photo viewer, everything else in the media player.
+  const imageAssets = useMemo(
+    () =>
+      assets
+        .filter((a) => a.kind === 'image' && a.url)
+        .map((a) => ({ id: a.id, url: a.url as string, title: a.title })),
+    [assets]
+  );
+
+  /** Single entry point from a tile: route by asset kind. */
+  const openAsset = useCallback((asset: MediaAssetData) => {
+    if (asset.kind === 'image') {
+      setViewerPhoto(asset);
+    } else {
+      setPlayerAsset(asset);
+    }
+  }, []);
   const [creating, setCreating] = useState<boolean>(false);
   const [albumTitle, setAlbumTitle] = useState<string>('');
 
@@ -255,7 +276,7 @@ export function MediaLibrarySection({
             <AssetTile
               key={asset.id}
               asset={asset}
-              onOpen={setPlayerAsset}
+              onOpen={openAsset}
               onDelete={removeAsset}
               canDelete={Boolean(currentUserId) && asset.ownerId === currentUserId}
             />
@@ -263,7 +284,18 @@ export function MediaLibrarySection({
         </div>
       )}
 
-      {playerAsset && (
+      {/* Photographs get their own viewer: feeding an image URL to <audio> or
+          <video> yields a control bar that can never play, which is what
+          happened before. Video and audio keep the transport controls. */}
+      {viewerPhoto && (
+        <PhotoViewer
+          photos={imageAssets}
+          startIndex={imageAssets.findIndex((p) => p.id === viewerPhoto.id)}
+          onClose={() => setViewerPhoto(null)}
+        />
+      )}
+
+      {playerAsset && playerAsset.kind !== 'image' && (
         <div className="fixed inset-0 z-40 bg-slate-900/80 flex items-center justify-center p-4">
           <div className="w-full max-w-3xl">
             <div className="flex items-center justify-between mb-2">
@@ -279,7 +311,7 @@ export function MediaLibrarySection({
             </div>
             <MediaPlayer
               src={playerAsset.url || ''}
-              kind={playerAsset.kind === 'image' ? 'audio' : playerAsset.kind}
+              kind={playerAsset.kind === 'video' ? 'video' : 'audio'}
               title={playerAsset.title}
             />
           </div>
