@@ -500,6 +500,8 @@ export function readStoredDiagnosticsState(userId?: string | null): StoredDiagno
   }
 }
 
+export const DIAGNOSTICS_UPDATED_EVENT = 'rca-diagnostics-updated';
+
 export function writeStoredDiagnosticsState(
   userId: string | null | undefined,
   state: StoredDiagnosticsState
@@ -509,6 +511,11 @@ export function writeStoredDiagnosticsState(
   }
   try {
     window.localStorage.setItem(getStorageKey(userId), JSON.stringify(state));
+    window.dispatchEvent(
+      new CustomEvent(DIAGNOSTICS_UPDATED_EVENT, {
+        detail: { userId: userId ?? null },
+      })
+    );
   } catch {
     // ignore storage quota errors
   }

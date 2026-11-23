@@ -21,6 +21,7 @@ import {
   MessageSquareText,
   ShieldCheck,
   ShieldAlert,
+  Trophy,
   UserPlus,
   UserRound,
   Users,
@@ -58,6 +59,17 @@ import { RouteComplexityPieWidget } from './RouteComplexityPieWidget';
 import { ProfileAttestationCertificateCard } from './ProfileAttestationCertificateCard';
 import { PreparationChecklistPdfCard } from './PreparationChecklistPdfCard';
 import { QualificationCertificatesJsonExportCard } from './QualificationCertificatesJsonExportCard';
+import {
+  AchievementIcon,
+  InstructorAchievementsWidget,
+  ProfileBadgesShowcase,
+  getTierEmblemClasses,
+} from './InstructorAchievementsWidget';
+import {
+  useInstructorAchievements,
+  type AchievementTargetAction,
+  type InstructorAchievementsSummary,
+} from '../utils/instructorAchievements';
 import {
   dispatchOpenRcaAssistant,
   dispatchRcaUserContext,
@@ -168,14 +180,26 @@ export function AccountSection({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [finalCertPreviewOpen]);
 
+  const resolvedProgressSummary = user
+    ? (liveProgressSummary ?? computeUserAttestationSummary(user, inquiries))
+    : null;
+
+  const achievementsSummary = useInstructorAchievements({
+    user,
+    attestationPercent: resolvedProgressSummary?.percent ?? 0,
+    completedStagesCount: resolvedProgressSummary?.completedStages ?? 0,
+    inquiries,
+    linkedAccounts,
+    selfCheckRevision,
+  });
+
   useEffect(() => {
     if (!user) {
       dispatchRcaUserContext({ user: null, progressSummary: null });
       return;
     }
-    const summary = liveProgressSummary ?? computeUserAttestationSummary(user, inquiries);
-    dispatchRcaUserContext({ user, progressSummary: summary });
-  }, [user, liveProgressSummary, inquiries]);
+    dispatchRcaUserContext({ user, progressSummary: resolvedProgressSummary });
+  }, [user, resolvedProgressSummary]);
 
   const openAiAssistant = useCallback((prompt?: string) => {
     dispatchOpenRcaAssistant({ prompt, mode: 'rag' });
@@ -335,6 +359,22 @@ export function AccountSection({
     scrollToElementById('account-knowledge-base');
   };
 
+  const jumpToAchievementAction = (action: AchievementTargetAction) => {
+    const targetMap: Record<AchievementTargetAction, string> = {
+      experience: 'professional-experience-log',
+      attestation: 'attestation-progress-widget',
+      profile: 'account-profile-card',
+      diagnostics: 'attestation-self-diagnostics',
+      self_check: 'qualification-self-check',
+      linked: 'account-linked-profiles',
+    };
+    if (!user && (action === 'profile' || action === 'attestation' || action === 'linked')) {
+      scrollToElementById('account-auth-panel');
+      return;
+    }
+    scrollToElementById(targetMap[action] ?? 'professional-experience-log');
+  };
+
   if (!user) {
     return (
       <div className="space-y-6">
@@ -402,6 +442,12 @@ export function AccountSection({
           user={null}
           onJumpToJournal={() => scrollToElementById('professional-experience-log')}
         />
+        <InstructorAchievementsWidget
+          user={null}
+          summary={achievementsSummary}
+          onActionJump={jumpToAchievementAction}
+          onFocusAuth={() => scrollToElementById('account-auth-panel')}
+        />
         <AttestationSessionsCalendarWidget
           user={null}
           inquiries={[]}
@@ -458,7 +504,7 @@ export function AccountSection({
   }
 
   const effectiveProgressSummary =
-    liveProgressSummary ?? computeUserAttestationSummary(user, inquiries);
+    resolvedProgressSummary ?? computeUserAttestationSummary(user, inquiries);
   const isAttestationComplete = isAttestationEligibleForCertificate(effectiveProgressSummary);
 
   const handleDownloadFinalCertificate = () => {
@@ -489,6 +535,7 @@ export function AccountSection({
     <div className="space-y-6">
       <CabinetHeader
         user={user}
+        achievementsSummary={achievementsSummary}
         isAttestationComplete={isAttestationComplete}
         certificateBusy={finalCertBusy}
         onDownloadCertificate={handleDownloadFinalCertificate}
@@ -502,6 +549,7 @@ export function AccountSection({
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
         onJumpToResume={() => scrollToElementById('instructor-resume-generator')}
         onJumpToExperienceLog={() => scrollToElementById('professional-experience-log')}
+        onJumpToAchievements={() => scrollToElementById('instructor-achievements')}
         onJumpToCertificateGenerator={() => scrollToElementById('account-certificate-generator')}
         onJumpToChecklistPdf={() => scrollToElementById('account-checklist-pdf')}
         onJumpToJsonExport={() => scrollToElementById('account-json-export')}
@@ -696,6 +744,11 @@ export function AccountSection({
         user={user}
         onJumpToJournal={() => scrollToElementById('professional-experience-log')}
       />
+      <InstructorAchievementsWidget
+        user={user}
+        summary={achievementsSummary}
+        onActionJump={jumpToAchievementAction}
+      />
       <ProfileAttestationCertificateCard
         user={user}
         summary={effectiveProgressSummary}
@@ -826,7 +879,12 @@ export function AccountSection({
             }
             onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
           />
-          <ProfileCard user={user} onUpdated={handleAuthenticated} />
+          <ProfileCard
+            user={user}
+            achievementsSummary={achievementsSummary}
+            onUpdated={handleAuthenticated}
+            onJumpToAchievements={() => scrollToElementById('instructor-achievements')}
+          />
           <PasswordCard onChanged={() => setUser(null)} />
         </div>
         <div className="space-y-6">
@@ -1154,6 +1212,7 @@ function Field({
 
 function CabinetHeader({
   user,
+  achievementsSummary,
   isAttestationComplete,
   certificateBusy,
   onDownloadCertificate,
@@ -1167,6 +1226,7 @@ function CabinetHeader({
   onJumpToPassport,
   onJumpToResume,
   onJumpToExperienceLog,
+  onJumpToAchievements,
   onJumpToCertificateGenerator,
   onJumpToChecklistPdf,
   onJumpToJsonExport,
@@ -1174,6 +1234,7 @@ function CabinetHeader({
   onJumpToReviews,
 }: {
   user: SessionUser;
+  achievementsSummary: InstructorAchievementsSummary;
   isAttestationComplete: boolean;
   certificateBusy: boolean;
   onDownloadCertificate: () => void;
@@ -1187,14 +1248,17 @@ function CabinetHeader({
   onJumpToPassport: () => void;
   onJumpToResume: () => void;
   onJumpToExperienceLog: () => void;
+  onJumpToAchievements: () => void;
   onJumpToCertificateGenerator: () => void;
   onJumpToChecklistPdf: () => void;
   onJumpToJsonExport: () => void;
   onJumpToFaq: () => void;
   onJumpToReviews: () => void;
 }) {
+  const featuredProfileBadges = achievementsSummary.featuredBadges.slice(0, 4);
+
   return (
-    <section className="bg-white border border-slate-200 rounded-xl p-6">
+    <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0">
@@ -1210,6 +1274,17 @@ function CabinetHeader({
               </span>
               <span aria-hidden="true">·</span>
               <span>{user.region}</span>
+              <span aria-hidden="true">·</span>
+              <button
+                type="button"
+                onClick={onJumpToAchievements}
+                className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-teal-800 hover:text-teal-950 cursor-pointer tabular-nums"
+              >
+                <Trophy className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+                <span>
+                  Бейджи: {achievementsSummary.unlockedCount}/{achievementsSummary.totalCount}
+                </span>
+              </button>
             </div>
           </div>
         </div>
@@ -1301,6 +1376,15 @@ function CabinetHeader({
 
           <button
             type="button"
+            onClick={onJumpToAchievements}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <Trophy className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+            <span>Достижения ({achievementsSummary.unlockedCount})</span>
+          </button>
+
+          <button
+            type="button"
             onClick={onJumpToCertificateGenerator}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
@@ -1363,6 +1447,45 @@ function CabinetHeader({
           </button>
         </div>
       </div>
+
+      {featuredProfileBadges.length > 0 && (
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium text-slate-500">
+              Активные бейджи профиля:
+            </span>
+            {featuredProfileBadges.map((badge) => {
+              const styles = getTierEmblemClasses(badge.tier, true);
+              return (
+                <button
+                  key={badge.id}
+                  type="button"
+                  onClick={onJumpToAchievements}
+                  title={badge.description}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <span
+                    className={`w-4 h-4 rounded flex items-center justify-center ${styles.emblemBox}`}
+                  >
+                    <AchievementIcon iconKey={badge.iconKey} className="w-3 h-3" />
+                  </span>
+                  <span>{badge.shortBadgeLabel}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {achievementsSummary.unlockedCount > featuredProfileBadges.length && (
+            <button
+              type="button"
+              onClick={onJumpToAchievements}
+              className="text-xs font-semibold text-teal-800 hover:text-teal-950 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              + ещё {achievementsSummary.unlockedCount - featuredProfileBadges.length}
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -1371,10 +1494,14 @@ function CabinetHeader({
 
 function ProfileCard({
   user,
+  achievementsSummary,
   onUpdated,
+  onJumpToAchievements,
 }: {
   user: SessionUser;
+  achievementsSummary: InstructorAchievementsSummary;
   onUpdated: (user: SessionUser) => void;
+  onJumpToAchievements?: () => void;
 }) {
   const [fullName, setFullName] = useState<string>(user.fullName);
   const [region, setRegion] = useState<string>(user.region);
@@ -1519,6 +1646,11 @@ function ProfileCard({
           </div>
         )}
       </form>
+
+      <ProfileBadgesShowcase
+        summary={achievementsSummary}
+        onJumpToAchievements={onJumpToAchievements}
+      />
     </section>
   );
 }

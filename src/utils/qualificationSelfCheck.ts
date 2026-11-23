@@ -286,10 +286,18 @@ export function readStoredSelfCheck(userId: string): StoredSelfCheckState {
   }
 }
 
+export const SELF_CHECK_UPDATED_EVENT = 'rca-self-check-updated';
+
 export function writeStoredSelfCheck(userId: string, state: StoredSelfCheckState): void {
+
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(state));
+    window.dispatchEvent(
+      new CustomEvent(SELF_CHECK_UPDATED_EVENT, {
+        detail: { userId },
+      })
+    );
   } catch {
     // ignore quota errors
   }
