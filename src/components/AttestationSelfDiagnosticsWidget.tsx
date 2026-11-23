@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Award,
   BookOpen,
   CalendarDays,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   GraduationCap,
   Headset,
   HeartPulse,
+  Lock,
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
@@ -33,6 +35,11 @@ import {
   type DiagnosticSectionStatus,
   type StoredDiagnosticsState,
 } from '../utils/attestationSelfDiagnostics';
+import {
+  DEMO_CERTIFICATE_THRESHOLD_PERCENT,
+  isEligibleForDemoCertificate,
+} from '../utils/demoCertificateCanvas';
+import { DemoCertificateModal } from './DemoCertificateModal';
 import { tracker } from '../utils/tracker';
 
 interface AttestationSelfDiagnosticsWidgetProps {
@@ -133,6 +140,7 @@ export const AttestationSelfDiagnosticsWidget: React.FC<
   const [state, setState] = useState<StoredDiagnosticsState>(() =>
     readStoredDiagnosticsState(userId)
   );
+  const [demoCertModalOpen, setDemoCertModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     setState(readStoredDiagnosticsState(userId));
@@ -142,6 +150,8 @@ export const AttestationSelfDiagnosticsWidget: React.FC<
     () => evaluateAttestationDiagnostics(state.answers),
     [state.answers]
   );
+
+  const canGenerateDemoCertificate = isEligibleForDemoCertificate(evaluation);
 
   const persistState = (next: StoredDiagnosticsState) => {
     setState(next);
@@ -669,13 +679,71 @@ export const AttestationSelfDiagnosticsWidget: React.FC<
               </div>
             </div>
 
-            <div className="pt-3 border-t border-black/10 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="pt-3 border-t border-black/10 flex flex-wrap items-center justify-between gap-3 text-xs">
               <span>
                 <span className="font-semibold">Рекомендуемая траектория:</span>{' '}
                 {evaluation.recommendedContour}
               </span>
+
+              {canGenerateDemoCertificate ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDemoCertModalOpen(true);
+                    tracker.trackCustomInteraction(
+                      `Демо-сертификат: открытие генератора (${evaluation.overallPercent}%)`,
+                      'account'
+                    );
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                >
+                  <Award className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>Сгенерировать демо-сертификат</span>
+                </button>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-slate-600 font-medium">
+                  <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span>
+                    Демо-сертификат откроется после всех 12 вопросов с результатом выше{' '}
+                    {DEMO_CERTIFICATE_THRESHOLD_PERCENT}%
+                  </span>
+                </span>
+              )}
             </div>
           </div>
+
+          {canGenerateDemoCertificate && (
+            <div className="bg-teal-50/70 border border-teal-200 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-teal-800 inline-flex items-center gap-1.5">
+                  <Award className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>Порог {DEMO_CERTIFICATE_THRESHOLD_PERCENT}% успешно преодолён</span>
+                </p>
+                <p className="text-sm font-bold text-slate-900">
+                  Доступен визуальный демо-сертификат готовности к аттестации
+                </p>
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  Сформируйте именной макет с вашим результатом ({evaluation.overallPercent}%) и
+                  разбивкой по 4 разделам в формате PNG для портфолио или самоподготовки.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDemoCertModalOpen(true);
+                  tracker.trackCustomInteraction(
+                    `Демо-сертификат: открытие генератора (${evaluation.overallPercent}%)`,
+                    'account'
+                  );
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+              >
+                <Award className="w-4 h-4 text-teal-300 shrink-0" aria-hidden="true" />
+                <span>Открыть демо-сертификат ({user?.fullName ? user.fullName.split(' ')[0] : 'PNG'})</span>
+              </button>
+            </div>
+          )}
 
           {/* 4-Section Breakdown Grid */}
           <div className="space-y-2.5">
@@ -881,6 +949,12 @@ export const AttestationSelfDiagnosticsWidget: React.FC<
           </div>
         </div>
       )}
+      <DemoCertificateModal
+        isOpen={demoCertModalOpen}
+        onClose={() => setDemoCertModalOpen(false)}
+        user={user}
+        evaluation={evaluation}
+      />
     </section>
   );
 };

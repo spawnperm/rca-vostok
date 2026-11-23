@@ -7,6 +7,7 @@ import {
   RECOMMENDATIONS,
 } from '../data/researchData';
 import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
+import { DfoSubjectsD3SvgMap } from './DfoSubjectsD3SvgMap';
 import { DfoGeographyLeafletMap } from './DfoGeographyLeafletMap';
 import { PrimoryeActivityMap } from './PrimoryeActivityMap';
 
@@ -101,6 +102,9 @@ export const MarketSection: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* Interactive D3.js SVG Map of DFO Subjects with Hover Stats */}
+      <DfoSubjectsD3SvgMap />
 
       {/* React-Leaflet Geography: Certified Routes & RCA Offices */}
       <DfoGeographyLeafletMap />

@@ -5,6 +5,7 @@ import { DemandForecastService } from '../domain/certification/DemandForecastSer
 import { DemandDynamics2030Chart } from './DemandDynamics2030Chart';
 import { DfoRegionalForecastModule } from './DfoRegionalForecastModule';
 import { TrainingAndAttestationCostEstimator } from './TrainingAndAttestationCostEstimator';
+import { IntensiveAttestationCostModule } from './IntensiveAttestationCostModule';
 import { TrainingCostByComplexityChart } from './TrainingCostByComplexityChart';
 import { StateDutyAttestationCalculator } from './StateDutyAttestationCalculator';
 import { AttestationKnowledgeQuiz } from './AttestationKnowledgeQuiz';
@@ -580,6 +581,9 @@ export const CalculatorSection: React.FC = () => {
 
       {/* Training & Attestation Cost Estimator by Guide Category and DFO Region */}
       <TrainingAndAttestationCostEstimator />
+
+      {/* Auxiliary cost estimator by complexity category & intensive days */}
+      <IntensiveAttestationCostModule />
 
       {/* Recharts stacked bar chart of training cost across 1-3 complexity categories */}
       <TrainingCostByComplexityChart />
