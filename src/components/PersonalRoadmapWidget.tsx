@@ -28,6 +28,7 @@ interface PersonalRoadmapWidgetProps {
   user: SessionUser;
   summary: UserAttestationSummary;
   onExamDateChange?: (examDateIso: string) => void;
+  onContourChange?: (contour: PreparationContour) => void;
 }
 
 function formatOffsetLabel(offsetDays: number): string {
@@ -73,6 +74,7 @@ export const PersonalRoadmapWidget: React.FC<PersonalRoadmapWidgetProps> = ({
   user,
   summary,
   onExamDateChange,
+  onContourChange,
 }) => {
   const [prefs, setPrefs] = useState(() => readStoredRoadmapPrefs(user.id));
   const [icsNotice, setIcsNotice] = useState<string | null>(null);
@@ -81,7 +83,8 @@ export const PersonalRoadmapWidget: React.FC<PersonalRoadmapWidgetProps> = ({
     const loaded = readStoredRoadmapPrefs(user.id);
     setPrefs(loaded);
     onExamDateChange?.(loaded.examDateIso);
-  }, [user.id, onExamDateChange]);
+    onContourChange?.(loaded.contour);
+  }, [user.id, onExamDateChange, onContourChange]);
 
   const plan = useMemo(
     () => buildPersonalRoadmap(prefs.examDateIso, prefs.contour, summary),
@@ -123,6 +126,7 @@ export const PersonalRoadmapWidget: React.FC<PersonalRoadmapWidgetProps> = ({
     const next = { ...prefs, contour };
     setPrefs(next);
     writeStoredRoadmapPrefs(user.id, next);
+    onContourChange?.(contour);
     tracker.trackCustomInteraction(
       'Смена контура подготовки в дорожной карте',
       contour === 'contour_b' ? 'Контур Б (ДПО)' : 'Контур А (Стаж)'
@@ -138,8 +142,9 @@ export const PersonalRoadmapWidget: React.FC<PersonalRoadmapWidgetProps> = ({
 
   return (
     <section
+      id="personal-roadmap-widget"
       aria-labelledby="personal-roadmap-heading"
-      className="bg-white border border-slate-200 rounded-xl p-6 space-y-6"
+      className="bg-white border border-slate-200 rounded-xl p-6 space-y-6 scroll-mt-24"
     >
       {/* Header + Countdown */}
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">

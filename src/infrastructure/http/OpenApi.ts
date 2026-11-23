@@ -367,6 +367,13 @@ export const openApiDocument = {
         responses: { '201': { description: 'Создано' } },
       },
     },
+    '/api/guides/leaderboard': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Рейтинг активных проводников ДФО по аттестованным маршрутам и стажу',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
   },
 } as const;
 

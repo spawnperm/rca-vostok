@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { appLogger } from '../../logging/Logger.ts';
+import { INITIAL_DFO_CERTIFIED_GUIDES } from '../../../domain/certification/GuideLeaderboard.ts';
 
 const { Pool } = pg;
 const pgLog = appLogger.child('pg');
@@ -65,6 +66,7 @@ const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> 
   { version: '003_social', run: (p) => migrateSocial(p) },
   { version: '004_chat', run: (p) => migrateChat(p) },
   { version: '005_media', run: (p) => migrateMedia(p) },
+  { version: '006_guide_leaderboard', run: (p) => migrateGuideLeaderboard(p) },
 ];
 
 /**
@@ -655,4 +657,71 @@ async function migrateMedia(pool: pg.Pool): Promise<void> {
       END IF;
     END $$;
   `);
+}
+
+/** Active certified DFO guides registry for regional leaderboard analytics. */
+async function migrateGuideLeaderboard(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS certified_guides_registry (
+      id                     TEXT PRIMARY KEY,
+      user_id                TEXT REFERENCES users(id) ON DELETE SET NULL,
+      full_name              TEXT NOT NULL,
+      region                 TEXT NOT NULL,
+      organisation           TEXT NOT NULL DEFAULT '',
+      track                  TEXT NOT NULL DEFAULT 'hiking',
+      certified_routes_count INTEGER NOT NULL DEFAULT 0,
+      experience_years       INTEGER NOT NULL DEFAULT 0,
+      max_complexity         TEXT NOT NULL DEFAULT '2 КС',
+      registry_number        TEXT NOT NULL,
+      is_active              BOOLEAN NOT NULL DEFAULT TRUE,
+      last_attestation_date  DATE NOT NULL,
+      updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'certified_guides_track_check') THEN
+        ALTER TABLE certified_guides_registry
+          ADD CONSTRAINT certified_guides_track_check
+          CHECK (track IN ('hiking', 'water', 'expedition', 'ski', 'auto'));
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'certified_guides_complexity_check') THEN
+        ALTER TABLE certified_guides_registry
+          ADD CONSTRAINT certified_guides_complexity_check
+          CHECK (max_complexity IN ('1 КС', '2 КС', '3 КС', '4 КС'));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS certified_guides_active_routes_idx
+      ON certified_guides_registry (is_active, certified_routes_count DESC, experience_years DESC);
+  `);
+
+  for (const guide of INITIAL_DFO_CERTIFIED_GUIDES) {
+    await pool.query(
+      `INSERT INTO certified_guides_registry (
+         id, user_id, full_name, region, organisation, track,
+         certified_routes_count, experience_years, max_complexity,
+         registry_number, is_active, last_attestation_date
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        guide.id,
+        guide.userId,
+        guide.fullName,
+        guide.region,
+        guide.organisation,
+        guide.track,
+        guide.certifiedRoutesCount,
+        guide.experienceYears,
+        guide.maxComplexity,
+        guide.registryNumber,
+        guide.isActive,
+        guide.lastAttestationDate,
+      ]
+    );
+  }
 }

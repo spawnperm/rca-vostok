@@ -316,6 +316,7 @@ interface AttestationProgressWidgetProps {
   inquiries: InquiryRecord[];
   inquiriesLoading?: boolean;
   selectedExamDate?: string;
+  externalSelectedStage?: { stageId: AttestationStageId; nonce: number } | null;
   onSummaryChange?: (summary: UserAttestationSummary) => void;
   onRefreshInquiries?: () => void;
   onOpenApplication?: () => void;
@@ -326,6 +327,7 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
   inquiries,
   inquiriesLoading = false,
   selectedExamDate,
+  externalSelectedStage = null,
   onSummaryChange,
   onRefreshInquiries,
   onOpenApplication,
@@ -339,6 +341,15 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
   useEffect(() => {
     setStored(readStoredProgress(user.id));
   }, [user.id]);
+
+  useEffect(() => {
+    if (!externalSelectedStage?.stageId) return;
+    setStored((prev) => {
+      const next = { ...prev, selectedStageId: externalSelectedStage.stageId };
+      writeStoredProgress(user.id, next);
+      return next;
+    });
+  }, [externalSelectedStage, user.id]);
 
   const summary = useMemo(
     () => computeUserAttestationSummary(user, inquiries),
@@ -754,7 +765,10 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
       </ol>
 
       {/* Active / Selected Stage Detail & Interactive Checklist */}
-      <div className="pt-5 border-t border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div
+        id="attestation-progress-details"
+        className="pt-5 border-t border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start scroll-mt-24"
+      >
         <div className="lg:col-span-5 space-y-3">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span className="font-mono font-semibold text-teal-800 tabular-nums">

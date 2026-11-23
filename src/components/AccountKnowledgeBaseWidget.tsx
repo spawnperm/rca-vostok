@@ -12,15 +12,15 @@ import {
   X,
 } from 'lucide-react';
 import {
+  ENRICHED_ATTESTATION_FAQ,
   KNOWLEDGE_QUICK_QUERIES,
   METHODOLOGICAL_MATERIALS,
   getMaterialById,
   searchAccountKnowledgeBase,
-  type FaqCategoryFilter,
+  type FaqTopicFilter,
   type KnowledgeSearchScope,
   type MethodologicalMaterial,
 } from '../utils/accountKnowledgeBase';
-import { ENRICHED_ATTESTATION_FAQ } from '../utils/accountKnowledgeBase';
 import type { SessionUser } from '../utils/identityApi';
 import type { SiteTabId } from '../utils/seo';
 import { tracker } from '../utils/tracker';
@@ -33,6 +33,13 @@ interface AccountKnowledgeBaseWidgetProps {
   onJumpToConsultant?: () => void;
 }
 
+const FAQ_TOPIC_TABS: readonly { id: FaqTopicFilter; label: string }[] = [
+  { id: 'all', label: 'Все вопросы' },
+  { id: 'attestation', label: 'Аттестация' },
+  { id: 'requirements', label: 'Квалификационные требования' },
+  { id: 'documents', label: 'Подача документов' },
+];
+
 export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProps> = ({
   user,
   externalSearch,
@@ -41,9 +48,12 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
   onJumpToConsultant,
 }) => {
   const [scope, setScope] = useState<KnowledgeSearchScope>('all');
-  const [faqCategory, setFaqCategory] = useState<FaqCategoryFilter>('all');
+  const [faqTopic, setFaqTopic] = useState<FaqTopicFilter>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [openFaqIds, setOpenFaqIds] = useState<string[]>([ENRICHED_ATTESTATION_FAQ[0].id]);
+  const [openFaqIds, setOpenFaqIds] = useState<string[]>([
+    ENRICHED_ATTESTATION_FAQ[0].id,
+    'faq-9',
+  ]);
   const [openMaterialIds, setOpenMaterialIds] = useState<string[]>([
     METHODOLOGICAL_MATERIALS[0].id,
   ]);
@@ -52,12 +62,12 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
     if (!externalSearch?.nonce) return;
     const nextQuery = externalSearch.query.trim();
     setScope('all');
-    setFaqCategory('all');
+    setFaqTopic('all');
     setSearchQuery(nextQuery);
     if (nextQuery) {
       const matched = searchAccountKnowledgeBase({ query: nextQuery, scope: 'all' });
       if (matched.faqItems.length > 0) {
-        setOpenFaqIds(matched.faqItems.slice(0, 2).map((item) => item.id));
+        setOpenFaqIds(matched.faqItems.slice(0, 3).map((item) => item.id));
       }
       if (matched.materials.length > 0) {
         setOpenMaterialIds([matched.materials[0].id]);
@@ -70,9 +80,9 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
       searchAccountKnowledgeBase({
         query: searchQuery,
         scope: 'all',
-        faqCategory,
+        faqTopic,
       }),
-    [searchQuery, faqCategory]
+    [searchQuery, faqTopic]
   );
 
   const visibleResult = useMemo(
@@ -80,9 +90,9 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
       searchAccountKnowledgeBase({
         query: searchQuery,
         scope,
-        faqCategory,
+        faqTopic,
       }),
-    [searchQuery, scope, faqCategory]
+    [searchQuery, scope, faqTopic]
   );
 
   const toggleFaq = (id: string, question: string) => {
@@ -130,7 +140,7 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
     if (scope === 'materials' || scope === 'glossary') {
       setScope('all');
     }
-    setFaqCategory('all');
+    setFaqTopic('all');
     setOpenFaqIds((prev) => (prev.includes(faqId) ? prev : [...prev, faqId]));
     const target = document.getElementById(`kb-faq-${faqId}`);
     if (target) {
@@ -140,16 +150,16 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
 
   const applyQuickQuery = (topic: string) => {
     setScope('all');
-    setFaqCategory('all');
+    setFaqTopic('all');
     setSearchQuery(topic);
     const matched = searchAccountKnowledgeBase({ query: topic, scope: 'all' });
     if (matched.faqItems.length > 0) {
-      setOpenFaqIds(matched.faqItems.slice(0, 2).map((item) => item.id));
+      setOpenFaqIds(matched.faqItems.slice(0, 3).map((item) => item.id));
     }
     if (matched.materials.length > 0) {
       setOpenMaterialIds([matched.materials[0].id]);
     }
-    tracker.trackCustomInteraction(`Кабинет база знаний · тег: ${topic}`, 'account');
+    tracker.trackCustomInteraction(`Кабинет FAQ · тег: ${topic}`, 'account');
   };
 
   const triggerMaterialAction = (material: MethodologicalMaterial) => {
@@ -172,7 +182,7 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
 
   const handleReset = () => {
     setScope('all');
-    setFaqCategory('all');
+    setFaqTopic('all');
     setSearchQuery('');
   };
 
@@ -189,17 +199,17 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
             <BookOpen className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>Справочник личного кабинета · ВВГУ и РЦА «Русский Восток»</span>
           </p>
-          <h3 id="account-kb-heading" className="text-lg font-bold text-slate-900">
-            Часто задаваемые вопросы (FAQ) и база знаний
+          <h3 id="account-kb-heading" className="text-lg font-bold text-slate-900 text-balance">
+            Часто задаваемые вопросы (FAQ)
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Быстрый поиск ответов по аттестации, нормативным требованиям (ПП РФ № 1003, № 1893,
-            № 760), регламентам ДПО ВВГУ и терминам.
+            Ответы на типовые вопросы об аттестации, квалификационных требованиях (стаж, ДПО ВВГУ,
+            Контур А) и подаче документов (ПП РФ № 1003, № 1893, № 760).
           </p>
         </div>
 
         <p className="text-xs font-mono text-slate-500 tabular-nums whitespace-nowrap shrink-0 pt-1">
-          Найдено материалов: {visibleResult.totalCount}
+          Материалов в выборке: {visibleResult.totalCount}
         </p>
       </div>
 
@@ -221,7 +231,7 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
                 const matched = searchAccountKnowledgeBase({
                   query: trimmed,
                   scope: 'all',
-                  faqCategory,
+                  faqTopic,
                 });
                 if (matched.faqItems.length > 0) {
                   setOpenFaqIds(matched.faqItems.slice(0, 3).map((item) => item.id));
@@ -231,8 +241,8 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
                 }
               }
             }}
-            placeholder="Быстрый поиск по FAQ и нормативам: Контур А, паспорт маршрута № 760, ПП № 1893, 27 200 ₽..."
-            aria-label="Быстрый поиск по FAQ, аттестации и нормативным требованиям"
+            placeholder="Поиск по FAQ: аттестация, квалификация, подача документов, Контур А, 760, пересдача..."
+            aria-label="Быстрый поиск по FAQ, аттестации, квалификационным требованиям и подаче документов"
             className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-700 focus:bg-white transition-colors"
           />
           {searchQuery && (
@@ -269,20 +279,20 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
         </div>
       </div>
 
-      {/* Scope Tabs + FAQ Category Sub-filter */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-200">
+      {/* Scope Tabs + Thematic FAQ Topic Filter */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200">
         <div
           role="tablist"
-          aria-label="Раздел базы знаний"
+          aria-label="Раздел справочника"
           className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
         >
           {(
             [
               { id: 'all', label: `Всё (${countsResult.totalCount})` },
-              { id: 'faq', label: `FAQ (${countsResult.faqItems.length})` },
+              { id: 'faq', label: `Вопросы FAQ (${countsResult.faqItems.length})` },
               {
                 id: 'materials',
-                label: `Методические материалы (${countsResult.materials.length})`,
+                label: `Методички (${countsResult.materials.length})`,
               },
               {
                 id: 'glossary',
@@ -311,21 +321,19 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
         </div>
 
         {(scope === 'all' || scope === 'faq') && (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            {(
-              [
-                { id: 'all', label: 'Все темы FAQ' },
-                { id: 'procedure', label: 'Процедура' },
-                { id: 'training', label: 'Обучение' },
-                { id: 'region', label: 'ДФО и ООПТ' },
-              ] as const
-            ).map((cat) => (
+          <div
+            role="group"
+            aria-label="Тематический фильтр FAQ"
+            className="flex flex-wrap items-center gap-1.5 text-xs"
+          >
+            {FAQ_TOPIC_TABS.map((cat) => (
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setFaqCategory(cat.id)}
-                className={`px-2.5 py-1 rounded-md border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  faqCategory === cat.id
+                aria-pressed={faqTopic === cat.id}
+                onClick={() => setFaqTopic(cat.id)}
+                className={`px-2.5 py-1.5 rounded-md border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  faqTopic === cat.id
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
                 }`}
@@ -344,8 +352,8 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
             По запросу «{searchQuery}» ответы и методические материалы не найдены.
           </p>
           <p className="text-xs text-slate-500">
-            Попробуйте изменить формулировку (например: «Контур А», «760», «пересдача») или
-            передайте вопрос дежурному специалисту комиссии.
+            Попробуйте изменить формулировку (например: «аттестация», «квалификация», «подача
+            документов», «760») или обратитесь к ИИ-консультанту.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
             <button
@@ -369,13 +377,111 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Primary FAQ Accordion Shown First */}
+          {(scope === 'all' || scope === 'faq') && visibleResult.faqItems.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold text-slate-800 inline-flex items-center gap-1.5">
+                  <HelpCircle className="w-4 h-4 text-teal-700" aria-hidden="true" />
+                  <span>Ответы на типовые вопросы ({visibleResult.faqItems.length})</span>
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allIds = visibleResult.faqItems.map((f) => f.id);
+                    const allOpen = allIds.every((id) => openFaqIds.includes(id));
+                    setOpenFaqIds(allOpen ? [] : allIds);
+                  }}
+                  className="text-xs font-medium text-teal-700 hover:text-teal-900 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  {visibleResult.faqItems.every((f) => openFaqIds.includes(f.id))
+                    ? 'Свернуть ответы'
+                    : 'Раскрыть все'}
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white">
+                {visibleResult.faqItems.map((item) => {
+                  const isOpen = openFaqIds.includes(item.id);
+                  return (
+                    <div
+                      key={item.id}
+                      id={`kb-faq-${item.id}`}
+                      className="px-4 py-3.5 scroll-mt-24"
+                    >
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={() => toggleFaq(item.id, item.question)}
+                        className="w-full text-left flex items-start justify-between gap-4 cursor-pointer group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="font-medium text-teal-700">
+                              {item.topicGroupLabel}
+                            </span>
+                            <span aria-hidden="true" className="text-slate-300">
+                              ·
+                            </span>
+                            <span className="text-slate-500">{item.quickHighlight}</span>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-900 group-hover:text-teal-800 transition-colors leading-snug">
+                            {item.question}
+                          </p>
+                        </div>
+
+                        <ChevronDown
+                          className={`w-4 h-4 text-slate-500 mt-1 shrink-0 transition-transform duration-200 ${
+                            isOpen ? 'rotate-180 text-teal-700' : ''
+                          }`}
+                          aria-hidden="true"
+                        />
+                      </button>
+
+                      {isOpen && (
+                        <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2.5">
+                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+                            {item.answer}
+                          </p>
+
+                          {item.relatedMaterialIds.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                              <span className="text-slate-500">Методические материалы:</span>
+                              {item.relatedMaterialIds.map((matId) => {
+                                const mat = getMaterialById(matId);
+                                if (!mat) return null;
+                                return (
+                                  <button
+                                    key={matId}
+                                    type="button"
+                                    onClick={() => openLinkedMaterial(matId)}
+                                    className="inline-flex items-center gap-1 font-medium text-teal-800 hover:text-teal-950 underline underline-offset-2 cursor-pointer"
+                                  >
+                                    <span>
+                                      {mat.code}: {mat.categoryLabel}
+                                    </span>
+                                    <ArrowRight className="w-3 h-3" aria-hidden="true" />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Methodological Materials Section */}
           {(scope === 'all' || scope === 'materials') &&
             visibleResult.materials.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                  <h4 className="text-sm font-semibold text-slate-800 inline-flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-teal-700" aria-hidden="true" />
                     <span>Методические материалы и инструкции</span>
                   </h4>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">
@@ -494,110 +600,12 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
               </div>
             )}
 
-          {/* Quick Answers FAQ Accordion */}
-          {(scope === 'all' || scope === 'faq') && visibleResult.faqItems.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider inline-flex items-center gap-1.5">
-                  <HelpCircle className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-                  <span>Быстрые ответы на вопросы по аттестации (FAQ)</span>
-                </h4>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const allIds = visibleResult.faqItems.map((f) => f.id);
-                    const allOpen = allIds.every((id) => openFaqIds.includes(id));
-                    setOpenFaqIds(allOpen ? [] : allIds);
-                  }}
-                  className="text-xs font-medium text-teal-700 hover:text-teal-900 whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  {visibleResult.faqItems.every((f) => openFaqIds.includes(f.id))
-                    ? 'Свернуть ответы'
-                    : 'Раскрыть все'}
-                </button>
-              </div>
-
-              <div className="divide-y divide-slate-200 border border-slate-200 rounded-lg bg-white">
-                {visibleResult.faqItems.map((item) => {
-                  const isOpen = openFaqIds.includes(item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      id={`kb-faq-${item.id}`}
-                      className="px-4 py-3.5 scroll-mt-24"
-                    >
-                      <button
-                        type="button"
-                        aria-expanded={isOpen}
-                        onClick={() => toggleFaq(item.id, item.question)}
-                        className="w-full text-left flex items-start justify-between gap-4 cursor-pointer group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-                      >
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                            <span className="font-medium text-teal-700">
-                              {item.categoryLabel}
-                            </span>
-                            <span aria-hidden="true" className="text-slate-300">
-                              ·
-                            </span>
-                            <span className="text-slate-500">{item.quickHighlight}</span>
-                          </div>
-                          <p className="text-sm font-semibold text-slate-900 group-hover:text-teal-800 transition-colors leading-snug">
-                            {item.question}
-                          </p>
-                        </div>
-
-                        <ChevronDown
-                          className={`w-4 h-4 text-slate-500 mt-1 shrink-0 transition-transform duration-200 ${
-                            isOpen ? 'rotate-180 text-teal-700' : ''
-                          }`}
-                          aria-hidden="true"
-                        />
-                      </button>
-
-                      {isOpen && (
-                        <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-2.5">
-                          <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                            {item.answer}
-                          </p>
-
-                          {item.relatedMaterialIds.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-                              <span className="text-slate-500">Методические материалы:</span>
-                              {item.relatedMaterialIds.map((matId) => {
-                                const mat = getMaterialById(matId);
-                                if (!mat) return null;
-                                return (
-                                  <button
-                                    key={matId}
-                                    type="button"
-                                    onClick={() => openLinkedMaterial(matId)}
-                                    className="inline-flex items-center gap-1 font-medium text-teal-800 hover:text-teal-950 underline underline-offset-2 cursor-pointer"
-                                  >
-                                    <span>
-                                      {mat.code}: {mat.categoryLabel}
-                                    </span>
-                                    <ArrowRight className="w-3 h-3" aria-hidden="true" />
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Glossary Terms (shown when searching or glossary tab active) */}
+          {/* Glossary Terms */}
           {(scope === 'glossary' || (scope === 'all' && searchQuery.trim().length > 0)) &&
             visibleResult.glossaryItems.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  <h4 className="text-sm font-semibold text-slate-800">
                     Нормативные термины и определения
                   </h4>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">
@@ -631,7 +639,7 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
       {/* Footer Escalation */}
       <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-slate-600">
-          Нужна индивидуальная проверка маршрутной книжки или паспорта маршрута?
+          Нужна индивидуальная проверка пакета документов или паспорта маршрута?
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {onJumpToChecklist && (
@@ -641,7 +649,7 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
               className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
             >
               <ClipboardCheck className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-              <span>К чек-листу документов</span>
+              <span>К чек-листу самопроверки</span>
             </button>
           )}
           {onJumpToConsultant && (

@@ -16,6 +16,11 @@ import {
   UpdateInquiryStatusUseCase,
 } from './src/application/certification/InquiryUseCases.ts';
 import {
+  GetGuideLeaderboardUseCase,
+  SyncMyGuideLeaderboardUseCase,
+} from './src/application/certification/GetGuideLeaderboardUseCase.ts';
+import type { GuideLeaderboardRepository } from './src/domain/certification/GuideLeaderboard.ts';
+import {
   GetCenterReviewsStatsUseCase,
   GetFeedbackStatsUseCase,
   SubmitFeedbackUseCase,
@@ -77,6 +82,7 @@ import { mountApiDocs } from './src/infrastructure/http/OpenApi.ts';
 import { JsonFileAnalyticsRepository } from './src/infrastructure/persistence/JsonFileAnalyticsRepository.ts';
 import { JsonFileFeedbackRepository } from './src/infrastructure/persistence/JsonFileFeedbackRepository.ts';
 import { JsonFileInquiryRepository } from './src/infrastructure/persistence/JsonFileInquiryRepository.ts';
+import { JsonFileGuideLeaderboardRepository } from './src/infrastructure/persistence/JsonFileGuideLeaderboardRepository.ts';
 import {
   MIGRATION_STEP_COUNT,
   createPool,
@@ -86,6 +92,7 @@ import {
 import { PostgresAnalyticsRepository } from './src/infrastructure/persistence/pg/PostgresAnalyticsRepository.ts';
 import { PostgresFeedbackRepository } from './src/infrastructure/persistence/pg/PostgresFeedbackRepository.ts';
 import { PostgresInquiryRepository } from './src/infrastructure/persistence/pg/PostgresInquiryRepository.ts';
+import { PostgresGuideLeaderboardRepository } from './src/infrastructure/persistence/pg/PostgresGuideLeaderboardRepository.ts';
 import { PostgresUserRepository } from './src/infrastructure/persistence/pg/PostgresUserRepository.ts';
 import { PostgresSessionRepository } from './src/infrastructure/persistence/pg/PostgresSessionRepository.ts';
 import {
@@ -268,6 +275,7 @@ async function startServer() {
   let analyticsRepo: AnalyticsRepository;
   let inquiryRepo: InquiryRepository;
   let feedbackRepo: FeedbackRepository;
+  let guideLeaderboardRepo: GuideLeaderboardRepository;
   let adapterName: string;
 
   const persistenceLog = appLogger.child('persistence');
@@ -278,12 +286,14 @@ async function startServer() {
     analyticsRepo = new PostgresAnalyticsRepository(pool);
     inquiryRepo = new PostgresInquiryRepository(pool);
     feedbackRepo = new PostgresFeedbackRepository(pool);
+    guideLeaderboardRepo = new PostgresGuideLeaderboardRepository(pool);
     adapterName = 'postgresql';
     persistenceLog.info('Using PostgreSQL persistence adapter');
   } else {
     analyticsRepo = new JsonFileAnalyticsRepository(DATA_DIR);
     inquiryRepo = new JsonFileInquiryRepository(DATA_DIR);
     feedbackRepo = new JsonFileFeedbackRepository(DATA_DIR);
+    guideLeaderboardRepo = new JsonFileGuideLeaderboardRepository(DATA_DIR);
     adapterName = 'json-file';
     persistenceLog.info('No database configured, using JSON file adapter', { dataDir: DATA_DIR });
   }
@@ -326,6 +336,8 @@ async function startServer() {
   const submitFeedbackUseCase = new SubmitFeedbackUseCase(feedbackRepo, eventBus);
   const getFeedbackStatsUseCase = new GetFeedbackStatsUseCase(feedbackRepo);
   const getCenterReviewsStatsUseCase = new GetCenterReviewsStatsUseCase(feedbackRepo);
+  const getGuideLeaderboardUseCase = new GetGuideLeaderboardUseCase(guideLeaderboardRepo, adapterName);
+  const syncMyGuideLeaderboardUseCase = new SyncMyGuideLeaderboardUseCase(guideLeaderboardRepo);
   const getSystemHealthUseCase = new GetSystemHealthUseCase(
     inquiryRepo,
     analyticsRepo,
@@ -849,6 +861,41 @@ async function startServer() {
   app.get('/api/feedback/reviews-summary', async (_req, res) => {
     try {
       res.json(await getCenterReviewsStatsUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  // Active DFO Certified Guides Leaderboard (database-backed ranking by routes & experience)
+  app.get('/api/guides/leaderboard', async (req, res) => {
+    try {
+      const result = await getGuideLeaderboardUseCase.execute({
+        sortBy: req.query.sortBy,
+        region: req.query.region,
+        track: req.query.track,
+        search: req.query.search,
+        limit: req.query.limit,
+      });
+      res.json(result);
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  app.post('/api/account/leaderboard-sync', requireAuth(), async (req, res) => {
+    try {
+      const body = (req.body || {}) as Record<string, unknown>;
+      const record = await syncMyGuideLeaderboardUseCase.execute({
+        userId: req.authUser!.id,
+        fullName: req.authUser!.fullName.value,
+        region: req.authUser!.region,
+        organisation: req.authUser!.organisation,
+        certifiedRoutesCount: body.certifiedRoutesCount,
+        experienceYears: body.experienceYears,
+        track: body.track,
+        maxComplexity: body.maxComplexity,
+      });
+      res.json({ ok: true, record });
     } catch (err) {
       handleDomainError(err, res);
     }

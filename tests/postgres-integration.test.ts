@@ -110,6 +110,7 @@ maybe('Postgres: migrations create every expected table', async () => {
     'chat_reactions',
     'media_albums',
     'media_assets',
+    'certified_guides_registry',
   ]) {
     assert.ok(names.includes(expected), `missing table: ${expected}`);
   }

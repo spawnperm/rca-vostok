@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  BarChart3,
   CheckCircle2,
   FileBadge2,
   GitBranch,
@@ -21,14 +22,17 @@ import { ForgotPasswordForm, ResetPasswordForm } from './social/PasswordRecovery
 import {
   AttestationProgressWidget,
   computeUserAttestationSummary,
+  type AttestationStageId,
   type UserAttestationSummary,
 } from './AttestationProgressWidget';
+import { AttestationPathWidget } from './AttestationPathWidget';
 import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
 import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
 import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
 import { InstructorPassportCard } from './InstructorPassportCard';
 import { RcaAssistantChatWidget } from './RcaAssistantChatWidget';
+import { DfoGuidesLeaderboardWidget } from './DfoGuidesLeaderboardWidget';
 import { CenterReviewForm } from './CenterReviewForm';
 import { ReviewStatsWidget } from './ReviewStatsWidget';
 import {
@@ -77,6 +81,7 @@ export function AccountSection({
     null
   );
   const [selectedExamDate, setSelectedExamDate] = useState<string | undefined>(undefined);
+  const [selectedContour, setSelectedContour] = useState<'contour_b' | 'contour_a'>('contour_b');
   const [reviewsRefreshKey, setReviewsRefreshKey] = useState<number>(0);
   const [selfCheckRevision, setSelfCheckRevision] = useState<number>(0);
   const [kbExternalSearch, setKbExternalSearch] = useState<{
@@ -85,6 +90,13 @@ export function AccountSection({
   } | null>(null);
   const [assistantRequest, setAssistantRequest] = useState<{
     prompt?: string;
+    nonce: number;
+  } | null>(null);
+  const [analyticsSubView, setAnalyticsSubView] = useState<
+    'all' | 'leaderboard' | 'reviews'
+  >('all');
+  const [externalSelectedStage, setExternalSelectedStage] = useState<{
+    stageId: AttestationStageId;
     nonce: number;
   } | null>(null);
 
@@ -207,6 +219,13 @@ export function AccountSection({
           onAuthenticated={handleAuthenticated}
           onForgotPassword={() => setShowForgot(true)}
         />
+        <AttestationPathWidget
+          user={null}
+          onFocusAuth={() => {
+            const el = document.getElementById('account-auth-panel');
+            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        />
         <AccountKnowledgeBaseWidget
           user={null}
           externalSearch={kbExternalSearch}
@@ -215,6 +234,26 @@ export function AccountSection({
             openAiAssistant('Подскажите, какие документы нужны для аттестации?')
           }
         />
+        <section
+          id="account-analytics-section"
+          aria-labelledby="account-analytics-guest-heading"
+          className="space-y-4 scroll-mt-24"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
+            <div>
+              <h3
+                id="account-analytics-guest-heading"
+                className="text-lg font-bold text-slate-900"
+              >
+                Аналитический раздел личного кабинета
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600">
+                Открытая аналитика реестра аттестованных проводников ДФО из базы данных РЦА.
+              </p>
+            </div>
+          </div>
+          <DfoGuidesLeaderboardWidget />
+        </section>
         <RcaAssistantChatWidget
           user={null}
           progressSummary={null}
@@ -237,14 +276,33 @@ export function AccountSection({
       <CabinetHeader
         user={user}
         onLogout={handleLogout}
+        onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
         onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
+      />
+      <AttestationPathWidget
+        user={user}
+        summary={effectiveProgressSummary}
+        inquiries={inquiries}
+        examDateIso={selectedExamDate}
+        contour={selectedContour}
+        onSelectStageInChecklist={(stageId) => {
+          setExternalSelectedStage((prev) => ({
+            stageId,
+            nonce: (prev?.nonce ?? 0) + 1,
+          }));
+          scrollToElementById('attestation-progress-details');
+        }}
+        onOpenApplication={onNavigate ? () => onNavigate('overview') : undefined}
+        onJumpToRoadmap={() => scrollToElementById('personal-roadmap-widget')}
+        onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
       />
       <AttestationProgressWidget
         user={user}
         inquiries={inquiries}
         inquiriesLoading={inquiriesLoading}
         selectedExamDate={selectedExamDate}
+        externalSelectedStage={externalSelectedStage}
         onSummaryChange={setLiveProgressSummary}
         onRefreshInquiries={
           hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
@@ -255,6 +313,7 @@ export function AccountSection({
         user={user}
         summary={effectiveProgressSummary}
         onExamDateChange={setSelectedExamDate}
+        onContourChange={setSelectedContour}
       />
       <QualificationSelfCheckWidget
         user={user}
@@ -276,6 +335,76 @@ export function AccountSection({
         inquiries={inquiries}
         selfCheckRevision={selfCheckRevision}
       />
+      <AccountKnowledgeBaseWidget
+        user={user}
+        externalSearch={kbExternalSearch}
+        onNavigate={onNavigate}
+        onJumpToChecklist={() => scrollToElementById('qualification-self-check')}
+        onJumpToConsultant={() => openAiAssistant()}
+      />
+
+      {/* Analytical Section of the Personal Cabinet */}
+      <section
+        id="account-analytics-section"
+        aria-labelledby="account-analytics-heading"
+        className="space-y-4 scroll-mt-24 pt-2"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 px-1">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-teal-700 inline-flex items-center gap-1.5">
+              <BarChart3 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>Аналитический раздел личного кабинета · Реестр и качество</span>
+            </p>
+            <h3 id="account-analytics-heading" className="text-lg font-bold text-slate-900">
+              Рейтинг проводников ДФО и статистика аттестаций
+            </h3>
+          </div>
+
+          <div
+            role="tablist"
+            aria-label="Подразделы аналитики кабинета"
+            className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start sm:self-auto"
+          >
+            {(
+              [
+                { id: 'all', label: 'Все виджеты' },
+                { id: 'leaderboard', label: 'Рейтинг ДФО' },
+                { id: 'reviews', label: 'Статистика оценок' },
+              ] as const
+            ).map((tab) => {
+              const active = analyticsSubView === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setAnalyticsSubView(tab.id)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    active
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {(analyticsSubView === 'all' || analyticsSubView === 'leaderboard') && (
+          <DfoGuidesLeaderboardWidget
+            currentUserId={user.id}
+            currentUserRegion={user.region}
+          />
+        )}
+
+        {(analyticsSubView === 'all' || analyticsSubView === 'reviews') && (
+          <ReviewStatsWidget refreshKey={reviewsRefreshKey} />
+        )}
+      </section>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <NotificationCenterWidget
@@ -287,12 +416,6 @@ export function AccountSection({
             }
             onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
           />
-          <AccountKnowledgeBaseWidget
-            user={user}
-            externalSearch={kbExternalSearch}
-            onNavigate={onNavigate}
-            onJumpToConsultant={() => openAiAssistant()}
-          />
           <ProfileCard user={user} onUpdated={handleAuthenticated} />
           <MyInquiriesSection
             canView={hasPermission(user, 'inquiries:view_own')}
@@ -301,7 +424,6 @@ export function AccountSection({
             error={inquiriesError}
             onRefresh={() => void loadInquiries()}
           />
-          <ReviewStatsWidget refreshKey={reviewsRefreshKey} />
           <CenterReviewForm
             user={user}
             onSubmitted={() => setReviewsRefreshKey((k) => k + 1)}
@@ -420,8 +542,9 @@ function AuthPanel({
 
   return (
     <section
+      id="account-auth-panel"
       aria-labelledby="account-auth-heading"
-      className="bg-white border border-slate-200 rounded-xl p-8"
+      className="bg-white border border-slate-200 rounded-xl p-8 scroll-mt-24"
     >
       <div className="max-w-md mx-auto space-y-6">
         <div className="space-y-2 text-center">
@@ -592,11 +715,13 @@ function Field({
 function CabinetHeader({
   user,
   onLogout,
+  onJumpToAnalytics,
   onJumpToPassport,
   onJumpToFaq,
 }: {
   user: SessionUser;
   onLogout: () => void;
+  onJumpToAnalytics: () => void;
   onJumpToPassport: () => void;
   onJumpToFaq: () => void;
 }) {
@@ -610,12 +735,13 @@ function CabinetHeader({
           <div className="space-y-1">
             <h2 className="text-xl font-bold text-slate-900">{user.fullName}</h2>
             <p className="text-sm text-slate-600">{user.email}</p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold rounded-md">
-                <ShieldCheck className="w-3.5 h-3.5" aria-hidden="true" />
-                {ROLE_LABELS[user.role]}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-slate-600">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-teal-800">
+                <ShieldCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span>{ROLE_LABELS[user.role]}</span>
               </span>
-              <span className="text-xs text-slate-500">{user.region}</span>
+              <span aria-hidden="true">·</span>
+              <span>{user.region}</span>
             </div>
           </div>
         </div>
@@ -624,7 +750,7 @@ function CabinetHeader({
           <button
             type="button"
             onClick={onJumpToPassport}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
           >
             <FileBadge2 className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
             <span>Цифровой паспорт</span>
@@ -632,17 +758,26 @@ function CabinetHeader({
 
           <button
             type="button"
+            onClick={onJumpToAnalytics}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Аналитика и рейтинг</span>
+          </button>
+
+          <button
+            type="button"
             onClick={onJumpToFaq}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold rounded-lg hover:bg-teal-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold rounded-lg hover:bg-teal-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
             <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>FAQ и нормативы</span>
+            <span>FAQ</span>
           </button>
 
           <button
             type="button"
             onClick={onLogout}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
             <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Выйти</span>

@@ -7,6 +7,7 @@ import {
 
 export type KnowledgeSearchScope = 'all' | 'faq' | 'materials' | 'glossary';
 export type FaqCategoryFilter = 'all' | FaqItem['category'];
+export type FaqTopicFilter = 'all' | 'attestation' | 'requirements' | 'documents';
 
 export interface MethodologicalMaterial {
   id: string;
@@ -25,6 +26,8 @@ export interface MethodologicalMaterial {
 }
 
 export interface EnrichedFaqItem extends FaqItem {
+  topicGroup: Exclude<FaqTopicFilter, 'all'>;
+  topicGroupLabel: string;
   quickHighlight: string;
   tags: string[];
   relatedMaterialIds: string[];
@@ -54,7 +57,7 @@ export const METHODOLOGICAL_MATERIALS: readonly MethodologicalMaterial[] = [
       'Проверка заявки занимает 1–3 рабочих дня, экзаменационная сессия длится 2–3 дня, выгрузка сведений и выпуск бейджа — до 10 рабочих дней.',
     ],
     tags: ['ПП № 1893', 'ПП № 1003', 'реестр', 'бейдж', '5 лет', 'сроки'],
-    relatedFaqIds: ['faq-1', 'faq-6', 'faq-12'],
+    relatedFaqIds: ['faq-1', 'faq-6', 'faq-12', 'faq-15'],
     actionLabel: 'Уточнить у онлайн-консультанта',
     actionType: 'consultant',
   },
@@ -73,7 +76,7 @@ export const METHODOLOGICAL_MATERIALS: readonly MethodologicalMaterial[] = [
       'На очной защите в ВВГУ комиссия проверяет умение аргументировать решения при смене погоды и травме участника.',
     ],
     tags: ['паспорт маршрута', '760', 'ООПТ', 'защита', 'тайминги', 'ЧС'],
-    relatedFaqIds: ['faq-3', 'faq-7'],
+    relatedFaqIds: ['faq-3', 'faq-7', 'faq-14'],
     actionLabel: 'Открыть чек-лист документов',
     actionType: 'checklist',
   },
@@ -92,7 +95,7 @@ export const METHODOLOGICAL_MATERIALS: readonly MethodologicalMaterial[] = [
       'Исключает дублирующее обучение: учебные зачёты ВВГУ синхронизированы с экзаменационными билетами РЦА.',
     ],
     tags: ['Контур А', 'МКК', 'походный стаж', 'треки', 'туроператор', 'опыт'],
-    relatedFaqIds: ['faq-4', 'faq-10'],
+    relatedFaqIds: ['faq-4', 'faq-10', 'faq-13'],
     actionLabel: 'Перейти к чек-листу Контура А',
     actionType: 'checklist',
   },
@@ -111,7 +114,7 @@ export const METHODOLOGICAL_MATERIALS: readonly MethodologicalMaterial[] = [
       'Организации и ИП Приморского края могут компенсировать до 70% расходов через региональные программы субсидирования туризма.',
     ],
     tags: ['ВВГУ', 'ДПО', '250 часов', '27 200', 'водный', 'субсидия 70%'],
-    relatedFaqIds: ['faq-5', 'faq-8'],
+    relatedFaqIds: ['faq-5', 'faq-8', 'faq-13'],
     actionLabel: 'Рассчитать бюджет в калькуляторе',
     actionType: 'tab',
     targetTab: 'calculator',
@@ -150,7 +153,7 @@ export const METHODOLOGICAL_MATERIALS: readonly MethodologicalMaterial[] = [
       'При зачёте теории пересдавать требуется только полевой блок на ближайшей выездной сессии в Шкотовском районе.',
     ],
     tags: ['документы', 'СНИЛС', 'медсправка', 'пересдача', 'ПДн', 'пакет'],
-    relatedFaqIds: ['faq-9', 'faq-11'],
+    relatedFaqIds: ['faq-9', 'faq-11', 'faq-14'],
     actionLabel: 'Проверить свой чек-лист',
     actionType: 'checklist',
   },
@@ -175,96 +178,171 @@ export const METHODOLOGICAL_MATERIALS: readonly MethodologicalMaterial[] = [
   },
 ];
 
+const CABINET_EXTRA_FAQS: readonly FaqItem[] = [
+  {
+    id: 'faq-13',
+    category: 'training',
+    categoryLabel: 'Квалификационные требования',
+    question:
+      'Какие квалификационные требования по образованию, здоровью и стажу предъявляются к соискателю?',
+    answer:
+      'Кандидат должен быть совершеннолетним гражданином РФ, иметь среднее профессиональное или высшее образование (либо пройти программу переподготовки ДПО, например в ВВГУ ≈ 250 часов), медицинское заключение об отсутствии противопоказаний к активным маршрутам и подтверждённый опыт прохождения/руководства маршрутами от 1 до 4 категории сложности в зависимости от заявляемого трека.',
+  },
+  {
+    id: 'faq-14',
+    category: 'procedure',
+    categoryLabel: 'Подача документов',
+    question:
+      'Как подать документы в РЦА и что делать, если комиссия выявила замечания в паспорте маршрута?',
+    answer:
+      'Заявка подаётся онлайн через форму записи или в личном кабинете с приложением скан-копий (паспорт, СНИЛС, диплом/удостоверение ДПО, медсправка, подтверждение стажа и проект паспорта маршрута по форме ПП № 760). Секретариат проверяет комплект за 1–3 рабочих дня; при замечаниях заявка не аннулируется — вы получаете перечень правок в разделе «Мои заявки» и можете дослать исправленные материалы до начала ближайшей сессии.',
+  },
+  {
+    id: 'faq-15',
+    category: 'procedure',
+    categoryLabel: 'Аттестация',
+    question:
+      'Как продлить аттестацию через 5 лет или добавить новую категорию сложности маршрута?',
+    answer:
+      'За 60 дней до окончания 5-летнего срока действия записи в Едином федеральном реестре необходимо подать заявление на подтверждение квалификации и обновить медицинское заключение. Чтобы повысить категорию сложности (например, с 2 КС на 3 КС) или открыть второй вид туризма (водный после пешеходного), повторно проходить общий правовой блок не требуется — защищается новый паспорт маршрута и профильная практика.',
+  },
+];
+
+const TOPIC_GROUP_LABELS: Record<Exclude<FaqTopicFilter, 'all'>, string> = {
+  attestation: 'Аттестация',
+  requirements: 'Квалификационные требования',
+  documents: 'Подача документов',
+};
+
 const FAQ_ENRICHMENT: Record<
   string,
-  { quickHighlight: string; tags: string[]; relatedMaterialIds: string[] }
+  {
+    topicGroup: Exclude<FaqTopicFilter, 'all'>;
+    quickHighlight: string;
+    tags: string[];
+    relatedMaterialIds: string[];
+  }
 > = {
   'faq-1': {
+    topicGroup: 'attestation',
     quickHighlight: 'Обязательно с 1 марта / 1 октября 2026 г. (ПП № 1003 и № 1893)',
-    tags: ['ПП № 1893', 'ПП № 1003', 'сроки', 'реестр'],
+    tags: ['ПП № 1893', 'ПП № 1003', 'сроки', 'реестр', 'аттестация'],
     relatedMaterialIds: ['method-npa-1893'],
   },
   'faq-2': {
+    topicGroup: 'attestation',
     quickHighlight: 'Владивосток, ВВГУ + ФСТР · председатель Г. Гомилевская, рук. Г. Саранча',
-    tags: ['ВВГУ', 'комиссия', 'Владивосток', 'ФСТР'],
+    tags: ['ВВГУ', 'комиссия', 'Владивосток', 'ФСТР', 'аттестация'],
     relatedMaterialIds: ['method-npa-1893', 'method-vac-presentations'],
   },
   'faq-3': {
+    topicGroup: 'attestation',
     quickHighlight: '4 шага: заявка → теория/паспорт в ВВГУ → полигон (Шкотовский р-н) → бейдж',
-    tags: ['этапы', 'паспорт маршрута', 'Шкотовский', 'экзамен'],
+    tags: ['этапы', 'паспорт маршрута', 'Шкотовский', 'экзамен', 'аттестация'],
     relatedMaterialIds: ['method-route-passport', 'method-dfo-wfa-safety'],
   },
   'faq-4': {
+    topicGroup: 'requirements',
     quickHighlight: 'Опытным гидам — Контур А: зачёт подтверждённого стажа без дублирования',
-    tags: ['Контур А', 'опыт', 'переподготовка'],
+    tags: ['Контур А', 'опыт', 'переподготовка', 'квалификация'],
     relatedMaterialIds: ['method-contour-a'],
   },
   'faq-5': {
+    topicGroup: 'requirements',
     quickHighlight: 'Пешеходный ≈ 250 ч · Водный 27 200 ₽/год · субсидия ДФО до 70%',
-    tags: ['стоимость', '27 200 ₽', '250 часов', 'субсидия'],
+    tags: ['стоимость', '27 200 ₽', '250 часов', 'субсидия', 'ДПО'],
     relatedMaterialIds: ['method-dpo-programs'],
   },
   'faq-6': {
+    topicGroup: 'attestation',
     quickHighlight: 'Срок действия 5 лет · действует по всей территории России',
-    tags: ['5 лет', 'реестр', 'регионы РФ'],
+    tags: ['5 лет', 'реестр', 'регионы РФ', 'аттестация'],
     relatedMaterialIds: ['method-npa-1893'],
   },
   'faq-7': {
+    topicGroup: 'requirements',
     quickHighlight: 'Wilderness First Aid · Garmin inReach · ПСР и безопасность от хищников на ООПТ',
-    tags: ['WFA', 'Garmin inReach', 'ООПТ', 'ДФО'],
+    tags: ['WFA', 'Garmin inReach', 'ООПТ', 'ДФО', 'требования'],
     relatedMaterialIds: ['method-dfo-wfa-safety', 'method-route-passport'],
   },
   'faq-8': {
+    topicGroup: 'requirements',
     quickHighlight: 'Работают пешеходный и водный треки; проектируется автотуризм',
-    tags: ['направления', 'водный', 'пешеходный', 'автотрек'],
+    tags: ['направления', 'водный', 'пешеходный', 'автотрек', 'квалификация'],
     relatedMaterialIds: ['method-dpo-programs', 'method-vac-presentations'],
   },
   'faq-9': {
+    topicGroup: 'documents',
     quickHighlight: 'Паспорт, СНИЛС, образование/ДПО, медсправка, стаж, согласие ПДн',
-    tags: ['документы', 'пакет', 'СНИЛС', 'медсправка'],
+    tags: ['документы', 'подача документов', 'пакет', 'СНИЛС', 'медсправка'],
     relatedMaterialIds: ['method-retake-dossier'],
   },
   'faq-10': {
+    topicGroup: 'documents',
     quickHighlight: 'Допускаются договоры с туроператорами, GPS-треки и рекомендации через Контур А',
-    tags: ['МКК', 'Контур А', 'стаж', 'треки'],
+    tags: ['МКК', 'Контур А', 'стаж', 'треки', 'подача документов'],
     relatedMaterialIds: ['method-contour-a'],
   },
   'faq-11': {
+    topicGroup: 'attestation',
     quickHighlight: 'Теория засчитывается отдельно — пересдаётся только не сданный блок',
-    tags: ['пересдача', 'теория', 'поле'],
+    tags: ['пересдача', 'теория', 'поле', 'экзамен'],
     relatedMaterialIds: ['method-retake-dossier'],
   },
   'faq-12': {
+    topicGroup: 'documents',
     quickHighlight: 'Проверка 1–3 дня · экзамен 2–3 дня · запись и бейдж до 10 рабочих дней',
-    tags: ['сроки', 'бейдж', 'регистрация'],
+    tags: ['сроки', 'бейдж', 'регистрация', 'подача документов'],
     relatedMaterialIds: ['method-npa-1893', 'method-retake-dossier'],
+  },
+  'faq-13': {
+    topicGroup: 'requirements',
+    quickHighlight: 'Образование/ДПО ВВГУ 250 ч · медзаключение · стаж по маршрутам 1–4 КС',
+    tags: ['квалификационные требования', 'квалификация', 'образование', 'стаж', '1-4 КС'],
+    relatedMaterialIds: ['method-contour-a', 'method-dpo-programs'],
+  },
+  'faq-14': {
+    topicGroup: 'documents',
+    quickHighlight: 'Подача онлайн · проверка 1–3 дня · замечания исправляются без повторной оплаты',
+    tags: ['подача документов', 'онлайн', 'замечания', 'паспорт маршрута', '760'],
+    relatedMaterialIds: ['method-retake-dossier', 'method-route-passport'],
+  },
+  'faq-15': {
+    topicGroup: 'attestation',
+    quickHighlight: 'Заявление за 60 дней до окончания 5-летнего срока · зачёт общей теории',
+    tags: ['продление', '5 лет', 'повышение КС', 'аттестация'],
+    relatedMaterialIds: ['method-npa-1893'],
   },
 };
 
-export const ENRICHED_ATTESTATION_FAQ: readonly EnrichedFaqItem[] = ATTESTATION_FAQ.map(
-  (item) => {
-    const meta = FAQ_ENRICHMENT[item.id] ?? {
-      quickHighlight: item.categoryLabel,
-      tags: [],
-      relatedMaterialIds: [],
-    };
-    return {
-      ...item,
-      quickHighlight: meta.quickHighlight,
-      tags: meta.tags,
-      relatedMaterialIds: meta.relatedMaterialIds,
-    };
-  }
-);
+export const ENRICHED_ATTESTATION_FAQ: readonly EnrichedFaqItem[] = [
+  ...ATTESTATION_FAQ,
+  ...CABINET_EXTRA_FAQS,
+].map((item) => {
+  const meta = FAQ_ENRICHMENT[item.id] ?? {
+    topicGroup: 'attestation' as const,
+    quickHighlight: item.categoryLabel,
+    tags: [],
+    relatedMaterialIds: [],
+  };
+  return {
+    ...item,
+    topicGroup: meta.topicGroup,
+    topicGroupLabel: TOPIC_GROUP_LABELS[meta.topicGroup],
+    quickHighlight: meta.quickHighlight,
+    tags: meta.tags,
+    relatedMaterialIds: meta.relatedMaterialIds,
+  };
+});
 
 export const KNOWLEDGE_QUICK_QUERIES: readonly string[] = [
+  'подача документов',
+  'квалификация',
   'Контур А',
   'паспорт маршрута',
   'ПП № 1893',
   '27 200 ₽',
-  'WFA и ООПТ',
   'пересдача',
-  'документы',
 ];
 
 function tokenizeQuery(query: string): string[] {
@@ -295,9 +373,11 @@ export function searchAccountKnowledgeBase(options: {
   query?: string;
   scope?: KnowledgeSearchScope;
   faqCategory?: FaqCategoryFilter;
+  faqTopic?: FaqTopicFilter;
 }): AccountKnowledgeSearchResult {
   const scope = options.scope ?? 'all';
   const faqCategory = options.faqCategory ?? 'all';
+  const faqTopic = options.faqTopic ?? 'all';
   const activeTokens = tokenizeQuery(options.query ?? '');
 
   const faqItems: EnrichedFaqItem[] =
@@ -306,9 +386,12 @@ export function searchAccountKnowledgeBase(options: {
           if (faqCategory !== 'all' && item.category !== faqCategory) {
             return null;
           }
+          if (faqTopic !== 'all' && item.topicGroup !== faqTopic) {
+            return null;
+          }
           const score = scoreMatch(
             activeTokens,
-            `${item.question} ${item.quickHighlight} ${item.tags.join(' ')}`,
+            `${item.question} ${item.quickHighlight} ${item.topicGroupLabel} ${item.tags.join(' ')}`,
             `${item.answer} ${item.categoryLabel}`
           );
           return score > 0 ? { item, score } : null;
