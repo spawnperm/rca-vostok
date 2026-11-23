@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   FileBadge2,
   GitBranch,
+  GraduationCap,
   HelpCircle,
   LogIn,
   LogOut,
@@ -33,6 +34,7 @@ import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
 import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
 import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
+import { AttestationSelfDiagnosticsWidget } from './AttestationSelfDiagnosticsWidget';
 import { InstructorPassportCard } from './InstructorPassportCard';
 import { RcaAssistantChatWidget } from './RcaAssistantChatWidget';
 import { DfoGuidesLeaderboardWidget } from './DfoGuidesLeaderboardWidget';
@@ -213,6 +215,19 @@ export function AccountSection({
     return <ForgotPasswordForm onBack={() => setShowForgot(false)} />;
   }
 
+  const scrollToElementById = (elementId: string) => {
+    const el = document.getElementById(elementId);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const jumpToKnowledgeBaseWithQuery = (query?: string) => {
+    setKbExternalSearch((prev) => ({
+      query: query ?? '',
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
+    scrollToElementById('account-knowledge-base');
+  };
+
   if (!user) {
     return (
       <div className="space-y-6">
@@ -225,16 +240,20 @@ export function AccountSection({
         <AttestationPathWidget
           user={null}
           onFocusAuth={() => {
-            const el = document.getElementById('account-auth-panel');
-            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            scrollToElementById('account-auth-panel');
           }}
+        />
+        <AttestationSelfDiagnosticsWidget
+          user={null}
+          onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
+          onJumpToConsultant={(prompt) => openAiAssistant(prompt)}
+          onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
         />
         <AttestationSessionsCalendarWidget
           user={null}
           inquiries={[]}
           onFocusAuth={() => {
-            const el = document.getElementById('account-auth-panel');
-            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            scrollToElementById('account-auth-panel');
           }}
         />
         <AccountKnowledgeBaseWidget
@@ -277,17 +296,13 @@ export function AccountSection({
   const effectiveProgressSummary =
     liveProgressSummary ?? computeUserAttestationSummary(user, inquiries);
 
-  const scrollToElementById = (elementId: string) => {
-    const el = document.getElementById(elementId);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   return (
     <div className="space-y-6">
       <CabinetHeader
         user={user}
         onLogout={handleLogout}
         onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
+        onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
         onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
         onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
@@ -353,16 +368,17 @@ export function AccountSection({
       <QualificationSelfCheckWidget
         user={user}
         onChange={() => setSelfCheckRevision((n) => n + 1)}
-        onJumpToKnowledgeBase={(query) => {
-          setKbExternalSearch((prev) => ({
-            query: query ?? '',
-            nonce: (prev?.nonce ?? 0) + 1,
-          }));
-          scrollToElementById('account-knowledge-base');
-        }}
+        onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
         onJumpToConsultant={() =>
           openAiAssistant('Помогите разобраться с пробелами по итогам самопроверки.')
         }
+      />
+      <AttestationSelfDiagnosticsWidget
+        user={user}
+        onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
+        onJumpToConsultant={(prompt) => openAiAssistant(prompt)}
+        onJumpToSelfCheck={() => scrollToElementById('qualification-self-check')}
+        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
       />
       <InstructorPassportCard
         user={user}
@@ -750,6 +766,7 @@ function CabinetHeader({
   user,
   onLogout,
   onJumpToCalendar,
+  onJumpToDiagnostics,
   onJumpToAnalytics,
   onJumpToPassport,
   onJumpToFaq,
@@ -758,6 +775,7 @@ function CabinetHeader({
   user: SessionUser;
   onLogout: () => void;
   onJumpToCalendar: () => void;
+  onJumpToDiagnostics: () => void;
   onJumpToAnalytics: () => void;
   onJumpToPassport: () => void;
   onJumpToFaq: () => void;
@@ -792,6 +810,15 @@ function CabinetHeader({
           >
             <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Календарь и заявки</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onJumpToDiagnostics}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <GraduationCap className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Самодиагностика</span>
           </button>
 
           <button
