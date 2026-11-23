@@ -29,6 +29,7 @@ import {
   type AttestationStageId,
   type UserAttestationSummary,
 } from './AttestationProgressWidget';
+import { ApplicationProgressIndicator } from './ApplicationProgressIndicator';
 import { AttestationPathWidget } from './AttestationPathWidget';
 import { AttestationSessionsCalendarWidget } from './AttestationSessionsCalendarWidget';
 import { LinkedAccountsCard } from './LinkedAccountsCard';
@@ -288,6 +289,11 @@ export function AccountSection({
           onAuthenticated={handleAuthenticated}
           onForgotPassword={() => setShowForgot(true)}
         />
+        <ApplicationProgressIndicator
+          user={null}
+          inquiries={[]}
+          onFocusAuth={() => scrollToElementById('account-auth-panel')}
+        />
         <AttestationPathWidget
           user={null}
           onFocusAuth={() => {
@@ -360,6 +366,18 @@ export function AccountSection({
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
         onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
         onJumpToReviews={() => scrollToElementById('account-reviews-section')}
+      />
+      <ApplicationProgressIndicator
+        user={user}
+        inquiries={inquiries}
+        inquiriesLoading={inquiriesLoading}
+        overallChecklistPercent={effectiveProgressSummary.percent}
+        onRefreshInquiries={
+          hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
+        }
+        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
+        onJumpToInquiries={() => scrollToElementById('my-inquiries-status-table')}
+        onJumpToChecklist={() => scrollToElementById('attestation-progress-widget')}
       />
       <AttestationPathWidget
         user={user}

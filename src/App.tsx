@@ -12,6 +12,7 @@ import {
   ContactsSection,
 } from './components/landing/LandingSections';
 import { NewsSection, RoutesSection } from './components/landing/NewsAndRoutes';
+import { FAQSection } from './components/landing/FAQSection';
 import { LANDING_SECTIONS } from './data/landingContent';
 import { applySectionSeo, SECTION_SEO_MAP, type SiteTabId } from './utils/seo';
 import { tracker } from './utils/tracker';
@@ -144,6 +145,7 @@ const LANDING_TABS = new Set<SiteTabId>([
   'consulting',
   'news',
   'routes',
+  'faq',
   'contacts',
 ]);
 
@@ -252,7 +254,7 @@ export default function App() {
             РЦА «Русский Восток»
           </button>
 
-          <nav aria-label="Разделы сайта" className="hidden lg:flex items-center gap-5">
+          <nav aria-label="Разделы сайта" className="hidden lg:flex items-center gap-4 xl:gap-5">
             {TOP_NAV.map((item) => {
               const active = activeTab === item.id;
               return (
@@ -356,6 +358,10 @@ export default function App() {
                 <ConsultingSection />
                 <NewsSection />
                 <RoutesSection />
+                <FAQSection
+                  onNavigateToContacts={() => scrollToSection('contacts')}
+                  onNavigateToCertification={() => scrollToSection('certification')}
+                />
                 <ContactsSection />
               </div>
             )}
@@ -365,6 +371,12 @@ export default function App() {
             {activeTab === 'consulting' && <ConsultingSection />}
             {activeTab === 'news' && <NewsSection />}
             {activeTab === 'routes' && <RoutesSection />}
+            {activeTab === 'faq' && (
+              <FAQSection
+                onNavigateToContacts={() => navigateTo('contacts')}
+                onNavigateToCertification={() => navigateTo('certification')}
+              />
+            )}
             {activeTab === 'contacts' && <ContactsSection />}
 
             {/* Lazy sections need a boundary per tab so switching tabs shows a

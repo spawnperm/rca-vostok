@@ -148,6 +148,7 @@ export const LANDING_SECTIONS: readonly LandingSection[] = [
   { id: 'consulting', label: 'Консалтинг' },
   { id: 'news', label: 'Новости' },
   { id: 'routes', label: 'Маршруты' },
+  { id: 'faq', label: 'FAQ' },
   { id: 'contacts', label: 'Связь' },
 ];
 

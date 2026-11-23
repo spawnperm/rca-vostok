@@ -37,6 +37,9 @@ import {
   downloadCalendarIcs,
 } from '../../utils/attestationCalendar';
 import { tracker } from '../../utils/tracker';
+import { FAQSection } from './FAQSection';
+
+export { FAQSection };
 
 /**
  * Landing sections imported from rca-vostok.ru.
@@ -492,6 +495,8 @@ export function LandingSections({ sections }: { sections: readonly LandingSectio
             return <CertificationSection key={section.id} />;
           case 'consulting':
             return <ConsultingSection key={section.id} />;
+          case 'faq':
+            return <FAQSection key={section.id} />;
           case 'contacts':
             return <ContactsSection key={section.id} />;
           default:

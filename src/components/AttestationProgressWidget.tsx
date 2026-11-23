@@ -507,8 +507,9 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
 
   return (
     <section
+      id="attestation-progress-widget"
       aria-labelledby="cabinet-attestation-progress-heading"
-      className="bg-white border border-slate-200 rounded-xl p-6 space-y-6"
+      className="bg-white border border-slate-200 rounded-xl p-6 space-y-6 scroll-mt-24"
     >
       {/* Header + Overall Progress Summary */}
       <div className="flex flex-wrap items-start justify-between gap-4">

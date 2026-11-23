@@ -52,16 +52,14 @@ test('programmes: four training directions from the site', () => {
 });
 
 test('landing sections: match the navigation order of the source site', () => {
-  // The site's `sections` array has seven entries in this order; «Новости» and
-  // «Маршруты» exist there with placeholder headings, and here they are backed
-  // by the platform's own datasets instead of being empty.
+  // The site's `sections` array includes the landing sections plus FAQ before Contacts.
   assert.deepEqual(
     LANDING_SECTIONS.map((s) => s.id),
-    ['learning', 'preparation', 'certification', 'consulting', 'news', 'routes', 'contacts']
+    ['learning', 'preparation', 'certification', 'consulting', 'news', 'routes', 'faq', 'contacts']
   );
   assert.deepEqual(
     LANDING_SECTIONS.map((s) => s.label),
-    ['Обучение', 'Подготовка', 'Аттестация', 'Консалтинг', 'Новости', 'Маршруты', 'Связь']
+    ['Обучение', 'Подготовка', 'Аттестация', 'Консалтинг', 'Новости', 'Маршруты', 'FAQ', 'Связь']
   );
 });
 
