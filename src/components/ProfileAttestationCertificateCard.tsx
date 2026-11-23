@@ -6,6 +6,7 @@ import {
   Eye,
   FileBadge2,
   FileCheck2,
+  FileJson,
   LogIn,
   RefreshCw,
   UserCog,
@@ -215,6 +216,39 @@ export const ProfileAttestationCertificateCard: React.FC<
     setStatusMessage('Параметры сертификата синхронизированы с данными профиля.');
   };
 
+  const handleDownloadCertificateJson = () => {
+    setError(null);
+    try {
+      const payload = {
+        schemaVersion: 'rca-vostok.certificate.v1',
+        exportedAtIso: new Date().toISOString(),
+        certificate: previewData,
+      };
+      const json = JSON.stringify(payload, null, 2);
+      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const fileName = `Sertifikat_RCA_${previewData.certificateNumber}_${previewData.issuedAtIso}.json`;
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatusMessage(`JSON-данные сертификата сохранены: ${fileName}`);
+      tracker.trackCustomInteraction(
+        'Экспорт сертификата (JSON)',
+        `${previewData.certificateNumber} · ${previewData.trackLabel}`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Не удалось сформировать JSON-файл сертификата.'
+      );
+    }
+  };
+
   return (
     <section
       id="account-certificate-generator"
@@ -251,6 +285,15 @@ export const ProfileAttestationCertificateCard: React.FC<
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleDownloadCertificateJson}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <FileJson className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>JSON сертификата</span>
+          </button>
+
           <button
             type="button"
             onClick={() => handleGenerate('preview')}

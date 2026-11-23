@@ -7,6 +7,7 @@ import {
   Download,
   Eye,
   FileBadge2,
+  FileJson,
   GitBranch,
   GraduationCap,
   HelpCircle,
@@ -45,6 +46,7 @@ import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
 import { AttestationSelfDiagnosticsWidget } from './AttestationSelfDiagnosticsWidget';
 import { InstructorPassportCard } from './InstructorPassportCard';
 import { ProfileAttestationCertificateCard } from './ProfileAttestationCertificateCard';
+import { QualificationCertificatesJsonExportCard } from './QualificationCertificatesJsonExportCard';
 import {
   dispatchOpenRcaAssistant,
   dispatchRcaUserContext,
@@ -342,6 +344,10 @@ export function AccountSection({
           user={null}
           onFocusAuth={() => scrollToElementById('account-auth-panel')}
         />
+        <QualificationCertificatesJsonExportCard
+          user={null}
+          onFocusAuth={() => scrollToElementById('account-auth-panel')}
+        />
         <AttestationSelfDiagnosticsWidget
           user={null}
           onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
@@ -445,6 +451,7 @@ export function AccountSection({
         onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
         onJumpToCertificateGenerator={() => scrollToElementById('account-certificate-generator')}
+        onJumpToJsonExport={() => scrollToElementById('account-json-export')}
         onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
         onJumpToReviews={() => scrollToElementById('account-reviews-section')}
       />
@@ -602,6 +609,15 @@ export function AccountSection({
         selectedExamDate={selectedExamDate}
         selectedContour={selectedContour}
         onJumpToProfile={() => scrollToElementById('account-profile-card')}
+      />
+      <QualificationCertificatesJsonExportCard
+        user={user}
+        summary={effectiveProgressSummary}
+        inquiries={inquiries}
+        linkedAccounts={linkedAccounts}
+        selectedExamDate={selectedExamDate}
+        selectedContour={selectedContour}
+        selfCheckRevision={selfCheckRevision}
       />
       <AccountKnowledgeBaseWidget
         user={user}
@@ -1048,6 +1064,7 @@ function CabinetHeader({
   onJumpToAnalytics,
   onJumpToPassport,
   onJumpToCertificateGenerator,
+  onJumpToJsonExport,
   onJumpToFaq,
   onJumpToReviews,
 }: {
@@ -1062,6 +1079,7 @@ function CabinetHeader({
   onJumpToAnalytics: () => void;
   onJumpToPassport: () => void;
   onJumpToCertificateGenerator: () => void;
+  onJumpToJsonExport: () => void;
   onJumpToFaq: () => void;
   onJumpToReviews: () => void;
 }) {
@@ -1142,6 +1160,15 @@ function CabinetHeader({
           >
             <Award className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
             <span>Сертификат PDF</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onJumpToJsonExport}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <FileJson className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Экспорт JSON</span>
           </button>
 
           <button
