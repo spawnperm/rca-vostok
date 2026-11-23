@@ -337,6 +337,78 @@ export const ActiveInquiriesDashboardWidget: React.FC<
             </span>
           )}
         </div>
+
+        {/* Compact Workflow Processing Status Table */}
+        <div className="pt-3 border-t border-slate-700/70 overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-slate-700/80 text-[11px] font-semibold text-slate-400">
+                <th className="py-2 pr-3">Статус обработки</th>
+                <th className="py-2 px-3 whitespace-nowrap">Заявок</th>
+                <th className="py-2 px-3 whitespace-nowrap">Доля</th>
+                <th className="py-2 px-3 whitespace-nowrap">Регламент</th>
+                <th className="py-2 pl-3 whitespace-nowrap">Состояние потока</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/80">
+              {[
+                {
+                  id: 'new',
+                  label: 'Новая (первичная регистрация)',
+                  count: byStatus.new,
+                  pct: newPct,
+                  sla: 'До 1 раб. дня',
+                  stateText: 'Приём заявок открыт',
+                  dotClass: 'bg-amber-400',
+                },
+                {
+                  id: 'in_review',
+                  label: 'На рассмотрении комиссии',
+                  count: byStatus.in_review,
+                  pct: reviewPct,
+                  sla: '1–3 раб. дня',
+                  stateText: 'Сверка стажа и ДПО',
+                  dotClass: 'bg-sky-400',
+                },
+                {
+                  id: 'needs_documents',
+                  label: 'Ожидает уточнения документов',
+                  count: needsDocs,
+                  pct: needsDocsPct,
+                  sla: 'По ответу соискателя',
+                  stateText: 'Дозагрузка справок',
+                  dotClass: 'bg-orange-400',
+                },
+                {
+                  id: 'approved',
+                  label: 'Одобрено / допущено к сессии',
+                  count: byStatus.approved,
+                  pct: approvedPct,
+                  sla: 'Включено в поток',
+                  stateText: 'Передано на экзамен',
+                  dotClass: 'bg-teal-400',
+                },
+              ].map((row) => (
+                <tr key={row.id} className="hover:bg-slate-800/40">
+                  <td className="py-2 pr-3 text-slate-200 font-medium">
+                    <span className="inline-flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${row.dotClass}`} aria-hidden="true" />
+                      <span>{row.label}</span>
+                    </span>
+                  </td>
+                  <td className="py-2 px-3 font-mono font-semibold text-white tabular-nums">
+                    {loading ? '—' : row.count}
+                  </td>
+                  <td className="py-2 px-3 font-mono text-slate-300 tabular-nums">
+                    {loading ? '—' : `${row.pct}%`}
+                  </td>
+                  <td className="py-2 px-3 text-slate-400 whitespace-nowrap">{row.sla}</td>
+                  <td className="py-2 pl-3 text-teal-300 whitespace-nowrap">{row.stateText}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Breakdown by Region & Track */}

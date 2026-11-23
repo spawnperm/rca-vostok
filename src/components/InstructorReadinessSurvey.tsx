@@ -110,12 +110,20 @@ export const InstructorReadinessSurvey: React.FC<InstructorReadinessSurveyProps>
 
   useEffect(() => {
     loadStats();
+    const timer = window.setInterval(loadStats, 15000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const currentReadinessPct = useMemo(
     () => Math.round((readyDocs.length / DOCUMENT_CHECKLIST.length) * 100),
     [readyDocs]
   );
+
+  const liveReadinessLabel = useMemo(() => {
+    if (currentReadinessPct >= 80) return 'Готов к подаче документов';
+    if (currentReadinessPct >= 40) return 'Частичная готовность';
+    return 'Требуется сбор комплекта';
+  }, [currentReadinessPct]);
 
   const toggleDoc = (id: string) => {
     setReadyDocs((prev) =>
@@ -457,14 +465,48 @@ export const InstructorReadinessSurvey: React.FC<InstructorReadinessSurveyProps>
           )}
         </div>
 
-        {/* Right: Collected Survey Summary Panel (4 cols) */}
-        <aside className="lg:col-span-4 bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-900">
-              Сводка собранных анкет готовности
+        {/* Right: Real-time Readiness & Collected Survey Summary Panel (4 cols) */}
+        <aside className="lg:col-span-4 bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-5">
+          {/* Live Personal Readiness Gauge */}
+          <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Ваша оценка сейчас
+              </span>
+              <span className="text-xs font-mono font-bold text-teal-800 tabular-nums">
+                {currentReadinessPct}%
+              </span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Личная оценка готовности к аттестации в реальном времени"
+              aria-valuenow={currentReadinessPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden"
+            >
+              <div
+                className="h-full bg-teal-700 transition-all duration-300 rounded-full"
+                style={{ width: `${currentReadinessPct}%` }}
+              />
+            </div>
+            <p className="text-xs font-semibold text-slate-900">{liveReadinessLabel}</p>
+            <p className="text-[11px] text-slate-500 leading-snug">
+              {region} · {preferredFormat.split('(')[0].trim()}
             </p>
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-slate-900">
+                Сводка в реальном времени
+              </p>
+              {stats?.updatedAt && (
+                <span className="text-[10px] font-mono text-teal-700">Live · 15с</span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-500">
-              Отражает реальные ответы инструкторов, отправленные через форму анкеты.
+              Реальные ответы инструкторов обновляются автоматически после каждой отправки.
             </p>
           </div>
 
@@ -474,31 +516,82 @@ export const InstructorReadinessSurvey: React.FC<InstructorReadinessSurveyProps>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Распределение по регионам ДФО
                 </p>
-                <ul className="space-y-1.5 text-xs">
-                  {stats.byRegion.slice(0, 4).map((item) => (
-                    <li key={item.region} className="flex items-center justify-between gap-2">
-                      <span className="text-slate-700 truncate">{item.region}</span>
-                      <span className="font-mono font-semibold text-slate-900 tabular-nums shrink-0">
-                        {item.count}
-                      </span>
-                    </li>
-                  ))}
+                <ul className="space-y-2 text-xs">
+                  {stats.byRegion.slice(0, 4).map((item) => {
+                    const pct = Math.round((item.count / stats.totalResponses) * 100);
+                    return (
+                      <li key={item.region} className="space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-slate-700 truncate">{item.region}</span>
+                          <span className="font-mono font-semibold text-slate-900 tabular-nums shrink-0">
+                            {item.count} ({pct}%)
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-teal-700 transition-all duration-300"
+                            style={{ width: `${Math.max(pct, 4)}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
+
+              {stats.byFormat.length > 0 && (
+                <div className="pt-3 border-t border-slate-200 space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Выбор образовательного трека
+                  </p>
+                  <ul className="space-y-2 text-xs">
+                    {stats.byFormat.slice(0, 3).map((fmt) => {
+                      const pct = Math.round((fmt.count / stats.totalResponses) * 100);
+                      return (
+                        <li key={fmt.format} className="space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-slate-700 truncate">{fmt.format}</span>
+                            <span className="font-mono font-semibold text-slate-900 tabular-nums shrink-0">
+                              {pct}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-slate-800 transition-all duration-300"
+                              style={{ width: `${Math.max(pct, 4)}%` }}
+                            />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
 
               <div className="pt-3 border-t border-slate-200 space-y-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   Частые барьеры подготовки
                 </p>
-                <ul className="space-y-1.5 text-xs">
-                  {stats.topBarriers.slice(0, 3).map((b) => (
-                    <li key={b.barrier} className="flex items-start justify-between gap-2">
-                      <span className="text-slate-700 leading-snug">{b.barrier}</span>
-                      <span className="font-mono font-semibold text-teal-800 tabular-nums shrink-0">
-                        {b.count}
-                      </span>
-                    </li>
-                  ))}
+                <ul className="space-y-2 text-xs">
+                  {stats.topBarriers.slice(0, 3).map((b) => {
+                    const pct = Math.round((b.count / stats.totalResponses) * 100);
+                    return (
+                      <li key={b.barrier} className="space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-slate-700 leading-snug">{b.barrier}</span>
+                          <span className="font-mono font-semibold text-teal-800 tabular-nums shrink-0">
+                            {b.count} ({pct}%)
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-amber-600 transition-all duration-300"
+                            style={{ width: `${Math.max(pct, 4)}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             </div>

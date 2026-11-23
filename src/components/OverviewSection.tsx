@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock,
   Compass,
+  Download,
   ExternalLink,
   MessageSquare,
   Quote,
@@ -33,16 +34,21 @@ import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
 import { DfoRegionalOfficesMap } from './DfoRegionalOfficesMap';
 import { ExpertProfileWidget } from './ExpertProfileWidget';
 import { GlossaryText, InteractiveGlossary } from './InteractiveGlossary';
+import { InstructorLevelMiniQuiz } from './InstructorLevelMiniQuiz';
 import { InstructorReadinessSurvey } from './InstructorReadinessSurvey';
 import { KnowledgeBaseFaq } from './KnowledgeBaseFaq';
 import { OverviewAttestationChatbot } from './OverviewAttestationChatbot';
 import { OverviewAttestationFaq } from './OverviewAttestationFaq';
+import { OverviewAttestationStatusBar } from './OverviewAttestationStatusBar';
+import { OverviewDemoCertificateSection } from './OverviewDemoCertificateSection';
 import { OverviewWebinarsSchedule } from './OverviewWebinarsSchedule';
+import { PartnersAndCoOrganizersSection } from './PartnersAndCoOrganizersSection';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import { RecommendedLiteratureSection } from './RecommendedLiteratureSection';
 import { RegionalSessionsTimeline } from './RegionalSessionsTimeline';
 import { RegulatoryKnowledgeMiniTest } from './RegulatoryKnowledgeMiniTest';
 import { SuccessStoriesSection } from './SuccessStoriesSection';
+import { generateOverviewDemoCertificatePdf } from '../utils/overviewDemoCertificatePdf';
 import {
   ATTESTATION_TIMELINE_2025_2030,
   CENTER_ACCREDITATION_STATUS,
@@ -79,6 +85,27 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   } | null>(null);
   const [hoveredMilestoneId, setHoveredMilestoneId] = useState<string | null>(null);
   const [focusedMilestoneId, setFocusedMilestoneId] = useState<string | null>(null);
+  const [heroDemoCertNotice, setHeroDemoCertNotice] = useState<string | null>(null);
+
+  const handleQuickDownloadDemoCert = () => {
+    try {
+      const result = generateOverviewDemoCertificatePdf({
+        fullName: 'Соискатель РЦА «Русский Восток»',
+        region: 'Приморский край',
+        track: 'Пешеходный туризм',
+        category: '1–2 категория сложности (коммерческие туры ДФО)',
+        contour: 'Контур А (зачёт подтверждённого стажа)',
+        readinessPercent: 88,
+      });
+      URL.revokeObjectURL(result.pdfBlobUrl);
+      setHeroDemoCertNotice(
+        `Сформирован PDF-отчёт «${result.fileName}». Чтобы указать свои ФИО, перейдите к генератору ниже.`
+      );
+      tracker.trackCustomInteraction('Hero · Скачать демо-сертификат (PDF)', result.data.certificateId);
+    } catch {
+      setHeroDemoCertNotice('Не удалось сформировать PDF — воспользуйтесь генератором ниже.');
+    }
+  };
 
   const handleInspectGlossaryTerm = (term: GlossaryTerm) => {
     setFocusedGlossaryTerm({ termId: term.id, nonce: Date.now() });
@@ -456,6 +483,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               </button>
               <button
                 type="button"
+                onClick={handleQuickDownloadDemoCert}
+                className="px-4 py-2.5 bg-teal-50 border border-teal-300 text-teal-900 text-sm font-semibold rounded-lg hover:bg-teal-100 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+              >
+                <Download className="w-4 h-4 text-teal-700" aria-hidden="true" />
+                <span>Скачать демо-сертификат</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => openCuratorModal('Hero')}
                 className="px-4 py-2.5 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
               >
@@ -463,6 +498,23 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                 <span>Связаться с куратором</span>
               </button>
             </div>
+
+            {heroDemoCertNotice && (
+              <div className="w-full flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-950">
+                <span>{heroDemoCertNotice}</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    document
+                      .getElementById('overview-demo-certificate')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                  className="font-semibold text-teal-800 underline underline-offset-2 cursor-pointer shrink-0"
+                >
+                  Указать свои ФИО
+                </button>
+              </div>
+            )}
 
             <a
               href="https://rca-vostok.ru/"
@@ -550,18 +602,27 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
       </section>
 
+      {/* Interactive Attestation Stages Progress Bar */}
+      <OverviewAttestationStatusBar
+        onApplyForSession={handleApplyForSession}
+        onContactCurator={openCuratorModal}
+      />
+
       {/* Compact Far East Tourism Hubs Weather Widget */}
       <DfoHubsWeatherWidget />
 
-      {/* Real-time Active Applications Dashboard Widget */}
+      {/* Real-time Active Applications Dashboard Widget & Processing Status Table */}
       <ActiveInquiriesDashboardWidget
         refreshKey={statsRefreshKey}
         onScrollToForm={scrollToInquiryForm}
         onContactCurator={openCuratorModal}
       />
 
-      {/* Smooth Attestation FAQ Accordion under Active Inquiries Widget */}
+      {/* Smooth Attestation FAQ Accordion with Real-time Search */}
       <OverviewAttestationFaq onContactCurator={openCuratorModal} />
+
+      {/* Interactive Demo Certificate Generator & PDF Export */}
+      <OverviewDemoCertificateSection />
 
       {/* Institutional Profile & Certification Pipeline */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -674,6 +735,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
       </section>
 
+      {/* Partners & Co-Organizers Section */}
+      <PartnersAndCoOrganizersSection />
+
       {/* Attestation Commission Experts Widget */}
       <AttestationCommissionWidget onContactCurator={openCuratorModal} />
 
@@ -688,6 +752,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Candidate Readiness Self-Check */}
       <AttestationReadinessCheck onContactCurator={openCuratorModal} />
+
+      {/* Mini-Test for Instructor Preparation Level & Category Choice */}
+      <InstructorLevelMiniQuiz
+        onApplyForSession={handleApplyForSession}
+        onContactCurator={openCuratorModal}
+      />
 
       {/* 5-Question Mini Interactive Readiness Quiz */}
       <CenterReadinessMiniQuiz

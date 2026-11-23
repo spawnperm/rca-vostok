@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Award,
   BarChart3,
+  Briefcase,
   CalendarDays,
   CheckCircle2,
   Download,
@@ -39,6 +40,7 @@ import { ApplicationProgressIndicator } from './ApplicationProgressIndicator';
 import { AttestationPathWidget } from './AttestationPathWidget';
 import { AttestationSessionsCalendarWidget } from './AttestationSessionsCalendarWidget';
 import { LinkedAccountsCard } from './LinkedAccountsCard';
+import { PersonalLearningPlanWidget } from './PersonalLearningPlanWidget';
 import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
 import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
@@ -46,6 +48,7 @@ import { FavoriteLiteratureCabinetWidget } from './FavoriteLiteratureCabinetWidg
 import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
 import { AttestationSelfDiagnosticsWidget } from './AttestationSelfDiagnosticsWidget';
 import { InstructorPassportCard } from './InstructorPassportCard';
+import { InstructorResumeGeneratorCard } from './InstructorResumeGeneratorCard';
 import { ProfileAttestationCertificateCard } from './ProfileAttestationCertificateCard';
 import { PreparationChecklistPdfCard } from './PreparationChecklistPdfCard';
 import { QualificationCertificatesJsonExportCard } from './QualificationCertificatesJsonExportCard';
@@ -360,6 +363,11 @@ export function AccountSection({
           onJumpToConsultant={(prompt) => openAiAssistant(prompt)}
           onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
         />
+        <PersonalLearningPlanWidget
+          user={null}
+          onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
+        />
+        <InstructorResumeGeneratorCard user={null} />
         <AttestationSessionsCalendarWidget
           user={null}
           inquiries={[]}
@@ -454,8 +462,10 @@ export function AccountSection({
         onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
         onJumpToLinkedProfiles={() => scrollToElementById('account-linked-profiles')}
         onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
+        onJumpToLearningPlan={() => scrollToElementById('personal-learning-plan')}
         onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
+        onJumpToResume={() => scrollToElementById('instructor-resume-generator')}
         onJumpToCertificateGenerator={() => scrollToElementById('account-certificate-generator')}
         onJumpToChecklistPdf={() => scrollToElementById('account-checklist-pdf')}
         onJumpToJsonExport={() => scrollToElementById('account-json-export')}
@@ -603,11 +613,26 @@ export function AccountSection({
         onJumpToSelfCheck={() => scrollToElementById('qualification-self-check')}
         onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
       />
+      <PersonalLearningPlanWidget
+        user={user}
+        selfCheckRevision={selfCheckRevision}
+        selectedContour={selectedContour}
+        onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
+      />
       <InstructorPassportCard
         user={user}
         summary={effectiveProgressSummary}
         inquiries={inquiries}
         selfCheckRevision={selfCheckRevision}
+      />
+      <InstructorResumeGeneratorCard
+        user={user}
+        summary={effectiveProgressSummary}
+        inquiries={inquiries}
+        selfCheckRevision={selfCheckRevision}
+        selectedContour={selectedContour}
+        onJumpToProfile={() => scrollToElementById('account-profile-card')}
+        onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
       />
       <ProfileAttestationCertificateCard
         user={user}
@@ -1074,8 +1099,10 @@ function CabinetHeader({
   onJumpToCalendar,
   onJumpToLinkedProfiles,
   onJumpToDiagnostics,
+  onJumpToLearningPlan,
   onJumpToAnalytics,
   onJumpToPassport,
+  onJumpToResume,
   onJumpToCertificateGenerator,
   onJumpToChecklistPdf,
   onJumpToJsonExport,
@@ -1090,8 +1117,10 @@ function CabinetHeader({
   onJumpToCalendar: () => void;
   onJumpToLinkedProfiles: () => void;
   onJumpToDiagnostics: () => void;
+  onJumpToLearningPlan: () => void;
   onJumpToAnalytics: () => void;
   onJumpToPassport: () => void;
+  onJumpToResume: () => void;
   onJumpToCertificateGenerator: () => void;
   onJumpToChecklistPdf: () => void;
   onJumpToJsonExport: () => void;
@@ -1161,11 +1190,29 @@ function CabinetHeader({
 
           <button
             type="button"
+            onClick={onJumpToLearningPlan}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <GraduationCap className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>План обучения</span>
+          </button>
+
+          <button
+            type="button"
             onClick={onJumpToPassport}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
           >
             <FileBadge2 className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
             <span>Цифровой паспорт</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onJumpToResume}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <Briefcase className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Резюме PDF</span>
           </button>
 
           <button
