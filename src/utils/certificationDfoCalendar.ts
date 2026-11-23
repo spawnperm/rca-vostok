@@ -439,10 +439,20 @@ export function toCertificationExportEvent(ev: CertificationDfoEvent): Attestati
   };
 }
 
-export function downloadCertificationEventIcs(ev: CertificationDfoEvent): string {
+export function buildCertificationIcsContent(
+  ev: CertificationDfoEvent,
+  reminderMinutesBefore = 1440
+): string {
   const mapped = toCertificationExportEvent(ev);
-  buildIcsEventContent(mapped, 1440);
-  return downloadCalendarIcs(mapped, 1440);
+  return buildIcsEventContent(mapped, reminderMinutesBefore);
+}
+
+export function downloadCertificationEventIcs(
+  ev: CertificationDfoEvent,
+  reminderMinutesBefore = 1440
+): string {
+  const mapped = toCertificationExportEvent(ev);
+  return downloadCalendarIcs(mapped, reminderMinutesBefore);
 }
 
 export function buildCertificationGoogleCalendarUrl(ev: CertificationDfoEvent): string {

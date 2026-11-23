@@ -1,4 +1,5 @@
 import { CERTIFICATION_SCHEDULE, formatSessionRange } from '../data/landingContent.ts';
+import type { AttestationCalendarEvent } from './attestationCalendar.ts';
 
 export interface UpcomingSessionView {
   id: string;
@@ -460,5 +461,41 @@ export function filterExamSchedule(
   return sessions.filter((s) =>
     s.disciplines.some((d) => d.includes(disciplineFilter))
   );
+}
+
+/**
+ * Converts a scheduled session view into a full RFC 5545 calendar event
+ * preserving the real venue, start time (VLAT), commission, and day plan.
+ */
+export function toUpcomingSessionCalendarEvent(
+  session: UpcomingSessionView
+): AttestationCalendarEvent {
+  const disciplinesLabel = session.disciplines.join(', ');
+  const planSummary =
+    session.dayPlan && session.dayPlan.length > 0
+      ? ` Программа: ${session.dayPlan.join(' | ')}.`
+      : '';
+
+  return {
+    id: session.id,
+    kind: 'session',
+    kindLabel: 'Аттестационная сессия',
+    title:
+      session.title ||
+      `Аттестация РЦА «Русский Восток» (${session.category})`,
+    shortTitle: `Сессия ${session.rangeLabel} (${session.category})`,
+    startDateIso: session.start,
+    endDateIso: session.end || session.start,
+    startTimeVld: session.startTimeVld || '09:00',
+    durationMinutes: 480,
+    regionLabel: session.regionLabel || 'Приморский край / весь ДФО',
+    formatLabel: session.examFormat || `Очная сессия · ${session.category}`,
+    location: session.venue,
+    organizer:
+      session.commissionInfo || 'Комиссия РЦА «Русский Восток» (ВВГУ и ФСТР)',
+    description: `Направления: ${disciplinesLabel}.${planSummary} Регламент ПП РФ № 1003 и № 1893.`,
+    inquiryRegion: session.regionLabel || 'Приморский край',
+    inquiryTrack: session.disciplines[0] || 'Пешеходный туризм',
+  };
 }
 

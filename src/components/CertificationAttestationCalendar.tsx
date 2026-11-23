@@ -21,6 +21,7 @@ import {
   type CertificationDfoEventType,
   type CertificationDfoRegionId,
 } from '../utils/certificationDfoCalendar.ts';
+import { buildYandexCalendarUrl } from '../utils/attestationCalendar.ts';
 import { tracker } from '../utils/tracker.ts';
 
 const WEEKDAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const;
@@ -30,6 +31,7 @@ export const CertificationAttestationCalendar: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<'all' | CertificationDfoEventType>('all');
   const [monthIdx, setMonthIdx] = useState<number>(3); // April 2027 default (contains spring sessions)
   const [selectedEventId, setSelectedEventId] = useState<string>('cert-dfo-prim-exam-apr');
+  const [reminderLeadMinutes, setReminderLeadMinutes] = useState<number>(1440);
   const [icsNotice, setIcsNotice] = useState<string | null>(null);
 
   const filteredEvents = useMemo(
@@ -97,10 +99,12 @@ export const CertificationAttestationCalendar: React.FC = () => {
 
   const handleDownloadIcs = () => {
     if (!activeEvent) return;
-    const fileName = downloadCertificationEventIcs(activeEvent);
-    setIcsNotice(`Файл ${fileName} сохранён — импортируйте его в Google, Яндекс или Apple Календарь.`);
+    const fileName = downloadCertificationEventIcs(activeEvent, reminderLeadMinutes);
+    setIcsNotice(
+      `Файл ${fileName} (.ics / iCalendar) сохранён — импортируйте его в Google, Яндекс, Apple или Outlook Календарь.`
+    );
     tracker.trackCustomInteraction(
-      `Календарь аттестаций · .ics: ${activeEvent.shortTitle}`,
+      `Календарь аттестаций · .ics: ${activeEvent.shortTitle} (${reminderLeadMinutes} мин)`,
       activeEvent.startDateIso
     );
   };
@@ -416,25 +420,50 @@ export const CertificationAttestationCalendar: React.FC = () => {
                     </div>
                   </dl>
 
-                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleDownloadIcs}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Добавить в календарь (.ics)</span>
-                    </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-200/80">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleDownloadIcs}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Добавить в календарь (.ics)</span>
+                      </button>
 
-                    <a
-                      href={buildCertificationGoogleCalendarUrl(activeEvent)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0"
-                    >
-                      <span>Google Календарь</span>
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
-                    </a>
+                      <a
+                        href={buildCertificationGoogleCalendarUrl(activeEvent)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <span>Google Календарь</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+                      </a>
+
+                      <a
+                        href={buildYandexCalendarUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <span>Яндекс Календарь</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+                      </a>
+                    </div>
+
+                    <label className="text-[11px] text-slate-600 inline-flex items-center gap-1.5">
+                      <span>Напоминание:</span>
+                      <select
+                        value={reminderLeadMinutes}
+                        onChange={(e) => setReminderLeadMinutes(Number(e.target.value))}
+                        className="px-2 py-1 text-[11px] bg-white border border-slate-300 rounded text-slate-800 font-medium focus:outline-none focus:border-teal-700"
+                      >
+                        <option value={60}>за 1 час</option>
+                        <option value={1440}>за 1 день</option>
+                        <option value={4320}>за 3 дня</option>
+                      </select>
+                    </label>
                   </div>
 
                   {icsNotice && (

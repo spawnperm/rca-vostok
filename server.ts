@@ -85,6 +85,7 @@ import { JsonFileFeedbackRepository } from './src/infrastructure/persistence/Jso
 import { JsonFileInquiryRepository } from './src/infrastructure/persistence/JsonFileInquiryRepository.ts';
 import { JsonFileGuideLeaderboardRepository } from './src/infrastructure/persistence/JsonFileGuideLeaderboardRepository.ts';
 import { JsonFileReadinessSurveyRepository } from './src/infrastructure/persistence/JsonFileReadinessSurveyRepository.ts';
+import { JsonFileSatisfactionSurveyRepository } from './src/infrastructure/persistence/JsonFileSatisfactionSurveyRepository.ts';
 import {
   MIGRATION_STEP_COUNT,
   createPool,
@@ -306,6 +307,7 @@ async function startServer() {
   }
 
   const readinessSurveyRepo = new JsonFileReadinessSurveyRepository(DATA_DIR);
+  const satisfactionSurveyRepo = new JsonFileSatisfactionSurveyRepository(DATA_DIR);
 
   // Identity bounded context: PostgreSQL in production, in-memory for local dev.
   const userRepo: UserRepository = pool
@@ -989,6 +991,31 @@ async function startServer() {
         ok: true,
         id: record.id,
         readinessPct: record.readinessPct,
+        stats,
+      });
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  // Course & Materials Satisfaction Survey (Certification / Аттестация section)
+  app.get('/api/course-satisfaction/stats', (_req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(satisfactionSurveyRepo.getStats());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  app.post('/api/course-satisfaction', surveyRateLimit, (req, res) => {
+    try {
+      const body = (req.body || {}) as Record<string, unknown>;
+      const { record, stats } = satisfactionSurveyRepo.submit(body);
+      res.status(201).json({
+        ok: true,
+        id: record.id,
+        overallScore: record.overallScore,
         stats,
       });
     } catch (err) {

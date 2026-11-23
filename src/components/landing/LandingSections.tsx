@@ -39,6 +39,7 @@ import {
 import { tracker } from '../../utils/tracker';
 import { AttestationLocationsGoogleMap } from './AttestationLocationsGoogleMap';
 import { CertificationAttestationCalendar } from '../CertificationAttestationCalendar';
+import { CourseSatisfactionSurvey } from '../CourseSatisfactionSurvey';
 import { FAQSection } from './FAQSection';
 import { PreparationExamSimulator } from './PreparationExamSimulator';
 
@@ -387,6 +388,8 @@ export function CertificationSection() {
       <CertificationAttestationCalendar />
 
       <AttestationLocationsGoogleMap />
+
+      <CourseSatisfactionSurvey />
     </section>
   );
 }

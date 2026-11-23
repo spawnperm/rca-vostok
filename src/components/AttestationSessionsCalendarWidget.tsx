@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  ExternalLink,
   Link2,
   LogIn,
   MapPin,
@@ -29,12 +30,14 @@ import {
   getDefaultCalendarMonth,
   getInPersonExamSchedule,
   getSessionMonths,
+  toUpcomingSessionCalendarEvent,
   WEEKDAYS_SHORT_RU,
   type ExamDisciplineFilter,
   type UpcomingSessionView,
 } from '../utils/attestationCalendarBooking';
 import {
-  buildScheduleSlotCalendarEvent,
+  buildGoogleCalendarUrl,
+  buildYandexCalendarUrl,
   downloadCalendarIcs,
 } from '../utils/attestationCalendar';
 import { tracker } from '../utils/tracker';
@@ -157,6 +160,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [justBookedDate, setJustBookedDate] = useState<string | null>(null);
+  const [reminderLeadMinutes, setReminderLeadMinutes] = useState<number>(1440);
   const [icsNotice, setIcsNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -272,20 +276,24 @@ export const AttestationSessionsCalendarWidget: React.FC<
     });
   };
 
+  const selectedCalendarEvent = useMemo(
+    () => (selectedSession ? toUpcomingSessionCalendarEvent(selectedSession) : null),
+    [selectedSession]
+  );
+
+  const selectedGoogleCalendarUrl = useMemo(
+    () => (selectedCalendarEvent ? buildGoogleCalendarUrl(selectedCalendarEvent) : ''),
+    [selectedCalendarEvent]
+  );
+
   const handleExportIcs = () => {
-    if (!selectedSession) return;
-    const ev = buildScheduleSlotCalendarEvent({
-      start: selectedSession.start,
-      end: selectedSession.end,
-      category: selectedSession.category,
-      disciplines: selectedSession.disciplines,
-    });
-    const fileName = downloadCalendarIcs(ev, 1440);
+    if (!selectedSession || !selectedCalendarEvent) return;
+    const fileName = downloadCalendarIcs(selectedCalendarEvent, reminderLeadMinutes);
     setIcsNotice(
-      `Файл ${fileName} скачан — добавьте очный экзамен ${selectedSession.rangeLabel} в Google или Яндекс Календарь.`
+      `Файл ${fileName} скачан (.ics / iCalendar) — откройте его для добавления сессии «${selectedSession.rangeLabel}» в Google, Яндекс, Apple или Outlook Календарь.`
     );
     tracker.trackCustomInteraction(
-      'Календарь аттестаций · Экспорт .ics',
+      `Календарь аттестаций · Экспорт .ics (${reminderLeadMinutes} мин)`,
       selectedSession.start
     );
   };
@@ -717,11 +725,66 @@ export const AttestationSessionsCalendarWidget: React.FC<
                 </div>
               )}
 
-              {icsNotice && (
-                <p className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
-                  {icsNotice}
-                </p>
-              )}
+              {/* Export Selected Session to Personal Calendar (.ics / iCalendar) */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-900 inline-flex items-center gap-1.5">
+                    <CalendarPlus className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                    <span>Экспорт выбранного события в личный календарь</span>
+                  </p>
+                  <label className="text-[11px] text-slate-600 inline-flex items-center gap-1.5">
+                    <span>Напоминание:</span>
+                    <select
+                      value={reminderLeadMinutes}
+                      onChange={(e) => setReminderLeadMinutes(Number(e.target.value))}
+                      className="px-2 py-1 text-[11px] bg-white border border-slate-300 rounded text-slate-800 font-medium focus:outline-none focus:border-teal-700"
+                    >
+                      <option value={60}>за 1 час</option>
+                      <option value={1440}>за 1 день</option>
+                      <option value={4320}>за 3 дня</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportIcs}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Скачать .ics (iCalendar)</span>
+                  </button>
+
+                  {selectedGoogleCalendarUrl && (
+                    <a
+                      href={selectedGoogleCalendarUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0"
+                    >
+                      <span>Google Календарь</span>
+                      <ExternalLink className="w-3 h-3 text-slate-500" aria-hidden="true" />
+                    </a>
+                  )}
+
+                  <a
+                    href={buildYandexCalendarUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <span>Яндекс Календарь</span>
+                    <ExternalLink className="w-3 h-3 text-slate-500" aria-hidden="true" />
+                  </a>
+                </div>
+
+                {icsNotice && (
+                  <p role="status" className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 font-medium">
+                    {icsNotice}
+                  </p>
+                )}
+              </div>
 
               {justBookedDate && (
                 <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-950 space-y-2">
