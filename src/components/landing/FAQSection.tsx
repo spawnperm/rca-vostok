@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import {
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
+  Download,
   HelpCircle,
   Phone,
   Search,
   X,
 } from 'lucide-react';
 import { ATTESTATION_FAQ, type FaqItem } from '../../data/researchData';
+import { generateFaqPdf } from '../../utils/faqPdfExport';
 import { tracker } from '../../utils/tracker';
 
 type FaqCategoryFilter = 'all' | FaqItem['category'];
@@ -37,6 +40,8 @@ export function FAQSection({
   const [openIds, setOpenIds] = useState<string[]>(() =>
     ATTESTATION_FAQ.slice(0, 2).map((item) => item.id)
   );
+  const [pdfNotice, setPdfNotice] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -78,6 +83,30 @@ export function FAQSection({
       setOpenIds((prev) => prev.filter((id) => !visibleSet.has(id)));
     } else {
       setOpenIds((prev) => Array.from(new Set([...prev, ...filteredItems.map((i) => i.id)])));
+    }
+  };
+
+  const handleExportPdf = () => {
+    setPdfError(null);
+    try {
+      const itemsToExport = filteredItems.length > 0 ? filteredItems : ATTESTATION_FAQ;
+      const activeCategoryLabel =
+        CATEGORY_TABS.find((t) => t.id === category)?.label ?? 'Все вопросы';
+      const scopeLabel =
+        filteredItems.length === ATTESTATION_FAQ.length
+          ? 'Полное руководство по аттестации'
+          : `${activeCategoryLabel}${normalizedQuery ? ` · «${query.trim()}»` : ''}`;
+
+      const result = generateFaqPdf(itemsToExport, scopeLabel);
+      setPdfNotice(
+        `Файл ${result.fileName} (${result.payload.totalQuestions} ответов) сохранён в PDF для офлайн-использования.`
+      );
+      tracker.trackCustomInteraction('Лендинг FAQ · Экспорт в PDF', result.fileName);
+      window.setTimeout(() => setPdfNotice(null), 6000);
+    } catch (err) {
+      setPdfError(
+        err instanceof Error ? err.message : 'Не удалось сформировать PDF-руководство.'
+      );
     }
   };
 
@@ -167,8 +196,36 @@ export function FAQSection({
                 {allVisibleOpen ? 'Свернуть все' : 'Раскрыть все'}
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Экспорт в PDF</span>
+            </button>
           </div>
         </div>
+
+        {pdfNotice && (
+          <div
+            role="status"
+            className="px-3.5 py-2.5 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-900 flex items-center gap-2"
+          >
+            <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
+            <span>{pdfNotice}</span>
+          </div>
+        )}
+
+        {pdfError && (
+          <p
+            role="alert"
+            className="px-3.5 py-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700"
+          >
+            {pdfError}
+          </p>
+        )}
 
         {/* Metadata bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
