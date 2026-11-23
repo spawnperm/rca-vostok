@@ -367,6 +367,13 @@ export const openApiDocument = {
         responses: { '201': { description: 'Создано' } },
       },
     },
+    '/api/feedback/reviews': {
+      get: {
+        tags: ['Content'],
+        summary: 'Список отзывов инструкторов с рейтингом аттестации и обучения',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
     '/api/guides/leaderboard': {
       get: {
         tags: ['Analytics'],

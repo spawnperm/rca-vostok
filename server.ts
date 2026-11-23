@@ -23,6 +23,7 @@ import type { GuideLeaderboardRepository } from './src/domain/certification/Guid
 import {
   GetCenterReviewsStatsUseCase,
   GetFeedbackStatsUseCase,
+  ListCenterReviewsUseCase,
   SubmitFeedbackUseCase,
 } from './src/application/feedback/FeedbackUseCases.ts';
 import { GetSystemHealthUseCase } from './src/application/system/HealthCheckUseCase.ts';
@@ -336,6 +337,7 @@ async function startServer() {
   const submitFeedbackUseCase = new SubmitFeedbackUseCase(feedbackRepo, eventBus);
   const getFeedbackStatsUseCase = new GetFeedbackStatsUseCase(feedbackRepo);
   const getCenterReviewsStatsUseCase = new GetCenterReviewsStatsUseCase(feedbackRepo);
+  const listCenterReviewsUseCase = new ListCenterReviewsUseCase(feedbackRepo);
   const getGuideLeaderboardUseCase = new GetGuideLeaderboardUseCase(guideLeaderboardRepo, adapterName);
   const syncMyGuideLeaderboardUseCase = new SyncMyGuideLeaderboardUseCase(guideLeaderboardRepo);
   const getSystemHealthUseCase = new GetSystemHealthUseCase(
@@ -622,6 +624,17 @@ async function startServer() {
     }
   });
 
+  // Google Maps Platform runtime browser key lookup (when not bundled via VITE_ env at build time)
+  app.get('/api/maps/config', (_req, res) => {
+    const apiKey = (
+      process.env.VITE_GOOGLE_MAPS_API_KEY ||
+      process.env.GOOGLE_MAPS_API_KEY ||
+      ''
+    ).trim();
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ apiKey });
+  });
+
   // Personal Cabinet AI Support Assistant (Gemini, server-side API key)
   app.post('/api/assistant/chat', assistantRateLimit, async (req, res) => {
     try {
@@ -862,6 +875,20 @@ async function startServer() {
   app.get('/api/feedback/reviews-summary', async (_req, res) => {
     try {
       res.json(await getCenterReviewsStatsUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  app.get('/api/feedback/reviews', async (req, res) => {
+    try {
+      res.json(
+        await listCenterReviewsUseCase.execute({
+          track: req.query.track,
+          minRating: req.query.minRating,
+          limit: req.query.limit,
+        })
+      );
     } catch (err) {
       handleDomainError(err, res);
     }

@@ -8,6 +8,7 @@ import {
   HelpCircle,
   LogIn,
   LogOut,
+  MessageSquareText,
   ShieldCheck,
   ShieldAlert,
   UserPlus,
@@ -35,7 +36,7 @@ import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
 import { InstructorPassportCard } from './InstructorPassportCard';
 import { RcaAssistantChatWidget } from './RcaAssistantChatWidget';
 import { DfoGuidesLeaderboardWidget } from './DfoGuidesLeaderboardWidget';
-import { CenterReviewForm } from './CenterReviewForm';
+import { InstructorReviewsSection } from './InstructorReviewsSection';
 import { ReviewStatsWidget } from './ReviewStatsWidget';
 import {
   ApiError,
@@ -290,6 +291,7 @@ export function AccountSection({
         onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
         onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
+        onJumpToReviews={() => scrollToElementById('account-reviews-section')}
       />
       <AttestationPathWidget
         user={user}
@@ -376,6 +378,16 @@ export function AccountSection({
         onJumpToConsultant={() => openAiAssistant()}
       />
 
+      {/* Instructor Reviews & Feedback with Rating List */}
+      <InstructorReviewsSection
+        user={user}
+        progressSummary={effectiveProgressSummary}
+        inquiries={inquiries}
+        refreshKey={reviewsRefreshKey}
+        onReviewSubmitted={() => setReviewsRefreshKey((k) => k + 1)}
+        onJumpToProgress={() => scrollToElementById('attestation-progress-widget')}
+      />
+
       {/* Analytical Section of the Personal Cabinet */}
       <section
         id="account-analytics-section"
@@ -450,10 +462,6 @@ export function AccountSection({
             onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
           />
           <ProfileCard user={user} onUpdated={handleAuthenticated} />
-          <CenterReviewForm
-            user={user}
-            onSubmitted={() => setReviewsRefreshKey((k) => k + 1)}
-          />
           <PasswordCard onChanged={() => setUser(null)} />
         </div>
         <div className="space-y-6">
@@ -745,6 +753,7 @@ function CabinetHeader({
   onJumpToAnalytics,
   onJumpToPassport,
   onJumpToFaq,
+  onJumpToReviews,
 }: {
   user: SessionUser;
   onLogout: () => void;
@@ -752,6 +761,7 @@ function CabinetHeader({
   onJumpToAnalytics: () => void;
   onJumpToPassport: () => void;
   onJumpToFaq: () => void;
+  onJumpToReviews: () => void;
 }) {
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-6">
@@ -800,6 +810,15 @@ function CabinetHeader({
           >
             <BarChart3 className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
             <span>Аналитика и рейтинг</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onJumpToReviews}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <MessageSquareText className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Отзывы</span>
           </button>
 
           <button

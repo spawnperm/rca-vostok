@@ -17,6 +17,7 @@ import {
 } from '../../data/researchData';
 import { useNewsFeed, type NewsPost } from '../../utils/useNewsFeed';
 import { DISTRICT_TO_ROUTE_ID } from '../../utils/routeWeatherApi';
+import { DfoRoutesGoogleMap } from './DfoRoutesGoogleMap';
 import { RouteWeatherWidget } from './RouteWeatherWidget';
 import { formatDate } from '../../utils/format.ts';
 
@@ -234,9 +235,10 @@ function LandingNewsCard({ item }: { item: NewsPost }) {
   );
 }
 
-/** «Маршруты» — the eight Primorye districts the centre works with. */
+/** «Маршруты» — ДФО interactive Google Map + eight Primorye districts + weather widget. */
 export function RoutesSection() {
   const [activeId, setActiveId] = useState<string>(PRIMORYE_DISTRICTS[0]?.id ?? '');
+  const [selectedMapRouteId, setSelectedMapRouteId] = useState<string | null>(null);
   const active =
     PRIMORYE_DISTRICTS.find((d) => d.id === activeId) ?? PRIMORYE_DISTRICTS[0];
 
@@ -249,15 +251,16 @@ export function RoutesSection() {
   return (
     <section className="space-y-8">
       <header id="routes" className="scroll-mt-24 space-y-2">
-        <p className="text-xs font-semibold uppercase uppercase tracking-wide text-teal-700">
+        <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
           Маршруты
         </p>
         <h2 className="text-2xl font-bold text-slate-900 text-balance">
-          Маршруты и округа Приморского края
+          Маршруты ДФО и округа Приморского края
         </h2>
         <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-          Территории, где работает центр: активные маршруты, обеспеченность проводниками и
-          особенности безопасности по каждому муниципальному образованию.
+          Популярные туристические направления Дальнего Востока с обязательным сопровождением
+          аттестованных инструкторов-проводников, активные маршруты и особенности безопасности
+          по муниципальным образованиям.
         </p>
 
         <div className="flex flex-wrap gap-6 pt-2">
@@ -278,6 +281,8 @@ export function RoutesSection() {
         </div>
       </header>
 
+      <DfoRoutesGoogleMap onSelectRouteId={(routeId) => setSelectedMapRouteId(routeId)} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* District selector */}
         <nav aria-label="Округа Приморского края" className="space-y-1 lg:col-span-1">
@@ -287,7 +292,10 @@ export function RoutesSection() {
               <button
                 key={district.id}
                 type="button"
-                onClick={() => setActiveId(district.id)}
+                onClick={() => {
+                  setActiveId(district.id);
+                  setSelectedMapRouteId(null);
+                }}
                 aria-current={isActive ? 'true' : undefined}
                 className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left text-sm transition-colors cursor-pointer ${
                   isActive
@@ -369,7 +377,9 @@ export function RoutesSection() {
         )}
       </div>
 
-      <RouteWeatherWidget suggestedRouteId={DISTRICT_TO_ROUTE_ID[active?.id ?? '']} />
+      <RouteWeatherWidget
+        suggestedRouteId={selectedMapRouteId ?? DISTRICT_TO_ROUTE_ID[active?.id ?? '']}
+      />
 
       <p className="text-xs text-slate-500 inline-flex items-start gap-1.5">
         <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />

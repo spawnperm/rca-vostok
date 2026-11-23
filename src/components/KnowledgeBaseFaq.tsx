@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { BookOpen, ChevronDown, MessageSquare, Search, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, ChevronDown, Download, MessageSquare, Search, X } from 'lucide-react';
 import { ATTESTATION_FAQ } from '../data/researchData';
+import { ENRICHED_ATTESTATION_FAQ } from '../utils/accountKnowledgeBase';
+import { generateFaqPdf } from '../utils/faqPdfExport';
 import { tracker } from '../utils/tracker';
 
 interface KnowledgeBaseFaqProps {
@@ -17,6 +19,7 @@ export const KnowledgeBaseFaq: React.FC<KnowledgeBaseFaqProps> = ({
   const [category, setCategory] = useState<FaqCategoryFilter>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [openIds, setOpenIds] = useState<string[]>([ATTESTATION_FAQ[0].id]);
+  const [pdfNotice, setPdfNotice] = useState<string | null>(null);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
@@ -57,6 +60,16 @@ export const KnowledgeBaseFaq: React.FC<KnowledgeBaseFaqProps> = ({
       setOpenIds(matched);
     }
     tracker.trackCustomInteraction(`База знаний быстрый тег: ${topic}`);
+  };
+
+  const handleDownloadFaqPdf = () => {
+    const result = generateFaqPdf(
+      ENRICHED_ATTESTATION_FAQ,
+      'Полный справочник соискателя (FAQ)'
+    );
+    setPdfNotice(`Файл ${result.fileName} (${result.payload.totalQuestions} ответов) сформирован.`);
+    tracker.trackCustomInteraction('База знаний: Скачать FAQ (PDF)', result.fileName);
+    setTimeout(() => setPdfNotice(null), 5000);
   };
 
   return (
@@ -119,8 +132,27 @@ export const KnowledgeBaseFaq: React.FC<KnowledgeBaseFaqProps> = ({
                 : 'Раскрыть все'}
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={handleDownloadFaqPdf}
+            className="px-3.5 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Скачать FAQ</span>
+          </button>
         </div>
       </div>
+
+      {pdfNotice && (
+        <div
+          role="status"
+          className="px-3.5 py-2.5 bg-teal-50 border border-teal-200 rounded-lg text-xs text-teal-900 inline-flex items-center gap-2"
+        >
+          <CheckCircle2 className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
+          <span>{pdfNotice}</span>
+        </div>
+      )}
 
       {/* Search & Quick Topic Filters */}
       <div className="space-y-3">

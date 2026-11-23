@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
+  Download,
   FileText,
   Headset,
   HelpCircle,
@@ -21,6 +22,7 @@ import {
   type KnowledgeSearchScope,
   type MethodologicalMaterial,
 } from '../utils/accountKnowledgeBase';
+import { generateFaqPdf } from '../utils/faqPdfExport';
 import type { SessionUser } from '../utils/identityApi';
 import type { SiteTabId } from '../utils/seo';
 import { tracker } from '../utils/tracker';
@@ -208,9 +210,25 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
           </p>
         </div>
 
-        <p className="text-xs font-mono text-slate-500 tabular-nums whitespace-nowrap shrink-0 pt-1">
-          Материалов в выборке: {visibleResult.totalCount}
-        </p>
+        <div className="flex flex-wrap items-center gap-3 shrink-0 pt-1">
+          <p className="text-xs font-mono text-slate-500 tabular-nums whitespace-nowrap">
+            Материалов в выборке: {visibleResult.totalCount}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              const res = generateFaqPdf(
+                ENRICHED_ATTESTATION_FAQ,
+                'Полный справочник личного кабинета (FAQ)'
+              );
+              tracker.trackCustomInteraction('Кабинет FAQ: Скачать FAQ (PDF)', res.fileName);
+            }}
+            className="px-3 py-1.5 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Скачать FAQ</span>
+          </button>
+        </div>
       </div>
 
       {/* Unified Search Input & Quick Topic Buttons */}
