@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DISSERTATION_DATA } from '../data/researchData';
+import { DissertationPdfReader } from './DissertationPdfReader';
 
 export const DissertationSection: React.FC = () => {
   const [degreeMode, setDegreeMode] = useState<'candidate' | 'doctor'>('candidate');
@@ -53,6 +54,9 @@ export const DissertationSection: React.FC = () => {
             : 'Развёртывание кандидатского исследования до докторского уровня предполагает смену масштаба с Приморского края на весь Дальневосточный федеральный округ и переход от сегмента инструкторов-проводников к комплексной системе квалификаций (гиды-переводчики, экскурсоводы, персонал глэмпингов) с интеграцией международных стандартов.'}
         </p>
       </section>
+
+      {/* Embedded Academic PDF Reader (Built-in & User-Uploaded PDFs) */}
+      <DissertationPdfReader />
 
       {/* VAK Formal Requirements Comparison */}
       <section className="bg-white border border-slate-200 rounded-xl p-8 space-y-5">
