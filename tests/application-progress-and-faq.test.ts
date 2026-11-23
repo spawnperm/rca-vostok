@@ -5,6 +5,14 @@ import { LANDING_SECTIONS } from '../src/data/landingContent.ts';
 import { ATTESTATION_FAQ } from '../src/data/researchData.ts';
 import type { InquiryRecord } from '../src/components/social/MyInquiriesSection.tsx';
 
+import {
+  buildFinalAttestationCertificateData,
+  isAttestationEligibleForCertificate,
+} from '../src/utils/attestationFinalCertificatePdf.ts';
+import { ATTESTATION_PATH_STAGES } from '../src/utils/attestationPath.ts';
+import type { SessionUser } from '../src/utils/identityApi.ts';
+import type { UserAttestationSummary } from '../src/components/AttestationProgressWidget.tsx';
+
 function makeInquiry(
   status: InquiryRecord['status'],
   statusComment?: string
@@ -25,6 +33,45 @@ function makeInquiry(
     createdAt: '2026-11-20T09:00:00.000Z',
   };
 }
+
+function makeSummary(completedStagesCount: number): UserAttestationSummary {
+  const allCompleted = completedStagesCount >= ATTESTATION_PATH_STAGES.length;
+  const stages = ATTESTATION_PATH_STAGES.map((stage, idx) => {
+    const done = idx < completedStagesCount;
+    return {
+      stage: stage as UserAttestationSummary['stages'][number]['stage'],
+      completedCount: done ? stage.tasks.length : 0,
+      totalCount: stage.tasks.length,
+      percent: done ? 100 : 0,
+      status: (done ? 'completed' : 'pending') as 'completed' | 'in_progress' | 'pending',
+    };
+  });
+  const totalTasks = stages.reduce((acc, s) => acc + s.totalCount, 0);
+  const completedTasks = stages.reduce((acc, s) => acc + s.completedCount, 0);
+  return {
+    percent: allCompleted ? 100 : Math.round((completedTasks / totalTasks) * 100),
+    completedTasks,
+    totalTasks,
+    completedStages: completedStagesCount,
+    activeStage: stages[Math.min(completedStagesCount, stages.length - 1)].stage,
+    stages,
+    resolvedCompletedSet: new Set<string>(),
+    autoTaskSet: new Set<string>(),
+  };
+}
+
+const SAMPLE_USER: SessionUser = {
+  id: 'user-cert-42',
+  email: 'guide@example.ru',
+  fullName: 'Сидорова Анна Алексеевна',
+  region: 'Приморский край',
+  organisation: 'Турклуб «Сихотэ-Алинь»',
+  role: 'instructor',
+  permissions: ['inquiries:view_own'],
+  isActive: true,
+  createdAt: '2026-01-10T00:00:00.000Z',
+  lastLoginAt: null,
+};
 
 describe('ApplicationProgressIndicator model & FAQ landing integration', () => {
   it('models no_inquiry at 0% with step 1 awaiting submission', () => {
@@ -104,5 +151,35 @@ describe('ApplicationProgressIndicator model & FAQ landing integration', () => {
     assert.ok(faqSection);
     assert.equal(faqSection.label, 'FAQ');
     assert.ok(ATTESTATION_FAQ.length >= 10);
+  });
+
+  it('unlocks and builds final PDF certificate data only when all 4 attestation stages are completed', () => {
+    const incompleteSummary = makeSummary(3);
+    assert.equal(isAttestationEligibleForCertificate(incompleteSummary), false);
+    assert.throws(
+      () =>
+        buildFinalAttestationCertificateData(
+          SAMPLE_USER,
+          incompleteSummary,
+          [makeInquiry('approved')]
+        ),
+      /100%/
+    );
+
+    const fullSummary = makeSummary(4);
+    assert.equal(isAttestationEligibleForCertificate(fullSummary), true);
+    const cert = buildFinalAttestationCertificateData(
+      SAMPLE_USER,
+      fullSummary,
+      [makeInquiry('approved')],
+      '2027-04-16',
+      new Date('2026-11-23T00:00:00.000Z')
+    );
+    assert.match(cert.certificateNumber, /^РЦА-ДФО-2026-\d{5}$/);
+    assert.equal(cert.holderName, 'Сидорова Анна Алексеевна');
+    assert.equal(cert.issuedAtIso, '2026-11-23');
+    assert.equal(cert.validUntilIso, '2031-11-23');
+    assert.equal(cert.stages.length, 4);
+    assert.equal(cert.completedStages, 4);
   });
 });

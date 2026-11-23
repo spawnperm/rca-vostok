@@ -20,6 +20,11 @@ import {
   generateCandidateCertificatePdf,
   type GeneratedPdfResult,
 } from '../utils/candidateCertificatePdf';
+import {
+  generateAttestationFinalCertificatePdf,
+  isAttestationEligibleForCertificate,
+  type GeneratedFinalCertificateResult,
+} from '../utils/attestationFinalCertificatePdf';
 import type { InquiryRecord } from './social/MyInquiriesSection';
 
 export type AttestationStageId = 'application' | 'training' | 'exam' | 'certificate';
@@ -336,7 +341,11 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
   const [pdfBusy, setPdfBusy] = useState<boolean>(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfResult, setPdfResult] = useState<GeneratedPdfResult | null>(null);
-  const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  const [finalCertBusy, setFinalCertBusy] = useState<boolean>(false);
+  const [finalCertResult, setFinalCertResult] = useState<GeneratedFinalCertificateResult | null>(
+    null
+  );
+  const [previewKind, setPreviewKind] = useState<'none' | 'status' | 'final'>('none');
 
   useEffect(() => {
     setStored(readStoredProgress(user.id));
@@ -358,6 +367,8 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
     [user, inquiries, stored]
   );
 
+  const isAllCompleted = isAttestationEligibleForCertificate(summary);
+
   useEffect(() => {
     onSummaryChange?.(summary);
   }, [summary, onSummaryChange]);
@@ -372,13 +383,22 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
   }, [pdfResult?.pdfBlobUrl]);
 
   useEffect(() => {
-    if (!previewOpen) return;
+    const url = finalCertResult?.pdfBlobUrl;
+    return () => {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [finalCertResult?.pdfBlobUrl]);
+
+  useEffect(() => {
+    if (previewKind === 'none') return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setPreviewOpen(false);
+      if (e.key === 'Escape') setPreviewKind('none');
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [previewOpen]);
+  }, [previewKind]);
 
   const selectedStageId: AttestationStageId =
     stored.selectedStageId && ATTESTATION_STAGES.some((s) => s.id === stored.selectedStageId)
@@ -500,6 +520,30 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
     }
   };
 
+  const handleGenerateFinalCertificatePdf = () => {
+    setFinalCertBusy(true);
+    setPdfError(null);
+    try {
+      const result = generateAttestationFinalCertificatePdf(
+        user,
+        summary,
+        inquiries,
+        selectedExamDate
+      );
+      setFinalCertResult(result);
+      tracker.trackCustomInteraction(
+        'Скачивание сертификата об аттестации (PDF)',
+        result.data.certificateNumber
+      );
+    } catch (err) {
+      setPdfError(
+        err instanceof Error ? err.message : 'Не удалось сформировать PDF-сертификат.'
+      );
+    } finally {
+      setFinalCertBusy(false);
+    }
+  };
+
   const statusText =
     summary.percent === 100
       ? 'Аттестация завершена · Свидетельство активно'
@@ -618,25 +662,74 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <p className="text-xs text-slate-500">
-            Данные прогресс-бара ({summary.percent}%, {summary.completedTasks}/{summary.totalTasks}{' '}
-            шагов) автоматически включаются в официальную PDF-справку с печатью РЦА.
+            {isAllCompleted
+              ? 'Все 4 этапа аттестации завершены (100%) — доступен итоговый сертификат и справка о статусе в PDF.'
+              : `Данные прогресс-бара (${summary.percent}%, ${summary.completedTasks}/${summary.totalTasks} шагов) включаются в PDF-справку. После завершения всех этапов откроется кнопка скачивания сертификата.`}
           </p>
 
-          <button
-            type="button"
-            onClick={handleGenerateCertificatePdf}
-            disabled={pdfBusy}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <FileCheck2 className="w-4 h-4" aria-hidden="true" />
-            {pdfBusy ? 'Формируем PDF…' : 'Справка о статусе кандидата (PDF)'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {isAllCompleted && (
+              <button
+                type="button"
+                onClick={handleGenerateFinalCertificatePdf}
+                disabled={finalCertBusy}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+              >
+                <Award className="w-4 h-4" aria-hidden="true" />
+                {finalCertBusy ? 'Формируем PDF…' : 'Скачать сертификат (PDF)'}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleGenerateCertificatePdf}
+              disabled={pdfBusy}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            >
+              <FileCheck2 className="w-4 h-4" aria-hidden="true" />
+              {pdfBusy ? 'Формируем PDF…' : 'Справка о статусе кандидата (PDF)'}
+            </button>
+          </div>
         </div>
 
         {pdfError && (
           <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {pdfError}
           </p>
+        )}
+
+        {finalCertResult && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 bg-emerald-50/80 border border-emerald-200 rounded-lg text-xs">
+            <div className="flex items-center gap-2 text-emerald-950">
+              <Award className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+              <span>
+                Сертификат{' '}
+                <span className="font-mono font-semibold">
+                  {finalCertResult.data.certificateNumber}
+                </span>{' '}
+                сформирован (100% · действует до {finalCertResult.data.validUntilFormatted}).
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPreviewKind('final')}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-emerald-300 text-emerald-900 font-semibold rounded-md hover:bg-emerald-50 transition-colors cursor-pointer"
+              >
+                <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                Просмотр сертификата
+              </button>
+              <a
+                href={finalCertResult.pdfBlobUrl}
+                download={finalCertResult.fileName}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-700 text-white font-semibold rounded-md hover:bg-emerald-800 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                Скачать PDF
+              </a>
+            </div>
+          </div>
         )}
 
         {pdfResult && (
@@ -653,7 +746,7 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setPreviewOpen(true)}
+                onClick={() => setPreviewKind('status')}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-teal-300 text-teal-900 font-semibold rounded-md hover:bg-teal-50 transition-colors cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" aria-hidden="true" />
@@ -862,8 +955,8 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
         </div>
       </div>
 
-      {/* Preview Modal for generated Candidate Status Certificate PDF */}
-      {previewOpen && pdfResult && (
+      {/* Preview Modal for generated Candidate Status Certificate or Final Certificate PDF */}
+      {previewKind === 'status' && pdfResult && (
         <div
           role="dialog"
           aria-modal="true"
@@ -893,7 +986,7 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
                 </a>
                 <button
                   type="button"
-                  onClick={() => setPreviewOpen(false)}
+                  onClick={() => setPreviewKind('none')}
                   aria-label="Закрыть предпросмотр"
                   className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer"
                 >
@@ -906,6 +999,55 @@ export const AttestationProgressWidget: React.FC<AttestationProgressWidgetProps>
               <img
                 src={pdfResult.previewDataUrl}
                 alt={`Справка о статусе кандидата ${pdfResult.data.candidateName}`}
+                className="max-w-full h-auto border border-slate-300 shadow-sm bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {previewKind === 'final' && finalCertResult && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="final-certificate-preview-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+        >
+          <div className="bg-white border border-slate-200 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between gap-3">
+              <div>
+                <h4 id="final-certificate-preview-title" className="text-sm font-bold text-slate-900">
+                  Сертификат об аттестации · {finalCertResult.data.certificateNumber}
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Итоговый документ А4 · Действителен до {finalCertResult.data.validUntilFormatted}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={finalCertResult.pdfBlobUrl}
+                  download={finalCertResult.fileName}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                  Скачать PDF
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewKind('none')}
+                  aria-label="Закрыть предпросмотр"
+                  className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-100 flex justify-center">
+              <img
+                src={finalCertResult.previewDataUrl}
+                alt={`Сертификат об аттестации ${finalCertResult.data.holderName}`}
                 className="max-w-full h-auto border border-slate-300 shadow-sm bg-white"
               />
             </div>

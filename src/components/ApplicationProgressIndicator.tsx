@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Download,
   FileCheck2,
   FileWarning,
   ListChecks,
@@ -26,6 +27,9 @@ export interface ApplicationProgressIndicatorProps {
   inquiries: InquiryRecord[];
   inquiriesLoading?: boolean;
   overallChecklistPercent?: number;
+  isAttestationComplete?: boolean;
+  certificateBusy?: boolean;
+  onDownloadCertificate?: () => void;
   onRefreshInquiries?: () => void;
   onJumpToCalendar?: () => void;
   onJumpToInquiries?: () => void;
@@ -151,6 +155,9 @@ export const ApplicationProgressIndicator: React.FC<ApplicationProgressIndicator
   inquiries,
   inquiriesLoading = false,
   overallChecklistPercent = 0,
+  isAttestationComplete = false,
+  certificateBusy = false,
+  onDownloadCertificate,
   onRefreshInquiries,
   onJumpToCalendar,
   onJumpToInquiries,
@@ -459,6 +466,20 @@ export const ApplicationProgressIndicator: React.FC<ApplicationProgressIndicator
                     ? 'Подать новую заявку'
                     : 'Выбрать сессию и подать заявку'}
                 </span>
+              </button>
+            )}
+
+          {user &&
+            (isAttestationComplete || model.statusKey === 'certified') &&
+            onDownloadCertificate && (
+              <button
+                type="button"
+                onClick={onDownloadCertificate}
+                disabled={certificateBusy}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+              >
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{certificateBusy ? 'Формируем PDF…' : 'Скачать сертификат (PDF)'}</span>
               </button>
             )}
 
