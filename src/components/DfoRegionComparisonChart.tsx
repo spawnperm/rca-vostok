@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeftRight, BarChart3, TrendingUp } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, Radar as RadarIcon, TrendingUp } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -7,6 +7,11 @@ import {
   Legend,
   Line,
   LineChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -17,6 +22,10 @@ import {
   DFO_REGIONS_DISTRIBUTION,
   type DfoRegionDistribution,
 } from '../data/researchData';
+import {
+  buildMultiRegionRadarProfile,
+  type MultiRegionRadarDatum,
+} from '../utils/dfoMultiRegionConcentration';
 import { tracker } from '../utils/tracker';
 import { DfoCertifiedDynamicsLineChart } from './DfoCertifiedDynamicsLineChart';
 import { DfoComparisonSvgMap, type ComparisonSlot } from './DfoComparisonSvgMap';
@@ -170,6 +179,64 @@ const ComparisonLineTooltip: React.FC<{
   );
 };
 
+interface PairRadarTooltipEntry {
+  dataKey?: string;
+  name?: string;
+  value?: number;
+  color?: string;
+  payload?: MultiRegionRadarDatum;
+}
+
+const formatPairRadarValue = (raw: number | undefined, unit: string): string => {
+  if (typeof raw !== 'number' || Number.isNaN(raw)) return '—';
+  if (unit === 'чел.') return `${Math.round(raw).toLocaleString('ru-RU')} чел.`;
+  if (unit === '%') return `${raw.toFixed(1).replace('.', ',')}%`;
+  if (unit === '×') return `${raw.toFixed(2).replace('.', ',')}×`;
+  return `${raw.toFixed(2).replace('.', ',')} ${unit}`;
+};
+
+const PairComparisonRadarTooltip: React.FC<{
+  active?: boolean;
+  payload?: PairRadarTooltipEntry[];
+}> = ({ active, payload }) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const datum = payload[0]?.payload;
+  if (!datum) return null;
+
+  return (
+    <div className="bg-slate-900 text-white border border-slate-700 rounded-lg p-3.5 shadow-lg max-w-xs text-xs space-y-2">
+      <div className="border-b border-slate-700 pb-1.5 space-y-0.5">
+        <div className="font-semibold text-teal-300">{datum.metric}</div>
+        <p className="text-[11px] text-slate-300 leading-snug">{datum.fullLabel}</p>
+      </div>
+      <div className="space-y-1.5">
+        {payload.map((entry) => {
+          const regionId = String(entry.dataKey ?? '');
+          const raw = datum.rawValues?.[regionId];
+          return (
+            <div key={regionId} className="flex items-center justify-between gap-4">
+              <span className="flex items-center gap-2 text-slate-200 truncate">
+                <span
+                  className="w-2.5 h-2.5 rounded-xs shrink-0"
+                  style={{ backgroundColor: entry.color }}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{entry.name}</span>
+              </span>
+              <span className="font-mono font-semibold tabular-nums text-white shrink-0">
+                {formatPairRadarValue(raw, datum.unit)}{' '}
+                <span className="text-slate-400 font-normal">
+                  ({typeof entry.value === 'number' ? Math.round(entry.value) : entry.value}/100)
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const DfoRegionComparisonChart: React.FC = () => {
   const [regionAId, setRegionAId] = useState<string>('primorye');
   const [regionBId, setRegionBId] = useState<string>('kamchatka');
@@ -177,6 +244,7 @@ export const DfoRegionComparisonChart: React.FC = () => {
   const [activeSlot, setActiveSlot] = useState<ComparisonSlot>('A');
   const [barMetricMode, setBarMetricMode] = useState<'counts' | 'rates'>('counts');
   const [forecastScenario, setForecastScenario] = useState<'base' | 'conservative'>('base');
+  const [chart2Mode, setChart2Mode] = useState<'line' | 'radar'>('line');
 
   const totals = useMemo(() => {
     const totalRegistry = DFO_REGIONS_DISTRIBUTION.reduce(
@@ -345,6 +413,11 @@ export const DfoRegionComparisonChart: React.FC = () => {
       driverNote: pt.driverNote,
     }));
   }, [forecastScenario, snapA.region.id, snapB.region.id]);
+
+  const pairRadarData = useMemo(
+    () => buildMultiRegionRadarProfile([snapA.region.id, snapB.region.id]),
+    [snapA.region.id, snapB.region.id]
+  );
 
   const coverageRatioText = useMemo(() => {
     const high = Math.max(snapA.coveragePct, snapB.coveragePct);
@@ -749,147 +822,247 @@ export const DfoRegionComparisonChart: React.FC = () => {
           </div>
         </div>
 
-        {/* Chart 2: 2025-2030 Demand Trajectory LineChart */}
+        {/* Chart 2: 2025-2030 Demand Trajectory LineChart OR Multidimensional RadarChart */}
         <div className="lg:col-span-6 border border-slate-200 rounded-xl p-5 space-y-4 flex flex-col justify-between">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-900">
-                <TrendingUp className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
-                <h3>Динамика потребности 2025–2030 гг.</h3>
+                {chart2Mode === 'line' ? (
+                  <TrendingUp className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
+                ) : (
+                  <RadarIcon className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
+                )}
+                <h3>
+                  {chart2Mode === 'line'
+                    ? 'Динамика потребности 2025–2030 гг.'
+                    : 'Многомерный радар показателей'}
+                </h3>
               </div>
               <p className="text-[11px] text-slate-500">
-                Наведите на точку линии, чтобы увидеть точное количество инструкторов по годам
+                {chart2Mode === 'line'
+                  ? 'Наведите на точку линии, чтобы увидеть точное количество инструкторов по годам'
+                  : 'Сравнение выбранной пары регионов по 6 индексам ДФО (0–100, в подсказке точные значения)'}
               </p>
             </div>
 
-            <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setForecastScenario('base');
-                  tracker.trackCustomInteraction('Сравнение ДФО прогноз: базовый');
-                }}
-                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                  forecastScenario === 'base'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div
+                role="tablist"
+                aria-label="Тип графика сравнения пары регионов ДФО"
+                className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0"
               >
-                Базовый (30%)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setForecastScenario('conservative');
-                  tracker.trackCustomInteraction('Сравнение ДФО прогноз: консервативный');
-                }}
-                className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
-                  forecastScenario === 'conservative'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Консерв. (18%)
-              </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={chart2Mode === 'line'}
+                  onClick={() => {
+                    setChart2Mode('line');
+                    tracker.trackCustomInteraction('Сравнение пары ДФО: линейный график');
+                  }}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+                    chart2Mode === 'line'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <TrendingUp className="w-3 h-3 text-teal-700" aria-hidden="true" />
+                  <span>Линия</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={chart2Mode === 'radar'}
+                  onClick={() => {
+                    setChart2Mode('radar');
+                    tracker.trackCustomInteraction('Сравнение пары ДФО: радарная диаграмма');
+                  }}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+                    chart2Mode === 'radar'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <RadarIcon className="w-3 h-3 text-teal-700" aria-hidden="true" />
+                  <span>Радар</span>
+                </button>
+              </div>
+
+              {chart2Mode === 'line' && (
+                <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForecastScenario('base');
+                      tracker.trackCustomInteraction('Сравнение ДФО прогноз: базовый');
+                    }}
+                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+                      forecastScenario === 'base'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Базовый (30%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForecastScenario('conservative');
+                      tracker.trackCustomInteraction('Сравнение ДФО прогноз: консервативный');
+                    }}
+                    className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
+                      forecastScenario === 'conservative'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Консерв. (18%)
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="w-full h-[290px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={forecastLineData}
-                margin={{ top: 10, right: 16, left: -8, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                <XAxis
-                  dataKey="year"
-                  tick={{ fontSize: 11, fill: '#475569', fontFamily: 'JetBrains Mono, monospace' }}
-                  axisLine={{ stroke: '#CBD5E1' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}
-                  axisLine={{ stroke: '#CBD5E1' }}
-                  tickLine={false}
-                  tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
-                />
-                <Tooltip
-                  trigger="hover"
-                  cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
-                  allowEscapeViewBox={{ x: true, y: true }}
-                  content={<ComparisonLineTooltip />}
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
-                  iconType="plainline"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="regionA"
-                  name={`${snapA.region.shortName} (прогноз)`}
-                  stroke={REGION_A_COLOR}
-                  strokeWidth={2.75}
-                  dot={(dotProps) => {
-                    const { cx, cy, payload, value } = dotProps as {
-                      cx?: number;
-                      cy?: number;
-                      value?: number;
-                      payload?: LineComparisonDatum;
-                    };
-                    if (typeof cx !== 'number' || typeof cy !== 'number') {
-                      return <g key={`empty-a-${payload?.year ?? 'x'}`} />;
-                    }
-                    return (
-                      <g key={`dot-a-${payload?.year}`}>
-                        <title>{`${payload?.year} г. (${snapA.region.shortName}): ${typeof value === 'number' ? value.toLocaleString('ru-RU') : value} инструкторов`}</title>
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={4.5}
-                          fill="#FFFFFF"
-                          stroke={REGION_A_COLOR}
-                          strokeWidth={2}
-                          className="cursor-pointer"
-                        />
-                      </g>
-                    );
-                  }}
-                  activeDot={{ r: 7, fill: REGION_A_COLOR, stroke: '#FFFFFF', strokeWidth: 2 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="regionB"
-                  name={`${snapB.region.shortName} (прогноз)`}
-                  stroke={REGION_B_COLOR}
-                  strokeWidth={2.75}
-                  dot={(dotProps) => {
-                    const { cx, cy, payload, value } = dotProps as {
-                      cx?: number;
-                      cy?: number;
-                      value?: number;
-                      payload?: LineComparisonDatum;
-                    };
-                    if (typeof cx !== 'number' || typeof cy !== 'number') {
-                      return <g key={`empty-b-${payload?.year ?? 'x'}`} />;
-                    }
-                    return (
-                      <g key={`dot-b-${payload?.year}`}>
-                        <title>{`${payload?.year} г. (${snapB.region.shortName}): ${typeof value === 'number' ? value.toLocaleString('ru-RU') : value} инструкторов`}</title>
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={4.5}
-                          fill="#FFFFFF"
-                          stroke={REGION_B_COLOR}
-                          strokeWidth={2}
-                          className="cursor-pointer"
-                        />
-                      </g>
-                    );
-                  }}
-                  activeDot={{ r: 7, fill: REGION_B_COLOR, stroke: '#FFFFFF', strokeWidth: 2 }}
-                />
-              </LineChart>
+              {chart2Mode === 'line' ? (
+                <LineChart
+                  data={forecastLineData}
+                  margin={{ top: 10, right: 16, left: -8, bottom: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                  <XAxis
+                    dataKey="year"
+                    tick={{ fontSize: 11, fill: '#475569', fontFamily: 'JetBrains Mono, monospace' }}
+                    axisLine={{ stroke: '#CBD5E1' }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}
+                    axisLine={{ stroke: '#CBD5E1' }}
+                    tickLine={false}
+                    tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
+                  />
+                  <Tooltip
+                    trigger="hover"
+                    cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                    allowEscapeViewBox={{ x: true, y: true }}
+                    content={<ComparisonLineTooltip />}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+                    iconType="plainline"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="regionA"
+                    name={`${snapA.region.shortName} (прогноз)`}
+                    stroke={REGION_A_COLOR}
+                    strokeWidth={2.75}
+                    dot={(dotProps) => {
+                      const { cx, cy, payload, value } = dotProps as {
+                        cx?: number;
+                        cy?: number;
+                        value?: number;
+                        payload?: LineComparisonDatum;
+                      };
+                      if (typeof cx !== 'number' || typeof cy !== 'number') {
+                        return <g key={`empty-a-${payload?.year ?? 'x'}`} />;
+                      }
+                      return (
+                        <g key={`dot-a-${payload?.year}`}>
+                          <title>{`${payload?.year} г. (${snapA.region.shortName}): ${typeof value === 'number' ? value.toLocaleString('ru-RU') : value} инструкторов`}</title>
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={4.5}
+                            fill="#FFFFFF"
+                            stroke={REGION_A_COLOR}
+                            strokeWidth={2}
+                            className="cursor-pointer"
+                          />
+                        </g>
+                      );
+                    }}
+                    activeDot={{ r: 7, fill: REGION_A_COLOR, stroke: '#FFFFFF', strokeWidth: 2 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="regionB"
+                    name={`${snapB.region.shortName} (прогноз)`}
+                    stroke={REGION_B_COLOR}
+                    strokeWidth={2.75}
+                    dot={(dotProps) => {
+                      const { cx, cy, payload, value } = dotProps as {
+                        cx?: number;
+                        cy?: number;
+                        value?: number;
+                        payload?: LineComparisonDatum;
+                      };
+                      if (typeof cx !== 'number' || typeof cy !== 'number') {
+                        return <g key={`empty-b-${payload?.year ?? 'x'}`} />;
+                      }
+                      return (
+                        <g key={`dot-b-${payload?.year}`}>
+                          <title>{`${payload?.year} г. (${snapB.region.shortName}): ${typeof value === 'number' ? value.toLocaleString('ru-RU') : value} инструкторов`}</title>
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={4.5}
+                            fill="#FFFFFF"
+                            stroke={REGION_B_COLOR}
+                            strokeWidth={2}
+                            className="cursor-pointer"
+                          />
+                        </g>
+                      );
+                    }}
+                    activeDot={{ r: 7, fill: REGION_B_COLOR, stroke: '#FFFFFF', strokeWidth: 2 }}
+                  />
+                </LineChart>
+              ) : (
+                <RadarChart data={pairRadarData} cx="50%" cy="50%" outerRadius="68%">
+                  <PolarGrid stroke="#CBD5E1" />
+                  <PolarAngleAxis
+                    dataKey="metric"
+                    tick={{ fontSize: 10.5, fill: '#334155', fontWeight: 500 }}
+                  />
+                  <PolarRadiusAxis
+                    angle={30}
+                    domain={[0, 100]}
+                    tickCount={5}
+                    tick={{
+                      fontSize: 9.5,
+                      fill: '#64748B',
+                      fontFamily: 'JetBrains Mono, monospace',
+                    }}
+                  />
+                  <Tooltip
+                    allowEscapeViewBox={{ x: true, y: true }}
+                    content={<PairComparisonRadarTooltip />}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '6px' }} />
+                  <Radar
+                    name={snapA.region.shortName}
+                    dataKey={snapA.region.id}
+                    stroke={REGION_A_COLOR}
+                    fill={REGION_A_COLOR}
+                    fillOpacity={0.2}
+                    strokeWidth={2.25}
+                    dot={{ r: 3.5, fill: '#FFFFFF', stroke: REGION_A_COLOR, strokeWidth: 1.75 }}
+                    activeDot={{ r: 5.5, fill: REGION_A_COLOR, stroke: '#FFFFFF', strokeWidth: 2 }}
+                  />
+                  <Radar
+                    name={snapB.region.shortName}
+                    dataKey={snapB.region.id}
+                    stroke={REGION_B_COLOR}
+                    fill={REGION_B_COLOR}
+                    fillOpacity={0.2}
+                    strokeWidth={2.25}
+                    dot={{ r: 3.5, fill: '#FFFFFF', stroke: REGION_B_COLOR, strokeWidth: 1.75 }}
+                    activeDot={{ r: 5.5, fill: REGION_B_COLOR, stroke: '#FFFFFF', strokeWidth: 2 }}
+                  />
+                </RadarChart>
+              )}
             </ResponsiveContainer>
           </div>
         </div>

@@ -6,7 +6,9 @@ import {
   MARKET_SEGMENTS,
   RECOMMENDATIONS,
 } from '../data/researchData';
+import { DfoMultiRegionConcentrationChart } from './DfoMultiRegionConcentrationChart';
 import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
+import { DfoTwoPeriodDemandComparison } from './DfoTwoPeriodDemandComparison';
 import { DfoSubjectsD3SvgMap } from './DfoSubjectsD3SvgMap';
 import { DfoGeographyLeafletMap } from './DfoGeographyLeafletMap';
 import { MarketDfoDemandTableBlock } from './MarketDfoDemandTableBlock';
@@ -120,6 +122,12 @@ export const MarketSection: React.FC = () => {
 
       {/* Interactive DFO Instructor Demand Dropdown & Simple Comparison Table */}
       <MarketDfoDemandTableBlock />
+
+      {/* Multi-Select Simultaneous Comparison of Instructor Concentration Across DFO Regions */}
+      <DfoMultiRegionConcentrationChart />
+
+      {/* Two-Period Instructor Demand Dynamics & Inter-Year Trend Comparison */}
+      <DfoTwoPeriodDemandComparison />
 
       {/* Visual Comparison of Two Selected DFO Regions */}
       <DfoRegionComparisonChart />
