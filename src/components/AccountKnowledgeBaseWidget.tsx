@@ -202,11 +202,11 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
             <span>Справочник личного кабинета · ВВГУ и РЦА «Русский Восток»</span>
           </p>
           <h3 id="account-kb-heading" className="text-lg font-bold text-slate-900 text-balance">
-            Часто задаваемые вопросы (FAQ)
+            База знаний и FAQ
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Ответы на типовые вопросы об аттестации, квалификационных требованиях (стаж, ДПО ВВГУ,
-            Контур А) и подаче документов (ПП РФ № 1003, № 1893, № 760).
+            Быстрые ответы на типовые вопросы об аттестации, квалификационных требованиях (стаж, ДПО ВВГУ,
+            Контур А) и подаче документов с интегрированным поиском по методическим материалам (ПП РФ № 1003, № 1893, № 760).
           </p>
         </div>
 
