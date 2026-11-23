@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
+  BookOpen,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -31,10 +32,15 @@ import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
 import { DfoRegionalOfficesMap } from './DfoRegionalOfficesMap';
 import { ExpertProfileWidget } from './ExpertProfileWidget';
 import { GlossaryText, InteractiveGlossary } from './InteractiveGlossary';
+import { InstructorReadinessSurvey } from './InstructorReadinessSurvey';
 import { KnowledgeBaseFaq } from './KnowledgeBaseFaq';
+import { OverviewAttestationChatbot } from './OverviewAttestationChatbot';
+import { OverviewAttestationFaq } from './OverviewAttestationFaq';
+import { OverviewWebinarsSchedule } from './OverviewWebinarsSchedule';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import { RecommendedLiteratureSection } from './RecommendedLiteratureSection';
 import { RegionalSessionsTimeline } from './RegionalSessionsTimeline';
+import { RegulatoryKnowledgeMiniTest } from './RegulatoryKnowledgeMiniTest';
 import { SuccessStoriesSection } from './SuccessStoriesSection';
 import {
   ATTESTATION_TIMELINE_2025_2030,
@@ -44,6 +50,7 @@ import {
   HERO_IMAGE,
   INDUSTRY_NEWS,
   RCA_PROFILE,
+  type GlossaryTerm,
 } from '../data/researchData';
 import { tracker } from '../utils/tracker';
 
@@ -65,8 +72,16 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   );
   const [glossaryHighlightEnabled, setGlossaryHighlightEnabled] =
     useState<boolean>(true);
+  const [focusedGlossaryTerm, setFocusedGlossaryTerm] = useState<{
+    termId: string;
+    nonce: number;
+  } | null>(null);
   const [hoveredMilestoneId, setHoveredMilestoneId] = useState<string | null>(null);
   const [focusedMilestoneId, setFocusedMilestoneId] = useState<string | null>(null);
+
+  const handleInspectGlossaryTerm = (term: GlossaryTerm) => {
+    setFocusedGlossaryTerm({ termId: term.id, nonce: Date.now() });
+  };
 
   const getMilestoneStatusMeta = (
     phase: 'Завершён' | 'Активный этап' | 'Прогноз'
@@ -358,16 +373,57 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
         <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-8 flex flex-col justify-between gap-6">
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-              <span>rca-vostok.ru</span>
-              <span aria-hidden="true">·</span>
-              <span>ВВГУ + Федерация спортивного туризма России</span>
-              <span aria-hidden="true">·</span>
-              <span>Ноябрь 2026</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-medium text-slate-500">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>rca-vostok.ru</span>
+                <span aria-hidden="true">·</span>
+                <span>ВВГУ + Федерация спортивного туризма России</span>
+                <span aria-hidden="true">·</span>
+                <span>Ноябрь 2026</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGlossaryHighlightEnabled((prev) => !prev);
+                    tracker.trackCustomInteraction(
+                      `Глоссарий в Hero: ${!glossaryHighlightEnabled ? 'вкл' : 'выкл'}`
+                    );
+                  }}
+                  aria-pressed={glossaryHighlightEnabled}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    glossaryHighlightEnabled
+                      ? 'bg-teal-50 border-teal-200 text-teal-900'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <BookOpen className="w-3 h-3 text-teal-700" aria-hidden="true" />
+                  <span>
+                    {glossaryHighlightEnabled ? 'Глоссарий: Вкл' : 'Глоссарий: Выкл'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    document
+                      .getElementById('glossary-section')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                  className="text-[11px] font-medium text-teal-700 hover:text-teal-900 underline underline-offset-2 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  Справочник
+                </button>
+              </div>
             </div>
 
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 leading-[1.15] text-balance">
-              Региональный центр аттестации «Русский Восток» и баланс кадров активного туризма ДФО
+              <GlossaryText
+                text="Региональный центр аттестации «Русский Восток» и баланс кадров активного туризма ДФО"
+                enabled={glossaryHighlightEnabled}
+                showDirectoryLink
+                onInspectTerm={handleInspectGlossaryTerm}
+              />
             </h1>
 
             <p className="text-base text-slate-600 leading-relaxed max-w-2xl">
@@ -375,6 +431,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                 text="Уполномоченный центр государственной аттестации инструкторов-проводников Приморского края на базе Владивостокского государственного университета (ВВГУ). Платформа объединяет институциональный профиль центра, расчётную модель потребности до 2030 года, аналитику рынка и материалы диссертационного исследования (ВАК 5.2.3)."
                 enabled={glossaryHighlightEnabled}
                 showDirectoryLink
+                onInspectTerm={handleInspectGlossaryTerm}
               />
             </p>
           </div>
@@ -453,19 +510,40 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-6">
-          <p className="text-xs font-medium text-slate-500">Активный туризм (оценка Минтуризма)</p>
+          <p className="text-xs font-medium text-slate-500">
+            <GlossaryText
+              text="Активный туризм (оценка Минтуризма)"
+              enabled={glossaryHighlightEnabled}
+              showDirectoryLink
+              onInspectTerm={handleInspectGlossaryTerm}
+            />
+          </p>
           <p className="mt-2 text-3xl font-bold text-slate-900 font-mono tabular-nums">≈ 835 тыс.</p>
           <p className="mt-2 text-xs text-slate-600">20% от общего потока: горные треки, сплавы, пешие походы</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-6">
-          <p className="text-xs font-medium text-slate-500">Реестр Приморского края</p>
+          <p className="text-xs font-medium text-slate-500">
+            <GlossaryText
+              text="Единый федеральный реестр (Приморский край)"
+              enabled={glossaryHighlightEnabled}
+              showDirectoryLink
+              onInspectTerm={handleInspectGlossaryTerm}
+            />
+          </p>
           <p className="mt-2 text-3xl font-bold text-red-700 font-mono tabular-nums">122 чел.</p>
           <p className="mt-2 text-xs text-slate-600">Разрыв с расчётной потребностью (2 390 чел.) — более 18 раз</p>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-6">
-          <p className="text-xs font-medium text-slate-500">Выпуск РЦА и ВВГУ (окт. 2026)</p>
+          <p className="text-xs font-medium text-slate-500">
+            <GlossaryText
+              text="Выпуск РЦА и ВВГУ (окт. 2026)"
+              enabled={glossaryHighlightEnabled}
+              showDirectoryLink
+              onInspectTerm={handleInspectGlossaryTerm}
+            />
+          </p>
           <p className="mt-2 text-3xl font-bold text-teal-700 font-mono tabular-nums">26 / 52</p>
           <p className="mt-2 text-xs text-slate-600">26 аттестованы (15 ПК, 9 ХК, 2 Камч.), 52 обучены за год</p>
         </div>
@@ -480,6 +558,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         onScrollToForm={scrollToInquiryForm}
         onContactCurator={openCuratorModal}
       />
+
+      {/* Smooth Attestation FAQ Accordion under Active Inquiries Widget */}
+      <OverviewAttestationFaq onContactCurator={openCuratorModal} />
 
       {/* Institutional Profile & Certification Pipeline */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -507,7 +588,15 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               <dt className="text-xs text-slate-500">Нормативно-правовой контур</dt>
               <dd className="mt-1.5 space-y-1.5 text-slate-700 text-xs leading-relaxed">
                 {RCA_PROFILE.legalBasis.map((item) => (
-                  <p key={item}>· {item}</p>
+                  <p key={item}>
+                    ·{' '}
+                    <GlossaryText
+                      text={item}
+                      enabled={glossaryHighlightEnabled}
+                      showDirectoryLink
+                      onInspectTerm={handleInspectGlossaryTerm}
+                    />
+                  </p>
                 ))}
               </dd>
             </div>
@@ -551,6 +640,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                     text={stage.detail}
                     enabled={glossaryHighlightEnabled}
                     showDirectoryLink
+                    onInspectTerm={handleInspectGlossaryTerm}
                   />
                 </p>
               </div>
@@ -568,7 +658,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                   <p className="text-xs font-mono text-teal-700 tabular-nums">
                     {prog.hours} · {prog.pricing}
                   </p>
-                  <p className="text-xs text-slate-600 leading-relaxed">{prog.seats}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    <GlossaryText
+                      text={prog.seats}
+                      enabled={glossaryHighlightEnabled}
+                      showDirectoryLink
+                      onInspectTerm={handleInspectGlossaryTerm}
+                    />
+                  </p>
                 </div>
               ))}
             </div>
@@ -597,6 +694,18 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         onApplyForSession={scrollToInquiryForm}
       />
 
+      {/* Regulatory Framework Mini-Test Before Application */}
+      <RegulatoryKnowledgeMiniTest
+        onApplyForSession={scrollToInquiryForm}
+        onContactCurator={openCuratorModal}
+      />
+
+      {/* Instructor Attestation Readiness Survey Questionnaire */}
+      <InstructorReadinessSurvey
+        onApplyForSession={handleApplyForSession}
+        onContactCurator={openCuratorModal}
+      />
+
       {/* Operational Certification Announcements & Regulatory Updates Feed */}
       <AttestationNewsFeed onContactCurator={openCuratorModal} />
 
@@ -621,6 +730,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                 text={CENTER_ACCREDITATION_STATUS.summary}
                 enabled={glossaryHighlightEnabled}
                 showDirectoryLink
+                onInspectTerm={handleInspectGlossaryTerm}
               />
             </p>
           </div>
@@ -742,7 +852,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                       {item.normRef}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 leading-relaxed">{item.implementation}</p>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    <GlossaryText
+                      text={item.implementation}
+                      enabled={glossaryHighlightEnabled}
+                      showDirectoryLink
+                      onInspectTerm={handleInspectGlossaryTerm}
+                    />
+                  </p>
                 </div>
               ))}
             </div>
@@ -751,7 +868,13 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               Актуальный перечень образовательных программ ДПО и графики аттестационных сессий
               подтверждаются официальным порталом{' '}
               <span className="font-mono text-slate-700">rca-vostok.ru</span> и вносимыми записями
-              в Единый федеральный реестр.
+              в{' '}
+              <GlossaryText
+                text="Единый федеральный реестр"
+                enabled={glossaryHighlightEnabled}
+                showDirectoryLink
+                onInspectTerm={handleInspectGlossaryTerm}
+              />.
             </p>
           </div>
         </div>
@@ -816,7 +939,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
             <div className="py-3 flex items-center justify-between gap-4">
               <div>
                 <p className="font-semibold text-slate-900">Приморский край</p>
-                <p className="text-xs text-slate-500">4,07 млн поездок · 20% активный туризм · лидер по объёму</p>
+                <p className="text-xs text-slate-500">
+                  <GlossaryText
+                    text="4,07 млн поездок · 20% активный туризм · лидер по объёму"
+                    enabled={glossaryHighlightEnabled}
+                    showDirectoryLink
+                    onInspectTerm={handleInspectGlossaryTerm}
+                  />
+                </p>
               </div>
               <div className="text-right font-mono tabular-nums shrink-0">
                 <p className="text-sm font-semibold text-slate-900">122 в реестре</p>
@@ -838,7 +968,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
             <div className="py-3 flex items-center justify-between gap-4">
               <div>
                 <p className="font-semibold text-slate-900">Хабаровский край</p>
-                <p className="text-xs text-slate-500">Высокий отложенный спрос · выездная аттестация в РЦА Приморья</p>
+                <p className="text-xs text-slate-500">
+                  <GlossaryText
+                    text="Высокий отложенный спрос · выездная аттестация в РЦА Приморья"
+                    enabled={glossaryHighlightEnabled}
+                    showDirectoryLink
+                    onInspectTerm={handleInspectGlossaryTerm}
+                  />
+                </p>
               </div>
               <div className="text-right font-mono tabular-nums shrink-0">
                 <p className="text-sm font-semibold text-slate-900">33 в реестре</p>
@@ -852,6 +989,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               text="Поскольку федеральная аттестация действует на всей территории РФ, ВВГУ и РЦА «Русский Восток» уже фактически выполняют роль межрегиональной площадки ДФО: треть аттестованных в октябре 2026 г. (11 из 26) прибыли из Хабаровского края и Камчатки."
               enabled={glossaryHighlightEnabled}
               showDirectoryLink
+              onInspectTerm={handleInspectGlossaryTerm}
             />
           </div>
         </div>
@@ -872,6 +1010,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
       {/* Interactive Regional Sessions & Deadlines Timeline */}
       <RegionalSessionsTimeline
         onApplyForSession={handleApplyForSession}
+        onContactCurator={openCuratorModal}
+      />
+
+      {/* Online Preparation Webinars Schedule with Booking */}
+      <OverviewWebinarsSchedule
+        onRegistered={() => setStatsRefreshKey((prev) => prev + 1)}
         onContactCurator={openCuratorModal}
       />
 
@@ -1088,7 +1232,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                 </h3>
 
                 <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-                  {activeMilestone.summary}
+                  <GlossaryText
+                    text={activeMilestone.summary}
+                    enabled={glossaryHighlightEnabled}
+                    showDirectoryLink
+                    onInspectTerm={handleInspectGlossaryTerm}
+                  />
                 </p>
               </div>
 
@@ -1102,7 +1251,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                       <span className="font-mono font-semibold text-teal-700 tabular-nums shrink-0">
                         0{tIdx + 1}.
                       </span>
-                      <span>{task}</span>
+                      <span>
+                        <GlossaryText
+                          text={task}
+                          enabled={glossaryHighlightEnabled}
+                          showDirectoryLink
+                          onInspectTerm={handleInspectGlossaryTerm}
+                        />
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -1211,7 +1367,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           <div className="lg:col-span-8 space-y-4">
             <Quote className="w-6 h-6 text-teal-700/60" aria-hidden="true" />
             <blockquote className="font-serif text-lg sm:text-xl text-slate-900 leading-relaxed">
-              «{activeExpert.quote}»
+              «<GlossaryText
+                text={activeExpert.quote}
+                enabled={glossaryHighlightEnabled}
+                showDirectoryLink
+                onInspectTerm={handleInspectGlossaryTerm}
+              />»
             </blockquote>
           </div>
 
@@ -1227,7 +1388,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                 Практический результат
               </p>
-              <p className="text-xs text-slate-800 leading-relaxed">{activeExpert.outcome}</p>
+              <p className="text-xs text-slate-800 leading-relaxed">
+                <GlossaryText
+                  text={activeExpert.outcome}
+                  enabled={glossaryHighlightEnabled}
+                  showDirectoryLink
+                  onInspectTerm={handleInspectGlossaryTerm}
+                />
+              </p>
             </div>
           </div>
         </div>
@@ -1316,13 +1484,23 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                       {item.title}
                     </h3>
                     <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-                      {item.summary}
+                      <GlossaryText
+                        text={item.summary}
+                        enabled={glossaryHighlightEnabled}
+                        showDirectoryLink
+                        onInspectTerm={handleInspectGlossaryTerm}
+                      />
                     </p>
 
                     {isExpanded && (
                       <div className="pt-2.5 border-t border-slate-100 max-w-3xl">
                         <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                          {item.details}
+                          <GlossaryText
+                            text={item.details}
+                            enabled={glossaryHighlightEnabled}
+                            showDirectoryLink
+                            onInspectTerm={handleInspectGlossaryTerm}
+                          />
                         </p>
                       </div>
                     )}
@@ -1361,6 +1539,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         onToggleHighlightInOverview={() =>
           setGlossaryHighlightEnabled((prev) => !prev)
         }
+        focusedTermRequest={focusedGlossaryTerm}
       />
 
       {/* Knowledge Base with Searchable FAQ Accordion */}
@@ -1376,6 +1555,12 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }, 220);
         }}
+      />
+
+      {/* Interactive Attestation Chatbot Widget */}
+      <OverviewAttestationChatbot
+        onApplyForSession={scrollToInquiryForm}
+        onContactCurator={openCuratorModal}
       />
 
       {/* Instructor Feedback & Certification Updates Form */}

@@ -195,6 +195,8 @@ export const DEFAULT_LOGIN_RULES: RateLimitRule[] = [
   { name: 'analytics-ip', windowMs: 60 * 1000, max: 60 },
   // AI assistant support chat inside the personal cabinet.
   { name: 'assistant-ip', windowMs: 60 * 1000, max: 20 },
+  // Instructor readiness survey submissions.
+  { name: 'survey-ip', windowMs: 60 * 60 * 1000, max: 20 },
   // Git repository sync endpoints (operator unlock & commit/push).
   { name: 'git-unlock-ip', windowMs: 15 * 60 * 1000, max: 10 },
   { name: 'git-push-ip', windowMs: 5 * 60 * 1000, max: 10 },

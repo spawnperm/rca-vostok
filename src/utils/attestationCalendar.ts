@@ -308,6 +308,66 @@ export function getEventsForDate(
   return events.filter((ev) => isoDate >= ev.startDateIso && isoDate <= ev.endDateIso);
 }
 
+export type DfoRegionFilterId =
+  | 'all'
+  | 'primorye'
+  | 'khabarovsk'
+  | 'kamchatka'
+  | 'sakhalin'
+  | 'yakutia_amur'
+  | 'magadan_chukotka';
+
+export const DFO_REGION_FILTER_OPTIONS: readonly {
+  id: DfoRegionFilterId;
+  label: string;
+}[] = [
+  { id: 'all', label: 'Все регионы ДФО' },
+  { id: 'primorye', label: 'Приморский край' },
+  { id: 'khabarovsk', label: 'Хабаровский край' },
+  { id: 'kamchatka', label: 'Камчатский край' },
+  { id: 'sakhalin', label: 'Сахалинская область' },
+  { id: 'yakutia_amur', label: 'Якутия и Амурская обл.' },
+  { id: 'magadan_chukotka', label: 'Магадан и Чукотка' },
+];
+
+const REGION_KEYWORDS: Record<Exclude<DfoRegionFilterId, 'all'>, readonly string[]> = {
+  primorye: ['примор', 'владивосток', 'шкотов'],
+  khabarovsk: ['хабаров'],
+  kamchatka: ['камчат'],
+  sakhalin: ['сахалин', 'курил'],
+  yakutia_amur: ['якут', 'амур'],
+  magadan_chukotka: ['магадан', 'чукот'],
+};
+
+export function matchesDirectDfoRegion(
+  event: AttestationCalendarEvent,
+  regionFilter: DfoRegionFilterId
+): boolean {
+  if (regionFilter === 'all') return true;
+  const haystack = `${event.regionLabel} ${event.inquiryRegion} ${event.location} ${event.title}`.toLowerCase();
+  return REGION_KEYWORDS[regionFilter].some((kw) => haystack.includes(kw));
+}
+
+export function matchesDfoRegionFilter(
+  event: AttestationCalendarEvent,
+  regionFilter: DfoRegionFilterId
+): boolean {
+  if (regionFilter === 'all') return true;
+  if (matchesDirectDfoRegion(event, regionFilter)) return true;
+  return event.regionLabel.toLowerCase().includes('весь дфо');
+}
+
+export function filterAttestationCalendarEvents(
+  events: readonly AttestationCalendarEvent[],
+  kindFilter: 'all' | CalendarEventKind,
+  regionFilter: DfoRegionFilterId
+): AttestationCalendarEvent[] {
+  return events.filter((ev) => {
+    const matchesKind = kindFilter === 'all' || ev.kind === kindFilter;
+    return matchesKind && matchesDfoRegionFilter(ev, regionFilter);
+  });
+}
+
 function escapeIcsText(value: string): string {
   return value
     .replace(/\\/g, '\\\\')

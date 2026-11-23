@@ -84,6 +84,7 @@ import { JsonFileAnalyticsRepository } from './src/infrastructure/persistence/Js
 import { JsonFileFeedbackRepository } from './src/infrastructure/persistence/JsonFileFeedbackRepository.ts';
 import { JsonFileInquiryRepository } from './src/infrastructure/persistence/JsonFileInquiryRepository.ts';
 import { JsonFileGuideLeaderboardRepository } from './src/infrastructure/persistence/JsonFileGuideLeaderboardRepository.ts';
+import { JsonFileReadinessSurveyRepository } from './src/infrastructure/persistence/JsonFileReadinessSurveyRepository.ts';
 import {
   MIGRATION_STEP_COUNT,
   createPool,
@@ -304,6 +305,8 @@ async function startServer() {
     persistenceLog.info('No database configured, using JSON file adapter', { dataDir: DATA_DIR });
   }
 
+  const readinessSurveyRepo = new JsonFileReadinessSurveyRepository(DATA_DIR);
+
   // Identity bounded context: PostgreSQL in production, in-memory for local dev.
   const userRepo: UserRepository = pool
     ? new PostgresUserRepository(pool)
@@ -394,6 +397,7 @@ async function startServer() {
   const feedbackRateLimit = createRateLimit(rateLimiter, 'feedback-ip');
   const analyticsRateLimit = createRateLimit(rateLimiter, 'analytics-ip');
   const assistantRateLimit = createRateLimit(rateLimiter, 'assistant-ip');
+  const surveyRateLimit = createRateLimit(rateLimiter, 'survey-ip');
   const loginRateLimit = createLoginRateLimit({
     limiter: loginLimiter,
     perIpRule: 'login-ip',
@@ -962,6 +966,31 @@ async function startServer() {
         message: body.message,
       });
       res.status(201).json(result);
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  // Instructor Readiness Survey (OverviewSection)
+  app.get('/api/readiness-survey/stats', (_req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(readinessSurveyRepo.getStats());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  app.post('/api/readiness-survey', surveyRateLimit, (req, res) => {
+    try {
+      const body = (req.body || {}) as Record<string, unknown>;
+      const { record, stats } = readinessSurveyRepo.submit(body);
+      res.status(201).json({
+        ok: true,
+        id: record.id,
+        readinessPct: record.readinessPct,
+        stats,
+      });
     } catch (err) {
       handleDomainError(err, res);
     }

@@ -19,12 +19,13 @@ import { tracker } from '../utils/tracker.ts';
 export type GlossaryCategoryFilter = 'all' | GlossaryTerm['category'];
 
 const QUICK_GLOSSARY_TOPICS = [
+  'активный туризм',
+  'инструктор-проводник',
   '132-ФЗ',
   '1003',
   '760',
   'МКК',
   'Контур А',
-  'реестр',
   'ООПТ',
 ] as const;
 
@@ -199,10 +200,10 @@ const InlineTermPopover: React.FC<InlineTermPopoverProps> = ({
         onBlur={() => setHovered(false)}
         aria-describedby={isOpen ? popoverId : undefined}
         aria-expanded={isOpen}
-        className={`inline text-left font-medium border-b border-dotted transition-colors duration-150 cursor-help rounded-xs px-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+        className={`inline text-left [font-weight:inherit] border-b-2 border-dotted transition-colors duration-150 cursor-help rounded-xs px-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
           isOpen
-            ? 'text-teal-900 border-teal-800 bg-teal-100/80'
-            : 'text-teal-800 border-teal-700/75 bg-teal-50/55 hover:bg-teal-100/70 hover:text-teal-950'
+            ? 'text-teal-900 border-teal-800 bg-teal-100/90'
+            : 'text-teal-800 border-teal-700/75 bg-teal-50/60 hover:bg-teal-100/75 hover:text-teal-950'
         }`}
       >
         {matchedText}
@@ -213,7 +214,7 @@ const InlineTermPopover: React.FC<InlineTermPopoverProps> = ({
           id={popoverId}
           role="dialog"
           aria-label={`Определение термина: ${term.term}`}
-          className={`absolute z-40 ${verticalClass} ${horizontalClass} w-72 sm:w-80 max-w-[calc(100vw-2rem)] p-4 rounded-xl bg-slate-900 text-white shadow-xl border border-slate-700 text-left`}
+          className={`absolute z-40 ${verticalClass} ${horizontalClass} w-72 sm:w-80 max-w-[calc(100vw-2rem)] p-4 rounded-xl bg-slate-900 text-white shadow-xl border border-slate-700 text-left font-normal tracking-normal leading-normal`}
         >
           <span className="flex items-start justify-between gap-2">
             <span className="block text-[11px] font-mono text-teal-300 tabular-nums">
@@ -328,12 +329,14 @@ export interface InteractiveGlossaryProps {
   onContactCurator?: (sourceLabel: string) => void;
   highlightInOverview?: boolean;
   onToggleHighlightInOverview?: () => void;
+  focusedTermRequest?: { termId: string; nonce: number } | null;
 }
 
 export const InteractiveGlossary: React.FC<InteractiveGlossaryProps> = ({
   onContactCurator,
   highlightInOverview = true,
   onToggleHighlightInOverview,
+  focusedTermRequest,
 }) => {
   const [glossaryCategory, setGlossaryCategory] =
     useState<GlossaryCategoryFilter>('all');
@@ -344,8 +347,20 @@ export const InteractiveGlossary: React.FC<InteractiveGlossaryProps> = ({
   );
   const [customTextMode, setCustomTextMode] = useState<boolean>(false);
   const [customText, setCustomText] = useState<string>(
-    'Кандидат подаёт заявление в Региональный центр аттестации (РЦА), подтверждает категорию сложности через МКК или Контур А, защищает паспорт маршрута по ПП РФ № 760 и после успешного экзамена вносится в Единый федеральный реестр инструкторов-проводников.'
+    'Активный туризм в ДФО требует участия аттестованного специалиста: инструктор-проводник подтверждает походный стаж через МКК или Контур А, защищает паспорт маршрута по ПП РФ № 760 и вносится в Единый федеральный реестр.'
   );
+
+  useEffect(() => {
+    if (!focusedTermRequest?.termId) return;
+    setGlossaryCategory('all');
+    setSearchQuery('');
+    setPinnedGlossaryId(focusedTermRequest.termId);
+    window.setTimeout(() => {
+      document
+        .getElementById(`glossary-card-${focusedTermRequest.termId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+  }, [focusedTermRequest]);
 
   const activePassage =
     READING_PASSAGES.find((p) => p.id === activePassageId) ??

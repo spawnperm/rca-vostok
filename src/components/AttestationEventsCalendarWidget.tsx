@@ -20,10 +20,14 @@ import {
   buildGoogleCalendarUrl,
   buildYandexCalendarUrl,
   CALENDAR_KEY_MONTHS,
+  DFO_REGION_FILTER_OPTIONS,
   downloadCalendarIcs,
+  filterAttestationCalendarEvents,
   getEventsForDate,
+  matchesDirectDfoRegion,
   type AttestationCalendarEvent,
   type CalendarEventKind,
+  type DfoRegionFilterId,
 } from '../utils/attestationCalendar';
 import { tracker } from '../utils/tracker';
 
@@ -39,6 +43,7 @@ export const AttestationEventsCalendarWidget: React.FC<
   AttestationEventsCalendarWidgetProps
 > = ({ onApplyForSession, onContactCurator }) => {
   const [kindFilter, setKindFilter] = useState<'all' | CalendarEventKind>('all');
+  const [regionFilter, setRegionFilter] = useState<DfoRegionFilterId>('all');
   const [monthIdx, setMonthIdx] = useState<number>(0); // Default: Декабрь 2026
   const [selectedEventId, setSelectedEventId] = useState<string>(
     ATTESTATION_CALENDAR_EVENTS[0].id
@@ -64,10 +69,10 @@ export const AttestationEventsCalendarWidget: React.FC<
     }
   }, [savedReminderIds]);
 
-  const filteredEvents = useMemo(() => {
-    if (kindFilter === 'all') return ATTESTATION_CALENDAR_EVENTS;
-    return ATTESTATION_CALENDAR_EVENTS.filter((e) => e.kind === kindFilter);
-  }, [kindFilter]);
+  const filteredEvents = useMemo(
+    () => filterAttestationCalendarEvents(ATTESTATION_CALENDAR_EVENTS, kindFilter, regionFilter),
+    [kindFilter, regionFilter]
+  );
 
   const currentMonth = CALENDAR_KEY_MONTHS[monthIdx] ?? CALENDAR_KEY_MONTHS[0];
 
@@ -84,8 +89,7 @@ export const AttestationEventsCalendarWidget: React.FC<
     [filteredEvents, selectedEventId]
   );
 
-  const selectEventAndSyncMonth = (ev: AttestationCalendarEvent) => {
-    setSelectedEventId(ev.id);
+  const syncMonthToEvent = (ev: AttestationCalendarEvent) => {
     const [ey, em] = ev.startDateIso.split('-').map(Number);
     const idx = CALENDAR_KEY_MONTHS.findIndex(
       (m) => m.year === ey && m.month === em - 1
@@ -93,8 +97,46 @@ export const AttestationEventsCalendarWidget: React.FC<
     if (idx >= 0) {
       setMonthIdx(idx);
     }
+  };
+
+  const selectEventAndSyncMonth = (ev: AttestationCalendarEvent) => {
+    setSelectedEventId(ev.id);
+    syncMonthToEvent(ev);
     setDownloadNotice(null);
     tracker.trackCustomInteraction(`Календарь событий: ${ev.shortTitle}`, ev.startDateIso);
+  };
+
+  const handleRegionFilterChange = (nextRegion: DfoRegionFilterId, label: string) => {
+    setRegionFilter(nextRegion);
+    const nextFiltered = filterAttestationCalendarEvents(
+      ATTESTATION_CALENDAR_EVENTS,
+      kindFilter,
+      nextRegion
+    );
+    const preferred =
+      nextFiltered.find((ev) => nextRegion !== 'all' && matchesDirectDfoRegion(ev, nextRegion)) ??
+      nextFiltered[0];
+    if (preferred) {
+      setSelectedEventId(preferred.id);
+      syncMonthToEvent(preferred);
+    }
+    setDownloadNotice(null);
+    tracker.trackCustomInteraction(`Фильтр календаря (регион ДФО): ${label}`);
+  };
+
+  const handleKindFilterChange = (nextKind: 'all' | CalendarEventKind, label: string) => {
+    setKindFilter(nextKind);
+    const nextFiltered = filterAttestationCalendarEvents(
+      ATTESTATION_CALENDAR_EVENTS,
+      nextKind,
+      regionFilter
+    );
+    if (nextFiltered.length > 0 && !nextFiltered.some((ev) => ev.id === selectedEventId)) {
+      setSelectedEventId(nextFiltered[0].id);
+      syncMonthToEvent(nextFiltered[0]);
+    }
+    setDownloadNotice(null);
+    tracker.trackCustomInteraction(`Фильтр календаря: ${label}`);
   };
 
   const handleToggleOnSiteReminder = (ev: AttestationCalendarEvent) => {
@@ -171,10 +213,7 @@ export const AttestationEventsCalendarWidget: React.FC<
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => {
-                  setKindFilter(tab.id);
-                  tracker.trackCustomInteraction(`Фильтр календаря: ${tab.label}`);
-                }}
+                onClick={() => handleKindFilterChange(tab.id, tab.label)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   kindFilter === tab.id
                     ? 'bg-white text-slate-900 shadow-xs'
@@ -186,6 +225,53 @@ export const AttestationEventsCalendarWidget: React.FC<
             ))}
           </div>
         </div>
+      </div>
+
+      {/* DFO Region Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          role="group"
+          aria-label="Фильтрация сессий по регионам ДФО"
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          <span className="text-xs font-medium text-slate-500 mr-1 inline-flex items-center gap-1">
+            <MapPin className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Регион ДФО:</span>
+          </span>
+          {DFO_REGION_FILTER_OPTIONS.map((reg) => {
+            const active = regionFilter === reg.id;
+            return (
+              <button
+                key={reg.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => handleRegionFilterChange(reg.id, reg.label)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  active
+                    ? 'bg-teal-700 border-teal-800 text-white font-semibold'
+                    : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-teal-600 hover:text-slate-900'
+                }`}
+              >
+                {reg.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {(kindFilter !== 'all' || regionFilter !== 'all') && (
+          <button
+            type="button"
+            onClick={() => {
+              setKindFilter('all');
+              setRegionFilter('all');
+              setSelectedEventId(ATTESTATION_CALENDAR_EVENTS[0].id);
+              syncMonthToEvent(ATTESTATION_CALENDAR_EVENTS[0]);
+            }}
+            className="text-xs font-medium text-teal-700 hover:text-teal-900 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            Сбросить фильтры
+          </button>
+        )}
       </div>
 
       {/* Main Split: Calendar Month Grid (6 cols) + Event & Reminder Inspector (6 cols) */}
@@ -379,9 +465,13 @@ export const AttestationEventsCalendarWidget: React.FC<
               <div className="py-2.5 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-3">
                 <dt className="text-slate-500 inline-flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-teal-700 shrink-0" aria-hidden="true" />
-                  <span>Площадка</span>
+                  <span>Регион и площадка</span>
                 </dt>
-                <dd className="sm:col-span-2 text-slate-800">{selectedEvent.location}</dd>
+                <dd className="sm:col-span-2 text-slate-800">
+                  <span className="font-semibold text-slate-900">{selectedEvent.regionLabel}</span>
+                  {' · '}
+                  {selectedEvent.location}
+                </dd>
               </div>
 
               <div className="py-2.5 grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-3">
@@ -530,42 +620,61 @@ export const AttestationEventsCalendarWidget: React.FC<
                 {filteredEvents.length} мероприятий
               </span>
             </div>
-            <div className="divide-y divide-slate-200 max-h-[195px] overflow-y-auto">
-              {filteredEvents.map((ev) => {
-                const isSelected = ev.id === selectedEvent.id;
-                const isReminded = savedReminderIds.includes(ev.id);
-                return (
+            <div className="divide-y divide-slate-200 max-h-[215px] overflow-y-auto">
+              {filteredEvents.length === 0 ? (
+                <div className="p-4 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                  <span>По выбранному сочетанию фильтров событий не найдено.</span>
                   <button
-                    key={ev.id}
                     type="button"
-                    onClick={() => selectEventAndSyncMonth(ev)}
-                    className={`w-full px-4 py-2.5 text-left text-xs flex items-center justify-between gap-3 transition-colors cursor-pointer ${
-                      isSelected ? 'bg-teal-50/80 font-semibold text-slate-900' : 'hover:bg-slate-50 text-slate-700'
-                    }`}
+                    onClick={() => {
+                      setKindFilter('all');
+                      setRegionFilter('all');
+                    }}
+                    className="text-teal-700 font-semibold hover:text-teal-900 cursor-pointer"
                   >
-                    <span className="inline-flex items-center gap-2 min-w-0">
-                      <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${
-                          ev.kind === 'webinar' ? 'bg-sky-600' : 'bg-teal-700'
-                        }`}
-                        aria-hidden="true"
-                      />
-                      <span className="font-mono text-[11px] text-slate-500 shrink-0 tabular-nums">
-                        {ev.startDateIso}
-                      </span>
-                      <span className="truncate">{ev.shortTitle}</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1.5 shrink-0">
-                      {isReminded && (
-                        <BellRing className="w-3.5 h-3.5 text-amber-600" aria-label="Напоминание включено" />
-                      )}
-                      <span className="text-[11px] text-slate-500">
-                        {ev.kind === 'webinar' ? 'Вебинар' : 'Сессия'}
-                      </span>
-                    </span>
+                    Показать все даты
                   </button>
-                );
-              })}
+                </div>
+              ) : (
+                filteredEvents.map((ev) => {
+                  const isSelected = ev.id === selectedEvent.id;
+                  const isReminded = savedReminderIds.includes(ev.id);
+                  return (
+                    <button
+                      key={ev.id}
+                      type="button"
+                      onClick={() => selectEventAndSyncMonth(ev)}
+                      className={`w-full px-4 py-2.5 text-left text-xs flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                        isSelected ? 'bg-teal-50/80 font-semibold text-slate-900' : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-2 min-w-0">
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${
+                            ev.kind === 'webinar' ? 'bg-sky-600' : 'bg-teal-700'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <span className="font-mono text-[11px] text-slate-500 shrink-0 tabular-nums">
+                          {ev.startDateIso}
+                        </span>
+                        <span className="truncate">{ev.shortTitle}</span>
+                        <span className="hidden sm:inline text-[11px] text-slate-500 truncate">
+                          · {ev.regionLabel}
+                        </span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 shrink-0">
+                        {isReminded && (
+                          <BellRing className="w-3.5 h-3.5 text-amber-600" aria-label="Напоминание включено" />
+                        )}
+                        <span className="text-[11px] text-slate-500">
+                          {ev.kind === 'webinar' ? 'Вебинар' : 'Сессия'}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
