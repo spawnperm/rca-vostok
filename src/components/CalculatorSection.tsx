@@ -9,6 +9,7 @@ import { IntensiveAttestationCostModule } from './IntensiveAttestationCostModule
 import { TrainingCostByComplexityChart } from './TrainingCostByComplexityChart';
 import { StateDutyAttestationCalculator } from './StateDutyAttestationCalculator';
 import { AttestationKnowledgeQuiz } from './AttestationKnowledgeQuiz';
+import { ExpertRatingCalculatorWidget } from './ExpertRatingCalculatorWidget';
 
 export const CalculatorSection: React.FC = () => {
   const [activePresetId, setActivePresetId] = useState<string>(DEMAND_PRESETS[0].id);
@@ -590,6 +591,9 @@ export const CalculatorSection: React.FC = () => {
 
       {/* Interactive state duty & PP RF 891 fee calculator */}
       <StateDutyAttestationCalculator />
+
+      {/* Expert Rating Calculator, Gauge Chart & Dynamic Collapsible Expert Tips */}
+      <ExpertRatingCalculatorWidget />
 
       {/* 5-question interactive self-check quiz with instant feedback */}
       <AttestationKnowledgeQuiz />

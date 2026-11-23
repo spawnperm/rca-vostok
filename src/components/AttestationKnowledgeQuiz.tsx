@@ -1,12 +1,22 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BookOpenCheck,
   CheckCircle2,
+  Clock,
+  Flag,
   HelpCircle,
+  Play,
   RotateCcw,
   XCircle,
 } from 'lucide-react';
 import { tracker } from '../utils/tracker';
+import {
+  QUIZ_DURATION_SECONDS,
+  formatCountdown,
+  getTimerUrgency,
+  type QuizFinishReason,
+  type QuizTimerState,
+} from '../utils/quizTimer';
 
 interface QuizOption {
   id: string;
@@ -120,6 +130,9 @@ const QUIZ_QUESTIONS: QuizQuestion[] = [
 
 export const AttestationKnowledgeQuiz: React.FC = () => {
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [secondsLeft, setSecondsLeft] = useState<number>(QUIZ_DURATION_SECONDS);
+  const [timerState, setTimerState] = useState<QuizTimerState>('idle');
+  const [finishReason, setFinishReason] = useState<QuizFinishReason>(null);
 
   const answeredCount = Object.keys(answers).length;
   const totalQuestions = QUIZ_QUESTIONS.length;
@@ -131,56 +144,125 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
   );
 
   const progressPct = Math.round((answeredCount / totalQuestions) * 100);
-  const allAnswered = answeredCount === totalQuestions;
+  const isFinished = timerState === 'finished';
+  const elapsedSeconds = QUIZ_DURATION_SECONDS - secondsLeft;
+  const urgency = getTimerUrgency(secondsLeft, timerState);
+
+  const finalizeQuiz = useCallback(
+    (reason: Exclude<QuizFinishReason, null>, currentCorrect: number) => {
+      setTimerState('finished');
+      setFinishReason(reason);
+      tracker.trackCustomInteraction(
+        `Тест «Готов ли я к аттестации» завершён (${reason})`,
+        `${currentCorrect}/${totalQuestions}`
+      );
+    },
+    [totalQuestions]
+  );
+
+  useEffect(() => {
+    if (timerState !== 'running') return;
+    const interval = window.setInterval(() => {
+      setSecondsLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [timerState]);
+
+  useEffect(() => {
+    if (timerState === 'running' && secondsLeft === 0) {
+      finalizeQuiz('timeout', correctCount);
+    }
+  }, [secondsLeft, timerState, finalizeQuiz, correctCount]);
 
   const verdict = useMemo(() => {
-    if (!allAnswered) return null;
+    if (!isFinished) return null;
+    const scorePct = Math.round((correctCount / totalQuestions) * 100);
+    const timeNote =
+      finishReason === 'timeout'
+        ? `Время вышло (05:00). Отвечено на ${answeredCount} из ${totalQuestions} вопросов. `
+        : finishReason === 'manual'
+        ? `Тест завершён досрочно за ${formatCountdown(elapsedSeconds)}. Отвечено на ${answeredCount} из ${totalQuestions} вопросов. `
+        : `Тест завершён за ${formatCountdown(elapsedSeconds)}. `;
+
     if (correctCount === 5) {
       return {
-        badge: 'Высокая готовность · 5 из 5',
+        badge: `Высокая готовность · ${correctCount} из ${totalQuestions} (${scorePct}%)`,
         title: 'Базовая нормативная и практическая подготовка подтверждена',
-        summary:
-          'Вы уверенно ориентируетесь в требованиях ФЗ № 132-ФЗ, ПП РФ № 1003/1893, правилах оплаты по ПП РФ № 891 и стандартах полевых испытаний РЦА.',
+        summary: `${timeNote}Вы уверенно ориентируетесь в требованиях ФЗ № 132-ФЗ, ПП РФ № 1003/1893, правилах оплаты по ПП РФ № 891 и стандартах полевых испытаний РЦА.`,
         toneClass: 'border-teal-300 bg-teal-50/70',
         badgeClass: 'bg-teal-700 text-white',
       };
     }
     if (correctCount >= 3) {
       return {
-        badge: `Хорошая база · ${correctCount} из 5`,
+        badge: `Хорошая база · ${correctCount} из ${totalQuestions} (${scorePct}%)`,
         title: 'Есть понимание ключевых норм, стоит освежить отдельные детали',
-        summary:
-          'Рекомендуем перечитать пояснения к ошибочным пунктам (особенно по паспорту маршрута и структуре оплаты) перед записью на теоретическое тестирование в ВВГУ.',
+        summary: `${timeNote}Рекомендуем перечитать пояснения к ошибочным пунктам (особенно по паспорту маршрута и структуре оплаты) перед записью на теоретическое тестирование в ВВГУ.`,
         toneClass: 'border-amber-300 bg-amber-50/70',
         badgeClass: 'bg-amber-700 text-white',
       };
     }
     return {
-      badge: `Требуется подготовка · ${correctCount} из 5`,
+      badge:
+        finishReason === 'timeout'
+          ? `Время истекло · ${correctCount} из ${totalQuestions} (${scorePct}%)`
+          : `Требуется подготовка · ${correctCount} из ${totalQuestions} (${scorePct}%)`,
       title: 'Рекомендуем вводный курс ДПО на базе ВВГУ перед экзаменом',
-      summary:
-        'До подачи заявки стоит проработать нормативную базу (ФЗ № 132-ФЗ, ПП № 760, ПП № 891) и методику безопасности ДФО на подготовительном потоке РЦА.',
+      summary: `${timeNote}До подачи заявки стоит проработать нормативную базу (ФЗ № 132-ФЗ, ПП № 760, ПП № 891) и методику безопасности ДФО на подготовительном потоке РЦА.`,
       toneClass: 'border-red-300 bg-red-50/70',
       badgeClass: 'bg-red-700 text-white',
     };
-  }, [allAnswered, correctCount]);
+  }, [isFinished, correctCount, totalQuestions, finishReason, answeredCount, elapsedSeconds]);
+
+  const startTimer = () => {
+    if (timerState !== 'idle') return;
+    setTimerState('running');
+    tracker.trackCustomInteraction('Тест «Готов ли я к аттестации»: старт таймера 05:00');
+  };
 
   const handleSelectOption = (question: QuizQuestion, optionId: string) => {
+    if (isFinished) return;
+    if (timerState === 'idle') {
+      setTimerState('running');
+    }
     const isCorrect = optionId === question.correctOptionId;
-    setAnswers((prev) => ({
-      ...prev,
+    const nextAnswers = {
+      ...answers,
       [question.id]: optionId,
-    }));
+    };
+    setAnswers(nextAnswers);
     tracker.trackCustomInteraction(
       `Тест «Готов ли я к аттестации»: ${question.topic}`,
       isCorrect ? 'верно' : 'ошибка'
     );
+    if (Object.keys(nextAnswers).length === totalQuestions) {
+      const nextCorrect = QUIZ_QUESTIONS.filter(
+        (q) => nextAnswers[q.id] === q.correctOptionId
+      ).length;
+      finalizeQuiz('completed', nextCorrect);
+    }
   };
 
   const handleReset = () => {
     setAnswers({});
+    setSecondsLeft(QUIZ_DURATION_SECONDS);
+    setTimerState('idle');
+    setFinishReason(null);
     tracker.trackCustomInteraction('Тест «Готов ли я к аттестации»: сброс');
   };
+
+  const timerBoxStyle =
+    urgency === 'critical' || urgency === 'finished'
+      ? 'border-red-300 bg-red-50 text-red-800'
+      : urgency === 'warning'
+      ? 'border-amber-300 bg-amber-50 text-amber-900'
+      : 'border-slate-200 bg-slate-50 text-slate-900';
 
   return (
     <section
@@ -189,10 +271,10 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
     >
       {/* Header & Live Score */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1.5 max-w-3xl">
+        <div className="space-y-1.5 max-w-2xl">
           <p className="text-xs font-medium text-teal-700 inline-flex items-center gap-1.5">
             <BookOpenCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-            <span>Экспресс-тест знаний соискателя (5 базовых вопросов)</span>
+            <span>Экспресс-тест знаний соискателя · 5 вопросов · лимит 05:00</span>
           </p>
           <h2
             id="knowledge-quiz-heading"
@@ -202,19 +284,69 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
             Проверьте знание сроков действия бейджа, структуры паспорта маршрута, правил
-            госпошлины и стандартов полевого экзамена РЦА «Русский Восток» с мгновенным разбором
-            каждого ответа.
+            госпошлины и стандартов полевого экзамена РЦА «Русский Восток». Обратный
+            отсчёт на 5 минут запускается при старте или первом выборе ответа.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div
+            role="timer"
+            aria-live="off"
+            aria-label={`Оставшееся время: ${formatCountdown(secondsLeft)}`}
+            className={`px-3.5 py-2 border rounded-lg text-right font-mono tabular-nums transition-colors ${timerBoxStyle}`}
+          >
+            <p className="text-[11px] opacity-80 inline-flex items-center gap-1">
+              <Clock className="w-3 h-3" aria-hidden="true" />
+              <span>
+                {finishReason === 'timeout'
+                  ? 'Время вышло'
+                  : timerState === 'running'
+                  ? urgency === 'warning' || urgency === 'critical'
+                    ? 'Менее 1 мин'
+                    : 'Осталось'
+                  : isFinished
+                  ? 'Затрачено'
+                  : 'Лимит времени'}
+              </span>
+            </p>
+            <p className="text-sm font-bold">
+              {isFinished && finishReason !== 'timeout'
+                ? formatCountdown(elapsedSeconds)
+                : formatCountdown(secondsLeft)}
+            </p>
+          </div>
+
           <div className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-right font-mono tabular-nums">
             <p className="text-[11px] text-slate-500">Результат</p>
             <p className="text-sm font-bold text-slate-900">
               {correctCount} / {totalQuestions} верно
             </p>
           </div>
-          {answeredCount > 0 && (
+
+          {timerState === 'idle' && (
+            <button
+              type="button"
+              onClick={startTimer}
+              className="px-3.5 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Начать (05:00)</span>
+            </button>
+          )}
+
+          {timerState === 'running' && (
+            <button
+              type="button"
+              onClick={() => finalizeQuiz('manual', correctCount)}
+              className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Flag className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Завершить</span>
+            </button>
+          )}
+
+          {(answeredCount > 0 || timerState !== 'idle') && (
             <button
               type="button"
               onClick={handleReset}
@@ -231,9 +363,9 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs text-slate-500 font-mono tabular-nums">
           <span>
-            Отвечено: {answeredCount} из {totalQuestions}
+            Отвечено: {answeredCount} из {totalQuestions} ({progressPct}%)
           </span>
-          <span>{progressPct}%</span>
+          <span>Таймер: {formatCountdown(secondsLeft)} / 05:00</span>
         </div>
         <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
           <div
@@ -249,12 +381,13 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
           const selectedId = answers[q.id];
           const isAnswered = Boolean(selectedId);
           const isCorrect = selectedId === q.correctOptionId;
+          const revealAnswer = isAnswered || isFinished;
 
           return (
             <div
               key={q.id}
               className={`border rounded-xl p-5 transition-colors space-y-4 ${
-                !isAnswered
+                !revealAnswer
                   ? 'border-slate-200 bg-white'
                   : isCorrect
                   ? 'border-teal-300 bg-teal-50/30'
@@ -265,7 +398,7 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
                 <span className="text-xs font-mono font-semibold text-teal-800">
                   Вопрос 0{idx + 1} · {q.topic}
                 </span>
-                {isAnswered ? (
+                {revealAnswer ? (
                   <span
                     className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-md ${
                       isCorrect
@@ -281,7 +414,7 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
                     ) : (
                       <>
                         <XCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span>Есть ошибка</span>
+                        <span>{isAnswered ? 'Есть ошибка' : 'Без ответа'}</span>
                       </>
                     )}
                   </span>
@@ -304,7 +437,7 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
 
                   let buttonStyle =
                     'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100 hover:border-slate-300';
-                  if (isAnswered) {
+                  if (revealAnswer) {
                     if (optionIsCorrect) {
                       buttonStyle =
                         'bg-teal-50 border-teal-600 text-teal-950 font-medium';
@@ -320,9 +453,12 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
                     <button
                       key={opt.id}
                       type="button"
+                      disabled={isFinished}
                       onClick={() => handleSelectOption(q, opt.id)}
                       aria-pressed={chosen}
-                      className={`p-3 text-left rounded-lg border text-xs leading-relaxed transition-colors cursor-pointer flex items-start gap-2.5 ${buttonStyle}`}
+                      className={`p-3 text-left rounded-lg border text-xs leading-relaxed transition-colors flex items-start gap-2.5 ${
+                        isFinished ? 'cursor-default' : 'cursor-pointer'
+                      } ${buttonStyle}`}
                     >
                       <span className="font-mono font-semibold uppercase text-[11px] mt-0.5 shrink-0">
                         {opt.id}.
@@ -334,7 +470,7 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
               </div>
 
               {/* Instant Feedback Box */}
-              {isAnswered && (
+              {revealAnswer && (
                 <div
                   role="status"
                   className={`rounded-lg p-3.5 text-xs leading-relaxed border ${
@@ -361,7 +497,11 @@ export const AttestationKnowledgeQuiz: React.FC = () => {
 
       {/* Final Verdict Card */}
       {verdict && (
-        <div className={`border rounded-xl p-5 sm:p-6 space-y-2 ${verdict.toneClass}`}>
+        <div
+          role="region"
+          aria-live="polite"
+          className={`border rounded-xl p-5 sm:p-6 space-y-2 ${verdict.toneClass}`}
+        >
           <span
             className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${verdict.badgeClass}`}
           >
