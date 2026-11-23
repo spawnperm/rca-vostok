@@ -28,10 +28,11 @@ import { DfoHubsWeatherWidget } from './DfoHubsWeatherWidget';
 import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
 import { DfoRegionalOfficesMap } from './DfoRegionalOfficesMap';
 import { ExpertProfileWidget } from './ExpertProfileWidget';
-import { GlossarySection } from './GlossarySection';
+import { GlossaryText, InteractiveGlossary } from './InteractiveGlossary';
 import { KnowledgeBaseFaq } from './KnowledgeBaseFaq';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import { RegionalSessionsTimeline } from './RegionalSessionsTimeline';
+import { SuccessStoriesSection } from './SuccessStoriesSection';
 import {
   ATTESTATION_TIMELINE_2025_2030,
   CENTER_ACCREDITATION_STATUS,
@@ -57,6 +58,8 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   const [activeContourId, setActiveContourId] = useState<string>(
     CENTER_ACCREDITATION_STATUS.contours[0].id
   );
+  const [glossaryHighlightEnabled, setGlossaryHighlightEnabled] =
+    useState<boolean>(true);
 
   const activeExpert = EXPERT_TESTIMONIALS[expertIndex] ?? EXPERT_TESTIMONIALS[0];
   const activeMilestone =
@@ -323,10 +326,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
             </h1>
 
             <p className="text-base text-slate-600 leading-relaxed max-w-2xl">
-              Уполномоченный центр государственной аттестации инструкторов-проводников Приморского края
-              на базе Владивостокского государственного университета (ВВГУ). Платформа объединяет
-              институциональный профиль центра, расчётную модель потребности до 2030 года,
-              аналитику рынка и материалы диссертационного исследования (ВАК 5.2.3).
+              <GlossaryText
+                text="Уполномоченный центр государственной аттестации инструкторов-проводников Приморского края на базе Владивостокского государственного университета (ВВГУ). Платформа объединяет институциональный профиль центра, расчётную модель потребности до 2030 года, аналитику рынка и материалы диссертационного исследования (ВАК 5.2.3)."
+                enabled={glossaryHighlightEnabled}
+                showDirectoryLink
+              />
             </p>
           </div>
 
@@ -497,7 +501,13 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                   Этап {stage.step}
                 </p>
                 <h3 className="mt-1 text-sm font-semibold text-slate-900">{stage.title}</h3>
-                <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">{stage.detail}</p>
+                <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">
+                  <GlossaryText
+                    text={stage.detail}
+                    enabled={glossaryHighlightEnabled}
+                    showDirectoryLink
+                  />
+                </p>
               </div>
             ))}
           </div>
@@ -562,7 +572,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
               Статус аккредитации центра
             </h2>
             <p className="text-sm text-slate-600 leading-relaxed pt-1">
-              {CENTER_ACCREDITATION_STATUS.summary}
+              <GlossaryText
+                text={CENTER_ACCREDITATION_STATUS.summary}
+                enabled={glossaryHighlightEnabled}
+                showDirectoryLink
+              />
             </p>
           </div>
 
@@ -789,9 +803,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs text-slate-700 leading-relaxed">
-            Поскольку федеральная аттестация действует на всей территории РФ, ВВГУ и РЦА «Русский Восток» уже
-            фактически выполняют роль межрегиональной площадки ДФО: треть аттестованных в октябре 2026 г. (11 из 26)
-            прибыли из Хабаровского края и Камчатки.
+            <GlossaryText
+              text="Поскольку федеральная аттестация действует на всей территории РФ, ВВГУ и РЦА «Русский Восток» уже фактически выполняют роль межрегиональной площадки ДФО: треть аттестованных в октябре 2026 г. (11 из 26) прибыли из Хабаровского края и Камчатки."
+              enabled={glossaryHighlightEnabled}
+              showDirectoryLink
+            />
           </div>
         </div>
       </section>
@@ -1102,6 +1118,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
       </section>
 
+      {/* Certified Guides Reviews & Success Stories */}
+      <SuccessStoriesSection onApplyForSession={scrollToInquiryForm} />
+
       {/* Industry News Chronological Feed */}
       <section aria-labelledby="industry-news-heading" className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -1199,8 +1218,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </ol>
       </section>
 
-      {/* Searchable Regulatory & Attestation Glossary */}
-      <GlossarySection onContactCurator={openCuratorModal} />
+      {/* Interactive Regulatory & Attestation Glossary */}
+      <InteractiveGlossary
+        onContactCurator={openCuratorModal}
+        highlightInOverview={glossaryHighlightEnabled}
+        onToggleHighlightInOverview={() =>
+          setGlossaryHighlightEnabled((prev) => !prev)
+        }
+      />
 
       {/* Knowledge Base with Searchable FAQ Accordion */}
       <KnowledgeBaseFaq onContactCurator={openCuratorModal} />
