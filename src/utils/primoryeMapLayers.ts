@@ -16,6 +16,58 @@ export interface PrimoryeRouteCorridor {
   routesCount: number;
 }
 
+export interface PrimoryeActivityZone {
+  id: string;
+  name: string;
+  subtitle: string;
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  rotationDeg: number;
+  fill: string;
+  stroke: string;
+}
+
+export const PRIMORYE_ACTIVITY_ZONES: readonly PrimoryeActivityZone[] = [
+  {
+    id: 'zone-south-coast',
+    name: 'Южно-Приморская зона активности',
+    subtitle: 'Хасан · Владивосток · Шкотово · Находка',
+    cx: 168,
+    cy: 438,
+    rx: 88,
+    ry: 46,
+    rotationDeg: -10,
+    fill: '#0F766E',
+    stroke: '#0F766E',
+  },
+  {
+    id: 'zone-east-ridge',
+    name: 'Восточно-Сихотэ-Алинская зона',
+    subtitle: 'Лазо · Кавалерово · Ольга',
+    cx: 294,
+    cy: 334,
+    rx: 46,
+    ry: 70,
+    rotationDeg: 22,
+    fill: '#B45309',
+    stroke: '#B45309',
+  },
+  {
+    id: 'zone-north-expedition',
+    name: 'Северная экспедиционная зона',
+    subtitle: 'Нацпарк «Бикин» · Терней · р. Кема',
+    cx: 286,
+    cy: 140,
+    rx: 106,
+    ry: 42,
+    rotationDeg: 2,
+    fill: '#475569',
+    stroke: '#475569',
+  },
+];
+
 export const PRIMORYE_ROUTE_CORRIDORS: readonly PrimoryeRouteCorridor[] = [
   {
     id: 'corridor-khasan-vladivostok',

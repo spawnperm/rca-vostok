@@ -10,7 +10,9 @@ import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
 import { DfoSubjectsD3SvgMap } from './DfoSubjectsD3SvgMap';
 import { DfoGeographyLeafletMap } from './DfoGeographyLeafletMap';
 import { MarketDfoDemandTableBlock } from './MarketDfoDemandTableBlock';
+import { MarketFieldCommissionsCalendar } from './MarketFieldCommissionsCalendar';
 import { PrimoryeActivityMap } from './PrimoryeActivityMap';
+import { PrimoryeMunicipalD3Heatmap } from './PrimoryeMunicipalD3Heatmap';
 
 export const MarketSection: React.FC = () => {
   const [selectedHorizonId, setSelectedHorizonId] = useState<string>(HORIZON_STAGES[0].id);
@@ -110,14 +112,20 @@ export const MarketSection: React.FC = () => {
       {/* React-Leaflet Geography: Certified Routes & RCA Offices */}
       <DfoGeographyLeafletMap />
 
-      {/* Interactive Map of Primorsky Krai Guide Activity & Route Layers */}
+      {/* Interactive Map of Primorsky Krai Guide Activity Zones & Key Tourist Routes */}
       <PrimoryeActivityMap />
+
+      {/* Interactive D3.js Municipal Heatmap of Certified Guide Concentration in Primorye */}
+      <PrimoryeMunicipalD3Heatmap />
 
       {/* Interactive DFO Instructor Demand Dropdown & Simple Comparison Table */}
       <MarketDfoDemandTableBlock />
 
       {/* Visual Comparison of Two Selected DFO Regions */}
       <DfoRegionComparisonChart />
+
+      {/* Field Commissions & Training Seminars Calendar */}
+      <MarketFieldCommissionsCalendar />
 
       {/* Regional Specifics (DFO Safety Requirements) */}
       <section className="bg-slate-900 text-white rounded-xl p-8 space-y-6">

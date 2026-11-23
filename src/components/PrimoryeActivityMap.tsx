@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Eye, EyeOff, Layers, MapPin, Route, UserCheck } from 'lucide-react';
 import { PRIMORYE_DISTRICTS, type DistrictActivity } from '../data/researchData';
 import {
+  PRIMORYE_ACTIVITY_ZONES,
   PRIMORYE_ROUTE_CORRIDORS,
   getRouteMarkerOffset,
   summarizePrimoryeLayers,
@@ -286,6 +287,29 @@ export const PrimoryeActivityMap: React.FC = () => {
                 зал. Петра Великого
               </text>
 
+              {/* Instructor Activity Zones */}
+              {layers.instructors &&
+                PRIMORYE_ACTIVITY_ZONES.map((zone) => (
+                  <g
+                    key={zone.id}
+                    transform={`rotate(${zone.rotationDeg} ${zone.cx} ${zone.cy})`}
+                  >
+                    <title>{`${zone.name} (${zone.subtitle})`}</title>
+                    <ellipse
+                      cx={zone.cx}
+                      cy={zone.cy}
+                      rx={zone.rx}
+                      ry={zone.ry}
+                      fill={zone.fill}
+                      fillOpacity={0.08}
+                      stroke={zone.stroke}
+                      strokeOpacity={0.34}
+                      strokeWidth={1.2}
+                      strokeDasharray="4 3"
+                    />
+                  </g>
+                ))}
+
               {/* Layer 2: Tourist Routes Corridors */}
               {layers.routes &&
                 PRIMORYE_ROUTE_CORRIDORS.map((corridor) => {
@@ -515,6 +539,21 @@ export const PrimoryeActivityMap: React.FC = () => {
                   {activeDistrict.seasonWindow}
                 </dd>
               </div>
+              {layers.routes && (
+                <div className="py-2.5">
+                  <dt className="text-slate-500">Ключевые туристические коридоры округа</dt>
+                  <dd className="mt-1 space-y-1 text-slate-800">
+                    {PRIMORYE_ROUTE_CORRIDORS.filter(
+                      (c) => c.fromId === activeDistrict.id || c.toId === activeDistrict.id
+                    ).map((corridor) => (
+                      <p key={corridor.id} className="leading-snug">
+                        · {corridor.name}{' '}
+                        <span className="font-mono text-sky-800">({corridor.routesCount} м.)</span>
+                      </p>
+                    ))}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
 
