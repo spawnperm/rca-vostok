@@ -121,6 +121,7 @@ export class GetSystemHealthUseCase {
           'research',
           'feedback',
           'identity',
+          'experience',
           'social',
           'chat',
           'media',

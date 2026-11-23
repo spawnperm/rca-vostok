@@ -34,7 +34,8 @@ export interface DomainEvent<TPayload = Record<string, unknown>> {
     | 'analytics'
     | 'research'
     | 'feedback'
-    | 'identity';
+    | 'identity'
+    | 'experience';
   readonly payload: TPayload;
 }
 

@@ -35,15 +35,13 @@ import {
   JOURNAL_DFO_REGIONS,
   buildJournalCalendarMonth,
   computeJournalMetrics,
+  experienceJournalGateway,
   extractActiveCalendarMonths,
   formatRussianJournalDate,
-  getDefaultJournalEntries,
   readStoredExperienceJournal,
   resolveInitialCalendarMonth,
   resolveJournalRegionId,
   shiftCalendarMonth,
-  validateJournalEntryInput,
-  writeStoredExperienceJournal,
   type DfoJournalRegionId,
   type ExpeditionComplexity,
   type ExperienceLogEntry,
@@ -83,10 +81,31 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
   const [entries, setEntries] = useState<ExperienceLogEntry[]>(() =>
     readStoredExperienceJournal(userId, preferredRegion)
   );
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // Sync storage when logged-in user changes
+  // Sync storage / backend repository when logged-in user changes
   useEffect(() => {
+    let cancelled = false;
     setEntries(readStoredExperienceJournal(userId, preferredRegion));
+    setIsSyncing(true);
+    void experienceJournalGateway
+      .load(userId, preferredRegion)
+      .then((loaded) => {
+        if (!cancelled) {
+          setEntries(loaded);
+        }
+      })
+      .catch(() => {
+        // Fallback already populated synchronously via readStoredExperienceJournal
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsSyncing(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [userId, preferredRegion]);
 
   // Form state
@@ -161,66 +180,95 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
     });
   }, [entries, regionFilter, complexityFilter]);
 
-  const persistEntries = (next: ExperienceLogEntry[]) => {
-    const sorted = [...next].sort((a, b) => b.date.localeCompare(a.date));
-    setEntries(sorted);
-    writeStoredExperienceJournal(userId, sorted);
-  };
-
-  const handleAddEntry = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddEntry = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (isSyncing) return;
     setFormError(null);
     setStatusNotice(null);
+    setIsSyncing(true);
 
-    const validated = validateJournalEntryInput({
-      date,
-      routeTitle,
-      regionId,
-      complexity,
-      participantsCount,
-      notes,
-    });
-
-    if (!validated.ok) {
-      setFormError(validated.error);
-      return;
+    try {
+      const result = await experienceJournalGateway.logExpedition({
+        userId,
+        preferredRegionName: preferredRegion,
+        input: {
+          date,
+          routeTitle,
+          regionId,
+          complexity,
+          participantsCount,
+          notes,
+        },
+      });
+      setEntries(result.entries);
+      setSelectedMapRegionId(result.entry.regionId);
+      const [yStr, mStr] = result.entry.date.split('-');
+      const yNum = Number.parseInt(yStr, 10);
+      const mNum = Number.parseInt(mStr, 10);
+      if (!Number.isNaN(yNum) && !Number.isNaN(mNum)) {
+        setCalendarYear(yNum);
+        setCalendarMonth(mNum);
+      }
+      setSelectedCalendarDate(result.entry.date);
+      setRouteTitle('');
+      setNotes('');
+      setStatusNotice(
+        `Запись добавлена: ${result.entry.routeTitle} (${result.entry.regionName}, ${result.entry.complexity}, ${result.entry.participantsCount} чел.).`
+      );
+      tracker.trackCustomInteraction(
+        'Журнал опыта · Добавлен поход',
+        `${result.entry.regionId}:${result.entry.complexity}`
+      );
+    } catch (err) {
+      setFormError(
+        err instanceof Error ? err.message : 'Не удалось сохранить запись о походе.'
+      );
+    } finally {
+      setIsSyncing(false);
     }
-
-    const next = [validated.entry, ...entries];
-    persistEntries(next);
-    setSelectedMapRegionId(validated.entry.regionId);
-    const [yStr, mStr] = validated.entry.date.split('-');
-    const yNum = Number.parseInt(yStr, 10);
-    const mNum = Number.parseInt(mStr, 10);
-    if (!Number.isNaN(yNum) && !Number.isNaN(mNum)) {
-      setCalendarYear(yNum);
-      setCalendarMonth(mNum);
-    }
-    setSelectedCalendarDate(validated.entry.date);
-    setRouteTitle('');
-    setNotes('');
-    setStatusNotice(
-      `Запись добавлена: ${validated.entry.routeTitle} (${validated.entry.regionName}, ${validated.entry.complexity}, ${validated.entry.participantsCount} чел.).`
-    );
-    tracker.trackCustomInteraction(
-      'Журнал опыта · Добавлен поход',
-      `${validated.entry.regionId}:${validated.entry.complexity}`
-    );
   };
 
-  const handleDeleteEntry = (entryId: string) => {
-    const next = entries.filter((item) => item.id !== entryId);
-    persistEntries(next);
-    setStatusNotice('Запись удалена из журнала.');
-  };
-
-  const handleResetDemoEntries = () => {
-    const defaults = getDefaultJournalEntries(preferredRegion);
-    persistEntries(defaults);
-    setRegionFilter('all');
-    setComplexityFilter('all');
+  const handleDeleteEntry = async (entryId: string) => {
+    if (isSyncing) return;
     setFormError(null);
-    setStatusNotice('Восстановлены демонстрационные записи походов по ДФО.');
+    setIsSyncing(true);
+    try {
+      const next = await experienceJournalGateway.removeExpedition({
+        userId,
+        entryId,
+        preferredRegionName: preferredRegion,
+      });
+      setEntries(next);
+      setStatusNotice('Запись удалена из журнала.');
+    } catch (err) {
+      setFormError(
+        err instanceof Error ? err.message : 'Не удалось удалить запись из журнала.'
+      );
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleResetDemoEntries = async () => {
+    if (isSyncing) return;
+    setFormError(null);
+    setIsSyncing(true);
+    try {
+      const defaults = await experienceJournalGateway.resetDemo({
+        userId,
+        preferredRegionName: preferredRegion,
+      });
+      setEntries(defaults);
+      setRegionFilter('all');
+      setComplexityFilter('all');
+      setStatusNotice('Восстановлены демонстрационные записи походов по ДФО.');
+    } catch (err) {
+      setFormError(
+        err instanceof Error ? err.message : 'Не удалось сбросить журнал к примерам.'
+      );
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -251,8 +299,9 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
 
         <button
           type="button"
-          onClick={handleResetDemoEntries}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors self-start cursor-pointer"
+          onClick={() => void handleResetDemoEntries()}
+          disabled={isSyncing}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors self-start cursor-pointer disabled:opacity-60"
         >
           <RotateCcw className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
           <span>Сбросить к примерам</span>
@@ -313,7 +362,9 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
         >
           <div className="flex items-center justify-between gap-2">
             <h4 className="text-sm font-bold text-slate-900">Добавить проведённый поход</h4>
-            <span className="text-[11px] text-slate-500">Сохраняется локально</span>
+            <span className="text-[11px] text-slate-500">
+              {userId ? 'Синхронизация с ЛК' : 'Сохраняется локально'}
+            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -418,10 +469,11 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
 
           <button
             type="submit"
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            disabled={isSyncing}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
-            <span>Добавить запись в журнал</span>
+            <span>{isSyncing ? 'Сохранение...' : 'Добавить запись в журнал'}</span>
           </button>
         </form>
 
@@ -1064,9 +1116,10 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
                     <td className="py-3 px-3.5 text-right align-top">
                       <button
                         type="button"
-                        onClick={() => handleDeleteEntry(entry.id)}
+                        onClick={() => void handleDeleteEntry(entry.id)}
+                        disabled={isSyncing}
                         aria-label={`Удалить запись ${entry.routeTitle}`}
-                        className="p-1 text-slate-400 hover:text-red-600 rounded-md hover:bg-red-50 transition-colors cursor-pointer"
+                        className="p-1 text-slate-400 hover:text-red-600 rounded-md hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50"
                       >
                         <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>

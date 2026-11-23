@@ -161,6 +161,14 @@ import {
 import { GitSyncAuthService } from './src/infrastructure/git/GitSyncAuth.ts';
 import { GitSyncService } from './src/infrastructure/git/GitSyncService.ts';
 import { createGitRouter } from './src/infrastructure/http/GitRouter.ts';
+import {
+  GetExperienceJournalUseCase,
+  LogExpeditionUseCase,
+  RemoveExpeditionUseCase,
+  ResetExperienceJournalUseCase,
+} from './src/application/experience/ExperienceJournalUseCases.ts';
+import { JsonFileExperienceJournalRepository } from './src/infrastructure/persistence/JsonFileExperienceJournalRepository.ts';
+import { createExperienceJournalRouter } from './src/infrastructure/http/ExperienceJournalRouter.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -308,6 +316,7 @@ async function startServer() {
 
   const readinessSurveyRepo = new JsonFileReadinessSurveyRepository(DATA_DIR);
   const satisfactionSurveyRepo = new JsonFileSatisfactionSurveyRepository(DATA_DIR);
+  const experienceJournalRepo = new JsonFileExperienceJournalRepository(DATA_DIR);
 
   // Identity bounded context: PostgreSQL in production, in-memory for local dev.
   const userRepo: UserRepository = pool
@@ -342,6 +351,24 @@ async function startServer() {
     });
   });
 
+  eventBus.subscribe('experience.expedition_logged', (event) => {
+    eventsLog.info('Domain event published', {
+      event: event.eventName,
+      boundedContext: event.boundedContext,
+      occurredAt: event.occurredAt,
+      payload: event.payload,
+    });
+  });
+
+  eventBus.subscribe('experience.expedition_removed', (event) => {
+    eventsLog.info('Domain event published', {
+      event: event.eventName,
+      boundedContext: event.boundedContext,
+      occurredAt: event.occurredAt,
+      payload: event.payload,
+    });
+  });
+
   const collectBehaviorUseCase = new CollectBehaviorUseCase(analyticsRepo, eventBus);
   const getAnalyticsSummaryUseCase = new GetAnalyticsSummaryUseCase(analyticsRepo);
   const getSessionDetailsUseCase = new GetSessionDetailsUseCase(analyticsRepo);
@@ -354,6 +381,13 @@ async function startServer() {
   const listCenterReviewsUseCase = new ListCenterReviewsUseCase(feedbackRepo);
   const getGuideLeaderboardUseCase = new GetGuideLeaderboardUseCase(guideLeaderboardRepo, adapterName);
   const syncMyGuideLeaderboardUseCase = new SyncMyGuideLeaderboardUseCase(guideLeaderboardRepo);
+  const getExperienceJournalUseCase = new GetExperienceJournalUseCase(experienceJournalRepo);
+  const logExpeditionUseCase = new LogExpeditionUseCase(experienceJournalRepo, eventBus);
+  const removeExpeditionUseCase = new RemoveExpeditionUseCase(experienceJournalRepo, eventBus);
+  const resetExperienceJournalUseCase = new ResetExperienceJournalUseCase(
+    experienceJournalRepo,
+    eventBus
+  );
   const getSystemHealthUseCase = new GetSystemHealthUseCase(
     inquiryRepo,
     analyticsRepo,
@@ -638,6 +672,15 @@ async function startServer() {
       oauthService: socialOAuthService,
       getBaseUrl,
       socialRepo: activeSocialRepo,
+    })
+  );
+
+  app.use(
+    createExperienceJournalRouter({
+      getJournalUseCase: getExperienceJournalUseCase,
+      logExpeditionUseCase,
+      removeExpeditionUseCase,
+      resetJournalUseCase: resetExperienceJournalUseCase,
     })
   );
 
