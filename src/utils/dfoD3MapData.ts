@@ -1,7 +1,9 @@
 import * as d3 from 'd3';
 import { DFO_REGIONS_DISTRIBUTION, type DfoRegionDistribution } from '../data/researchData.ts';
 
-export type DfoD3MetricMode = 'registry' | 'deficit' | 'coveragePct';
+export type DfoD3MetricMode = 'density' | 'registry' | 'deficit' | 'coveragePct';
+
+export type DensityTierId = 'high' | 'medium' | 'low';
 
 export interface DfoSubjectGeometryFeature {
   type: 'Feature';
@@ -20,6 +22,12 @@ export interface DfoSubjectGeometryFeature {
 export interface DfoProjectedSubject extends DfoRegionDistribution {
   pathData: string;
   centroid: [number, number];
+  areaKm2: number;
+  densityPer10kKm2: number;
+  demandDensityPer10kKm2: number;
+  densityTier: DensityTierId;
+  densityTierLabel: string;
+  densityVsDfoAvgRatio: number;
   deficit: number;
   coveragePct: number;
   registrySharePct: number;
@@ -30,11 +38,25 @@ export interface DfoD3MapLayout {
   height: number;
   graticulePath: string;
   subjects: DfoProjectedSubject[];
+  totalAreaKm2: number;
+  avgDensityPer10kKm2: number;
+  maxDensityPer10kKm2: number;
   totalRegistry: number;
   totalDemand: number;
   totalDeficit: number;
   totalOct2026: number;
 }
+
+// Official territory sizes (km²) for the 7 DFO subjects/clusters
+export const DFO_SUBJECT_AREA_KM2: Record<string, number> = {
+  primorye: 164673,
+  kamchatka: 464275,
+  khabarovsk: 787633,
+  sakhalin: 87101,
+  yakutia: 3083523,
+  amur: 361908,
+  'magadan-chukotka': 1183945,
+};
 
 // Cartographically accurate approximate lon/lat polygons for the 7 statistical subjects/clusters of DFO
 // Matching verified dataset entries in DFO_REGIONS_DISTRIBUTION.
@@ -314,6 +336,13 @@ export function buildDfoD3MapLayout(width = 760, height = 480): DfoD3MapLayout {
     0
   );
 
+  const totalAreaKm2 = DFO_REGIONS_DISTRIBUTION.reduce(
+    (sum, r) => sum + (DFO_SUBJECT_AREA_KM2[r.id] ?? 100000),
+    0
+  );
+  const avgDensityPer10kKm2 =
+    Math.round(((totalRegistry / Math.max(totalAreaKm2, 1)) * 10000) * 100) / 100;
+
   const featureById = new Map(DFO_SUBJECT_GEOJSON.map((f) => [f.id, f]));
 
   const subjects: DfoProjectedSubject[] = DFO_REGIONS_DISTRIBUTION.map((region) => {
@@ -326,6 +355,25 @@ export function buildDfoD3MapLayout(width = 760, height = 480): DfoD3MapLayout {
       Number.isFinite(rawCentroid[1]) ? rawCentroid[1] : region.cy,
     ];
 
+    const areaKm2 = DFO_SUBJECT_AREA_KM2[region.id] ?? 100000;
+    const densityPer10kKm2 =
+      Math.round(((region.certifiedInRegistry / areaKm2) * 10000) * 100) / 100;
+    const demandDensityPer10kKm2 =
+      Math.round(((region.estimatedDemand / areaKm2) * 10000) * 100) / 100;
+
+    let densityTier: DensityTierId = 'low';
+    let densityTierLabel = 'Низкая плотность';
+    if (densityPer10kKm2 >= 5) {
+      densityTier = 'high';
+      densityTierLabel = 'Высокая плотность';
+    } else if (densityPer10kKm2 >= 0.4) {
+      densityTier = 'medium';
+      densityTierLabel = 'Средняя плотность';
+    }
+
+    const densityVsDfoAvgRatio =
+      Math.round((densityPer10kKm2 / Math.max(avgDensityPer10kKm2, 0.01)) * 10) / 10;
+
     const deficit = Math.max(0, region.estimatedDemand - region.certifiedInRegistry);
     const coveragePct =
       Math.round((region.certifiedInRegistry / Math.max(region.estimatedDemand, 1)) * 1000) / 10;
@@ -337,17 +385,28 @@ export function buildDfoD3MapLayout(width = 760, height = 480): DfoD3MapLayout {
       ...region,
       pathData,
       centroid,
+      areaKm2,
+      densityPer10kKm2,
+      demandDensityPer10kKm2,
+      densityTier,
+      densityTierLabel,
+      densityVsDfoAvgRatio,
       deficit,
       coveragePct,
       registrySharePct,
     };
   });
 
+  const maxDensityPer10kKm2 = Math.max(...subjects.map((s) => s.densityPer10kKm2), 0.1);
+
   return {
     width,
     height,
     graticulePath,
     subjects,
+    totalAreaKm2,
+    avgDensityPer10kKm2,
+    maxDensityPer10kKm2,
     totalRegistry,
     totalDemand,
     totalDeficit: Math.max(0, totalDemand - totalRegistry),
@@ -359,6 +418,7 @@ export function getDfoSubjectMetricValue(
   subject: DfoProjectedSubject,
   mode: DfoD3MetricMode
 ): number {
+  if (mode === 'density') return subject.densityPer10kKm2;
   if (mode === 'registry') return subject.certifiedInRegistry;
   if (mode === 'deficit') return subject.deficit;
   return subject.coveragePct;
@@ -368,6 +428,7 @@ export function formatDfoSubjectMetricLabel(
   subject: DfoProjectedSubject,
   mode: DfoD3MetricMode
 ): string {
+  if (mode === 'density') return subject.densityPer10kKm2.toFixed(2).replace('.', ',');
   if (mode === 'registry') return String(subject.certifiedInRegistry);
   if (mode === 'deficit') return String(subject.deficit);
   return `${subject.coveragePct.toFixed(0)}%`;
@@ -380,6 +441,11 @@ export function createDfoD3ColorScale(
   const values = subjects.map((s) => getDfoSubjectMetricValue(s, mode));
   const maxVal = Math.max(...values, 1);
 
+  if (mode === 'density') {
+    return d3
+      .scaleSequential(d3.interpolateRgbBasis(['#F1F5F9', '#99F6E4', '#0F766E', '#115E59']))
+      .domain([0, Math.max(maxVal, 7.5)]);
+  }
   if (mode === 'deficit') {
     return d3
       .scaleSequential(d3.interpolateRgbBasis(['#FEF3C7', '#F59E0B', '#B91C1C']))

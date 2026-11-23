@@ -16,20 +16,25 @@ test('buildDfoD3MapLayout projects all DFO subjects with valid SVG paths and cen
   assert.ok(layout.totalRegistry > 500);
   assert.ok(layout.totalDemand > layout.totalRegistry);
 
+  assert.ok(layout.avgDensityPer10kKm2 > 0.5 && layout.avgDensityPer10kKm2 < 3);
+
   for (const subject of layout.subjects) {
     assert.ok(subject.pathData.startsWith('M'), `Expected valid SVG path for ${subject.id}`);
     assert.ok(subject.pathData.length > 20);
     assert.ok(Number.isFinite(subject.centroid[0]) && subject.centroid[0] >= 0 && subject.centroid[0] <= 760);
     assert.ok(Number.isFinite(subject.centroid[1]) && subject.centroid[1] >= 0 && subject.centroid[1] <= 480);
+    assert.ok(subject.areaKm2 > 50000);
+    assert.ok(subject.densityPer10kKm2 > 0);
+    assert.ok(subject.demandDensityPer10kKm2 > subject.densityPer10kKm2);
     assert.ok(subject.deficit >= 0);
     assert.ok(subject.coveragePct > 0 && subject.coveragePct <= 100);
   }
 });
 
-test('D3 color and radius scales map metrics consistently across modes', () => {
+test('D3 color and radius scales map metrics consistently across modes including density', () => {
   const layout = buildDfoD3MapLayout(760, 480);
 
-  for (const mode of ['registry', 'deficit', 'coveragePct'] as const) {
+  for (const mode of ['density', 'registry', 'deficit', 'coveragePct'] as const) {
     const colorScale = createDfoD3ColorScale(layout.subjects, mode);
     const radiusScale = createDfoD3RadiusScale(layout.subjects, mode);
 

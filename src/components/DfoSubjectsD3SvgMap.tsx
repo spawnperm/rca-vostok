@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { Award, MapPin, ShieldAlert, TrendingUp, Users } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as d3 from 'd3';
+import { Award, Compass, MapPin, ShieldAlert, TrendingUp, Users } from 'lucide-react';
 import {
   DFO_LABEL_OFFSETS,
   buildDfoD3MapLayout,
@@ -20,6 +21,14 @@ const METRIC_TABS: readonly {
   legendHigh: string;
   gradientCss: string;
 }[] = [
+  {
+    id: 'density',
+    label: 'Плотность (на 10 тыс. км²)',
+    unitLabel: 'инструкторов / 10 тыс. км²',
+    legendLow: '0,05',
+    legendHigh: '7,41',
+    gradientCss: 'linear-gradient(90deg, #F1F5F9 0%, #99F6E4 45%, #0F766E 80%, #115E59 100%)',
+  },
   {
     id: 'registry',
     label: 'В реестре (чел.)',
@@ -46,11 +55,19 @@ const METRIC_TABS: readonly {
   },
 ];
 
+function getDensityTierClass(tier: 'high' | 'medium' | 'low'): string {
+  if (tier === 'high') return 'bg-teal-50 text-teal-800 border-teal-200';
+  if (tier === 'medium') return 'bg-amber-50 text-amber-800 border-amber-200';
+  return 'bg-slate-100 text-slate-700 border-slate-300';
+}
+
 export const DfoSubjectsD3SvgMap: React.FC = () => {
-  const [metricMode, setMetricMode] = useState<DfoD3MetricMode>('registry');
+  const [metricMode, setMetricMode] = useState<DfoD3MetricMode>('density');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('primorye');
   const [hoveredSubjectId, setHoveredSubjectId] = useState<string | null>(null);
   const [hoverPointer, setHoverPointer] = useState<{ xPct: number; yPct: number } | null>(null);
+
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
   const layout = useMemo(() => buildDfoD3MapLayout(760, 480), []);
 
@@ -63,6 +80,33 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
     () => createDfoD3RadiusScale(layout.subjects, metricMode),
     [layout.subjects, metricMode]
   );
+
+  const densityBarWidthScale = useMemo(
+    () =>
+      d3
+        .scaleLinear()
+        .domain([0, Math.max(layout.maxDensityPer10kKm2, 7.5)])
+        .range([4, 100])
+        .clamp(true),
+    [layout.maxDensityPer10kKm2]
+  );
+
+  // Use D3 selection to animate subject fill opacity & halo ring on hover/selection
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svg = d3.select(svgRef.current);
+
+    svg
+      .selectAll<SVGPathElement, unknown>('path[data-dfo-subject]')
+      .transition()
+      .duration(140)
+      .attr('fill-opacity', function () {
+        const id = this.getAttribute('data-dfo-subject');
+        if (hoveredSubjectId && id === hoveredSubjectId) return 0.98;
+        if (hoveredSubjectId && id !== hoveredSubjectId) return 0.62;
+        return id === selectedSubjectId ? 0.94 : 0.85;
+      });
+  }, [hoveredSubjectId, selectedSubjectId, metricMode]);
 
   const hoveredSubject: DfoProjectedSubject | null = useMemo(
     () =>
@@ -94,27 +138,30 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
     METRIC_TABS.find((t) => t.id === metricMode) ?? METRIC_TABS[0];
 
   const handleSvgMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const rawX = ((event.clientX - rect.left) / rect.width) * 100;
-    const rawY = ((event.clientY - rect.top) / rect.height) * 100;
+    if (!svgRef.current) return;
+    const [svgX, svgY] = d3.pointer(event, svgRef.current);
+    const rawX = (svgX / layout.width) * 100;
+    const rawY = (svgY / layout.height) * 100;
     setHoverPointer({
-      xPct: Math.max(12, Math.min(72, rawX)),
-      yPct: Math.max(8, Math.min(68, rawY)),
+      xPct: Math.max(12, Math.min(68, rawX)),
+      yPct: Math.max(6, Math.min(64, rawY)),
     });
   };
 
   const handleFocusOrHoverSubject = (subject: DfoProjectedSubject) => {
     setHoveredSubjectId(subject.id);
     setHoverPointer({
-      xPct: Math.max(10, Math.min(68, (subject.centroid[0] / layout.width) * 100)),
-      yPct: Math.max(8, Math.min(64, (subject.centroid[1] / layout.height) * 100)),
+      xPct: Math.max(12, Math.min(66, (subject.centroid[0] / layout.width) * 100)),
+      yPct: Math.max(8, Math.min(62, (subject.centroid[1] / layout.height) * 100)),
     });
   };
 
   const handleSelectSubject = (subject: DfoProjectedSubject) => {
     setSelectedSubjectId(subject.id);
-    tracker.trackCustomInteraction(`D3-карта ДФО: ${subject.shortName}`, 'market');
+    tracker.trackCustomInteraction(
+      `D3-карта плотности ДФО: ${subject.shortName}`,
+      `${subject.densityPer10kKm2} чел/10т.км²`
+    );
   };
 
   return (
@@ -124,25 +171,26 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
       className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6 scroll-mt-24"
     >
       {/* Header & Metric Switcher */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-4">
         <div className="space-y-1.5 max-w-2xl">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-teal-700">
             <MapPin className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-            <span>Интерактивная SVG-картография на базе D3.js (проекция d3.geoConicEqualArea)</span>
+            <span>Картограмма плотности на D3.js (проекция d3.geoConicEqualArea + шкала плотности)</span>
           </div>
           <h2 id="dfo-d3-map-heading" className="text-xl font-bold text-slate-900">
-            Субъекты Дальневосточного федерального округа: статистика аттестованных инструкторов
+            Плотность аттестованных инструкторов по субъектам ДФО
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Наведите курсор на любой регион ДФО (или выберите строку в рейтинге), чтобы увидеть
-            число инструкторов в ЕФРТА, расчётную потребность, дефицит и долю в округе.
+            Наведите курсор на субъект федерации на карте D3.js, чтобы увидеть плотность инструкторов
+            на 10 000 км² территории, сопоставление со средним уровнем по ДФО и разрыв с расчётной
+            потребностью.
           </p>
         </div>
 
         <div
           role="tablist"
-          aria-label="Режим окраски D3-карты ДФО"
-          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start lg:self-auto"
+          aria-label="Режим визуализации D3-карты ДФО"
+          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start xl:self-auto"
         >
           {METRIC_TABS.map((tab) => {
             const active = metricMode === tab.id;
@@ -169,20 +217,20 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Split: D3 SVG Canvas (8 cols) + Live Subject Inspector (4 cols) */}
+      {/* Main Split: D3 SVG Canvas (8 cols) + Live Density Inspector (4 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Left D3 Canvas */}
         <div className="lg:col-span-8 bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col justify-between gap-4 relative">
           {/* Scale Legend Strip */}
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 pb-3 border-b border-slate-200">
             <span>
-              Всего по ДФО в реестре:{' '}
+              Средняя плотность по ДФО:{' '}
+              <strong className="font-mono text-teal-800 tabular-nums">
+                {layout.avgDensityPer10kKm2.toFixed(2).replace('.', ',')} чел./10 тыс. км²
+              </strong>{' '}
+              <span aria-hidden="true">·</span> Реестр:{' '}
               <strong className="font-mono text-slate-900 tabular-nums">
                 {layout.totalRegistry.toLocaleString('ru-RU')} чел.
-              </strong>{' '}
-              · Спрос:{' '}
-              <strong className="font-mono text-slate-900 tabular-nums">
-                {layout.totalDemand.toLocaleString('ru-RU')} чел.
               </strong>
             </span>
 
@@ -197,9 +245,10 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
             </div>
           </div>
 
-          {/* Relative Map + Hover Tooltip Container */}
+          {/* Relative Map + Hover Density Tooltip Container */}
           <div className="relative w-full overflow-hidden rounded-lg border border-slate-200 bg-sky-50/60">
             <svg
+              ref={svgRef}
               viewBox={`0 0 ${layout.width} ${layout.height}`}
               onMouseMove={handleSvgMouseMove}
               onMouseLeave={() => {
@@ -208,8 +257,20 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
               }}
               className="w-full h-auto block select-none"
               role="img"
-              aria-label="Интерактивная SVG-карта субъектов ДФО на библиотеке D3.js"
+              aria-label="Интерактивная D3-карта плотности инструкторов-проводников по субъектам ДФО"
             >
+              {/* Subtle SVG Hatch Pattern for Density Overlay on Hovered Region */}
+              <defs>
+                <pattern
+                  id="dfo-density-dots"
+                  width="8"
+                  height="8"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <circle cx="2.5" cy="2.5" r="1" fill="#0F172A" fillOpacity="0.22" />
+                </pattern>
+              </defs>
+
               {/* D3 Projected Graticule Grid */}
               <path
                 d={layout.graticulePath}
@@ -252,29 +313,40 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
                   const isSelected = selectedSubjectId === subject.id;
 
                   return (
-                    <path
-                      key={subject.id}
-                      d={subject.pathData}
-                      fill={fillColor}
-                      fillOpacity={isHovered ? 0.96 : 0.86}
-                      stroke={isHovered || isSelected ? '#0F172A' : '#475569'}
-                      strokeWidth={isHovered ? 2.4 : isSelected ? 1.9 : 1.0}
-                      strokeLinejoin="round"
-                      tabIndex={0}
-                      role="button"
-                      aria-label={`${subject.name}: в реестре ${subject.certifiedInRegistry} чел., потребность ${subject.estimatedDemand} чел.`}
-                      onMouseEnter={() => handleFocusOrHoverSubject(subject)}
-                      onFocus={() => handleFocusOrHoverSubject(subject)}
-                      onBlur={() => setHoveredSubjectId(null)}
-                      onClick={() => handleSelectSubject(subject)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          handleSelectSubject(subject);
-                        }
-                      }}
-                      className="cursor-pointer transition-opacity duration-150 focus:outline-none"
-                    />
+                    <g key={subject.id}>
+                      <path
+                        data-dfo-subject={subject.id}
+                        d={subject.pathData}
+                        fill={fillColor}
+                        fillOpacity={isHovered ? 0.98 : 0.86}
+                        stroke={isHovered || isSelected ? '#0F172A' : '#475569'}
+                        strokeWidth={isHovered ? 2.5 : isSelected ? 1.9 : 1.0}
+                        strokeLinejoin="round"
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`${subject.name}: плотность ${subject.densityPer10kKm2.toFixed(2)} инструкторов на 10 тыс. км², в реестре ${subject.certifiedInRegistry} чел.`}
+                        onMouseEnter={() => handleFocusOrHoverSubject(subject)}
+                        onFocus={() => handleFocusOrHoverSubject(subject)}
+                        onBlur={() => setHoveredSubjectId(null)}
+                        onClick={() => handleSelectSubject(subject)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleSelectSubject(subject);
+                          }
+                        }}
+                        className="cursor-pointer focus:outline-none"
+                      />
+                      {isHovered && (
+                        <path
+                          d={subject.pathData}
+                          fill="url(#dfo-density-dots)"
+                          stroke="#0F172A"
+                          strokeWidth={1.5}
+                          className="pointer-events-none"
+                        />
+                      )}
+                    </g>
                   );
                 })}
               </g>
@@ -299,10 +371,11 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
                         <circle
                           cx={cx}
                           cy={cy}
-                          r={radius + 4}
+                          r={radius + 5}
                           fill="none"
                           stroke="#0F172A"
                           strokeWidth={1.6}
+                          strokeDasharray={hoveredSubjectId === subject.id ? undefined : '3 2'}
                         />
                       )}
                       <circle
@@ -310,7 +383,7 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
                         cy={cy}
                         r={radius}
                         fill={metricMode === 'deficit' ? '#991B1B' : '#0F172A'}
-                        fillOpacity={0.85}
+                        fillOpacity={0.86}
                         stroke="#FFFFFF"
                         strokeWidth={1.6}
                       />
@@ -331,7 +404,7 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
                         }`}
                         style={{
                           paintOrder: 'stroke',
-                          stroke: 'rgba(255, 255, 255, 0.9)',
+                          stroke: 'rgba(255, 255, 255, 0.92)',
                           strokeWidth: 3,
                         }}
                       >
@@ -343,7 +416,7 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
               </g>
             </svg>
 
-            {/* Interactive Hover Tooltip Card */}
+            {/* Interactive Hover Tooltip Visualizing Regional Instructor Density */}
             {hoveredSubject && hoverPointer && (
               <div
                 role="status"
@@ -352,66 +425,107 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
                   left: `${hoverPointer.xPct}%`,
                   top: `${hoverPointer.yPct}%`,
                 }}
-                className="pointer-events-none absolute z-20 w-64 bg-slate-900/95 text-white border border-slate-700 rounded-xl shadow-lg p-3.5 space-y-2 text-xs transition-opacity duration-100"
+                className="pointer-events-none absolute z-20 w-72 bg-slate-900/95 text-white border border-slate-700 rounded-xl shadow-xl p-3.5 space-y-2.5 text-xs transition-opacity duration-100"
               >
                 <div className="space-y-0.5 border-b border-slate-700 pb-2">
-                  <p className="font-bold text-sm text-white leading-snug">
-                    {hoveredSubject.name}
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-bold text-sm text-white leading-snug">
+                      {hoveredSubject.name}
+                    </p>
+                  </div>
                   <p className="text-[11px] text-teal-300 leading-snug">
-                    {hoveredSubject.statusLabel}
+                    {hoveredSubject.densityTierLabel} · {hoveredSubject.areaKm2.toLocaleString('ru-RU')} км²
                   </p>
+                </div>
+
+                {/* Density Gauge Bar Scaled via d3.scaleLinear */}
+                <div className="space-y-1 bg-slate-800/80 rounded-lg p-2.5 border border-slate-700/80">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] text-slate-300">Плотность инструкторов</span>
+                    <span className="font-mono font-bold text-teal-300 tabular-nums">
+                      {hoveredSubject.densityPer10kKm2.toFixed(2).replace('.', ',')} / 10 тыс. км²
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-teal-400 rounded-full transition-all duration-150"
+                      style={{ width: `${densityBarWidthScale(hoveredSubject.densityPer10kKm2)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono tabular-nums">
+                    <span>
+                      {hoveredSubject.densityVsDfoAvgRatio >= 1
+                        ? `в ${hoveredSubject.densityVsDfoAvgRatio.toFixed(1).replace('.', ',')}× выше ср. ДФО`
+                        : `${Math.round(hoveredSubject.densityVsDfoAvgRatio * 100)}% от ср. ДФО`}
+                    </span>
+                    <span>
+                      Спрос: {hoveredSubject.demandDensityPer10kKm2.toFixed(1).replace('.', ',')} / 10т.км²
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 font-mono tabular-nums">
                   <div>
                     <p className="text-[10px] text-slate-400 font-sans">В реестре ЕФРТА</p>
-                    <p className="font-bold text-teal-300">
+                    <p className="font-bold text-white">
                       {hoveredSubject.certifiedInRegistry.toLocaleString('ru-RU')} чел.
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-slate-400 font-sans">Расчётный спрос</p>
-                    <p className="font-bold text-white">
-                      {hoveredSubject.estimatedDemand.toLocaleString('ru-RU')} чел.
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-sans">Дефицит кадров</p>
+                    <p className="text-[10px] text-slate-400 font-sans">Потребность / Дефицит</p>
                     <p className="font-bold text-amber-300">
-                      −{hoveredSubject.deficit.toLocaleString('ru-RU')} чел.
+                      {hoveredSubject.estimatedDemand.toLocaleString('ru-RU')} / −{hoveredSubject.deficit.toLocaleString('ru-RU')}
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400 font-sans">Обеспеченность</p>
-                    <p className="font-bold text-white">{hoveredSubject.coveragePct.toFixed(1)}%</p>
                   </div>
                 </div>
-
-                {hoveredSubject.october2026Certified > 0 && (
-                  <p className="text-[11px] text-emerald-300 pt-1 border-t border-slate-700 font-mono tabular-nums">
-                    Окт. 2026 (РЦА): +{hoveredSubject.october2026Certified} аттестованных
-                  </p>
-                )}
               </div>
             )}
           </div>
 
           <p className="text-[11px] text-slate-500">
-            Проекция D3.js: коническая равновеликая (`d3.geoConicEqualArea`) с масштабированием
-            маркеров через `d3.scaleSqrt`. Нажмите на субъект для фиксации карточки справа.
+            Картография D3.js: проекция `d3.geoConicEqualArea`, координатная сетка `d3.geoGraticule`,
+            цветовая шкала `d3.scaleSequential`, маркеры `d3.scaleSqrt` и отслеживание курсора `d3.pointer`.
           </p>
         </div>
 
-        {/* Right Live Statistical Panel (4 cols) */}
+        {/* Right Live Density & Subject Inspector (4 cols) */}
         <aside className="lg:col-span-4 bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between gap-5">
           <div className="space-y-4">
-            <div className="space-y-1 border-b border-slate-200 pb-3">
-              <p className="text-[11px] font-semibold text-teal-700">
-                {hoveredSubject ? 'Данные при наведении' : 'Выбранный субъект ДФО'}
-              </p>
+            <div className="space-y-1.5 border-b border-slate-200 pb-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold text-teal-700">
+                  {hoveredSubject ? 'Плотность при наведении' : 'Выбранный субъект ДФО'}
+                </p>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded border ${getDensityTierClass(
+                    activeSubject.densityTier
+                  )}`}
+                >
+                  {activeSubject.densityTierLabel}
+                </span>
+              </div>
               <h3 className="text-base font-bold text-slate-900">{activeSubject.name}</h3>
               <p className="text-xs text-slate-600">{activeSubject.statusLabel}</p>
+            </div>
+
+            {/* Density Highlight Metric */}
+            <div className="bg-teal-50/70 border border-teal-200 rounded-lg p-3.5 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="font-medium text-teal-950 inline-flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                  <span>Плотность инструкторов</span>
+                </span>
+                <span className="font-mono text-[11px] text-teal-800 tabular-nums">
+                  {activeSubject.areaKm2.toLocaleString('ru-RU')} км²
+                </span>
+              </div>
+              <p className="text-xl font-bold font-mono text-teal-800 tabular-nums">
+                {activeSubject.densityPer10kKm2.toFixed(2).replace('.', ',')} чел. / 10 тыс. км²
+              </p>
+              <p className="text-[11px] text-teal-900/80 font-mono tabular-nums">
+                Целевая плотность спроса: {activeSubject.demandDensityPer10kKm2.toFixed(1).replace('.', ',')}{' '}
+                чел. / 10 тыс. км²
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -466,16 +580,12 @@ export const DfoSubjectsD3SvgMap: React.FC = () => {
               <p className="font-semibold text-slate-900">Ведущие профили маршрутов:</p>
               <p className="text-slate-600 leading-relaxed">{activeSubject.keyTracks}</p>
             </div>
-
-            <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 border border-slate-200 rounded-lg p-3">
-              {activeSubject.note}
-            </p>
           </div>
 
           {/* Quick clickable ranking list */}
           <div className="space-y-1.5 pt-3 border-t border-slate-200">
             <p className="text-[11px] font-semibold text-slate-500">
-              Быстрый выбор субъекта ({activeMetricMeta.label}):
+              Рейтинг субъектов ({activeMetricMeta.label}):
             </p>
             <ul className="divide-y divide-slate-100">
               {sortedSubjects.map((sub) => {
