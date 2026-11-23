@@ -32,6 +32,7 @@ interface InstructorPassportCardProps {
   user: SessionUser;
   summary: UserAttestationSummary;
   inquiries: InquiryRecord[];
+  selfCheckRevision?: number;
 }
 
 const CATEGORIES: readonly MaxRouteCategory[] = ['1 КС', '2 КС', '3 КС', '4 КС', 'Не указана'];
@@ -40,6 +41,7 @@ export const InstructorPassportCard: React.FC<InstructorPassportCardProps> = ({
   user,
   summary,
   inquiries,
+  selfCheckRevision = 0,
 }) => {
   const [extras, setExtras] = useState<StoredPassportExtras>(() =>
     readStoredPassportExtras(user.id, inquiries)
@@ -79,7 +81,7 @@ export const InstructorPassportCard: React.FC<InstructorPassportCardProps> = ({
         inquiries,
         extras,
       }),
-    [user, summary, inquiries, extras]
+    [user, summary, inquiries, extras, selfCheckRevision]
   );
 
   const updateExtras = (updater: (prev: StoredPassportExtras) => StoredPassportExtras) => {
@@ -157,7 +159,7 @@ export const InstructorPassportCard: React.FC<InstructorPassportCardProps> = ({
     <section
       id="instructor-digital-passport"
       aria-labelledby="instructor-digital-passport-heading"
-      className="bg-white border border-slate-200 rounded-xl p-6 space-y-6"
+      className="bg-white border border-slate-200 rounded-xl p-6 space-y-6 scroll-mt-24"
     >
       {/* Header & Export Actions */}
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 pb-4 border-b border-slate-200">

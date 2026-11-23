@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  FileBadge2,
   GitBranch,
   HelpCircle,
   LogIn,
@@ -77,6 +78,7 @@ export function AccountSection({
   );
   const [selectedExamDate, setSelectedExamDate] = useState<string | undefined>(undefined);
   const [reviewsRefreshKey, setReviewsRefreshKey] = useState<number>(0);
+  const [selfCheckRevision, setSelfCheckRevision] = useState<number>(0);
   const [kbExternalSearch, setKbExternalSearch] = useState<{
     query: string;
     nonce: number;
@@ -235,6 +237,7 @@ export function AccountSection({
       <CabinetHeader
         user={user}
         onLogout={handleLogout}
+        onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
         onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
       />
       <AttestationProgressWidget
@@ -255,6 +258,7 @@ export function AccountSection({
       />
       <QualificationSelfCheckWidget
         user={user}
+        onChange={() => setSelfCheckRevision((n) => n + 1)}
         onJumpToKnowledgeBase={(query) => {
           setKbExternalSearch((prev) => ({
             query: query ?? '',
@@ -270,6 +274,7 @@ export function AccountSection({
         user={user}
         summary={effectiveProgressSummary}
         inquiries={inquiries}
+        selfCheckRevision={selfCheckRevision}
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -587,10 +592,12 @@ function Field({
 function CabinetHeader({
   user,
   onLogout,
+  onJumpToPassport,
   onJumpToFaq,
 }: {
   user: SessionUser;
   onLogout: () => void;
+  onJumpToPassport: () => void;
   onJumpToFaq: () => void;
 }) {
   return (
@@ -614,6 +621,15 @@ function CabinetHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onJumpToPassport}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+          >
+            <FileBadge2 className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
+            <span>Цифровой паспорт</span>
+          </button>
+
           <button
             type="button"
             onClick={onJumpToFaq}

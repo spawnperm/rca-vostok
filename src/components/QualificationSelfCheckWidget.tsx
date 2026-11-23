@@ -33,6 +33,7 @@ interface QualificationSelfCheckWidgetProps {
   onJumpToChecklist?: () => void;
   onJumpToKnowledgeBase?: (query?: string) => void;
   onJumpToConsultant?: () => void;
+  onChange?: () => void;
 }
 
 function SelfCheckPieTooltip({
@@ -67,6 +68,7 @@ export const QualificationSelfCheckWidget: React.FC<QualificationSelfCheckWidget
   onJumpToChecklist,
   onJumpToKnowledgeBase,
   onJumpToConsultant,
+  onChange,
 }) => {
   const [state, setState] = useState<StoredSelfCheckState>(() =>
     readStoredSelfCheck(user.id)
@@ -102,6 +104,7 @@ export const QualificationSelfCheckWidget: React.FC<QualificationSelfCheckWidget
   const updateState = (next: StoredSelfCheckState) => {
     setState(next);
     writeStoredSelfCheck(user.id, next);
+    onChange?.();
   };
 
   const handleTrackChange = (track: QualificationTrackId) => {

@@ -95,6 +95,83 @@ export function buildRcaSystemInstruction(context?: AssistantUserContext): strin
     .join('\n');
 }
 
+function extractUpstreamErrorInfo(err: unknown): {
+  status?: number;
+  apiStatus?: string;
+  rawMessage: string;
+} {
+  const rawMessage = err instanceof Error ? err.message : String(err ?? 'Неизвестная ошибка');
+  let status: number | undefined =
+    typeof (err as { status?: unknown })?.status === 'number'
+      ? (err as { status: number }).status
+      : undefined;
+  let apiStatus: string | undefined;
+
+  try {
+    const jsonStart = rawMessage.indexOf('{');
+    if (jsonStart !== -1) {
+      const parsed = JSON.parse(rawMessage.slice(jsonStart)) as {
+        error?: { code?: number; status?: string; message?: string };
+      };
+      if (typeof parsed.error?.code === 'number') status = parsed.error.code;
+      if (typeof parsed.error?.status === 'string') apiStatus = parsed.error.status;
+    }
+  } catch {
+    // non-JSON upstream message
+  }
+
+  return { status, apiStatus, rawMessage };
+}
+
+function isTransientUpstreamError(err: unknown): boolean {
+  const { status, apiStatus, rawMessage } = extractUpstreamErrorInfo(err);
+  if (status === 503 || status === 429 || status === 502 || status === 504) return true;
+  if (apiStatus === 'UNAVAILABLE' || apiStatus === 'RESOURCE_EXHAUSTED') return true;
+  return /high demand|temporarily unavailable|try again later|overloaded|ETIMEDOUT|ECONNRESET/i.test(
+    rawMessage
+  );
+}
+
+export function formatGeminiUpstreamError(err: unknown): AssistantServiceError {
+  const { status, apiStatus, rawMessage } = extractUpstreamErrorInfo(err);
+
+  if (status === 503 || apiStatus === 'UNAVAILABLE' || /high demand|overloaded/i.test(rawMessage)) {
+    return new AssistantServiceError(
+      'Модель ИИ сейчас испытывает повышенную нагрузку. Нажмите «Повторить» через несколько секунд.',
+      503,
+      'GEMINI_OVERLOADED'
+    );
+  }
+  if (status === 429 || apiStatus === 'RESOURCE_EXHAUSTED') {
+    return new AssistantServiceError(
+      'Достигнут лимит запросов к сервису ИИ. Пожалуйста, повторите попытку чуть позже.',
+      429,
+      'GEMINI_RATE_LIMITED'
+    );
+  }
+  if (
+    status === 400 ||
+    status === 401 ||
+    status === 403 ||
+    apiStatus === 'PERMISSION_DENIED' ||
+    /API_KEY_INVALID|API key not valid/i.test(rawMessage)
+  ) {
+    return new AssistantServiceError(
+      'Ключ GEMINI_API_KEY отклонён или недействителен. Проверьте его в панели Settings > Secrets.',
+      502,
+      'GEMINI_KEY_REJECTED'
+    );
+  }
+
+  return new AssistantServiceError(
+    'Сервис ИИ-консультанта временно недоступен. Попробуйте повторить запрос чуть позже.',
+    502,
+    'GEMINI_UPSTREAM_ERROR'
+  );
+}
+
+const RETRY_DELAYS_MS = [500, 1200];
+
 export async function generateRcaAssistantReply(rawInput: unknown): Promise<{
   reply: string;
   model: string;
@@ -133,38 +210,42 @@ export async function generateRcaAssistantReply(rawInput: unknown): Promise<{
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.text }],
   }));
+  const systemInstruction = buildRcaSystemInstruction(context);
 
-  try {
-    const response = await ai.models.generateContent({
-      model: ASSISTANT_MODEL,
-      contents,
-      config: {
-        systemInstruction: buildRcaSystemInstruction(context),
-      },
-    });
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      const response = await ai.models.generateContent({
+        model: ASSISTANT_MODEL,
+        contents,
+        config: { systemInstruction },
+      });
 
-    const text = response.text?.trim();
-    if (!text) {
-      throw new AssistantServiceError(
-        'ИИ-ассистент вернул пустой ответ. Попробуйте переформулировать вопрос.',
-        502,
-        'EMPTY_AI_RESPONSE'
-      );
+      const text = response.text?.trim();
+      if (!text) {
+        throw new AssistantServiceError(
+          'ИИ-ассистент вернул пустой ответ. Попробуйте переформулировать вопрос.',
+          502,
+          'EMPTY_AI_RESPONSE'
+        );
+      }
+
+      return {
+        reply: text,
+        model: ASSISTANT_MODEL,
+      };
+    } catch (err) {
+      if (err instanceof AssistantServiceError) {
+        throw err;
+      }
+      lastError = err;
+      if (attempt < RETRY_DELAYS_MS.length && isTransientUpstreamError(err)) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+        continue;
+      }
+      break;
     }
-
-    return {
-      reply: text,
-      model: ASSISTANT_MODEL,
-    };
-  } catch (err) {
-    if (err instanceof AssistantServiceError) {
-      throw err;
-    }
-    const detail = err instanceof Error ? err.message : 'Неизвестная ошибка сервиса ИИ';
-    throw new AssistantServiceError(
-      `Не удалось получить ответ от ИИ-ассистента: ${detail}`,
-      502,
-      'GEMINI_UPSTREAM_ERROR'
-    );
   }
+
+  throw formatGeminiUpstreamError(lastError);
 }

@@ -106,29 +106,12 @@ export const RcaAssistantChatWidget: React.FC<RcaAssistantChatWidgetProps> = ({
     }
   }, [messages, busy, isOpen]);
 
-  const sendMessage = async (textOverride?: string) => {
-    const text = (textOverride ?? draft).trim();
-    if (!text || busy) return;
-
+  const requestReply = async (historyToSend: ChatMessage[]) => {
     setError(null);
-    const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      text,
-      createdAtLabel: formatNowTime(),
-    };
-
-    const nextHistory = [...messages, userMsg];
-    setMessages(nextHistory);
-    if (!textOverride) {
-      setDraft('');
-    }
     setBusy(true);
 
-    tracker.trackCustomInteraction('ИИ-консультант РЦА · вопрос', text.slice(0, 60));
-
     try {
-      const apiMessages = nextHistory
+      const apiMessages = historyToSend
         .filter((m) => m.id !== 'welcome')
         .slice(-16)
         .map((m) => ({ role: m.role, text: m.text }));
@@ -182,6 +165,35 @@ export const RcaAssistantChatWidget: React.FC<RcaAssistantChatWidgetProps> = ({
     } finally {
       setBusy(false);
     }
+  };
+
+  const sendMessage = async (textOverride?: string) => {
+    const text = (textOverride ?? draft).trim();
+    if (!text || busy) return;
+
+    const userMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      text,
+      createdAtLabel: formatNowTime(),
+    };
+
+    const nextHistory = [...messages, userMsg];
+    setMessages(nextHistory);
+    if (!textOverride) {
+      setDraft('');
+    }
+
+    tracker.trackCustomInteraction('ИИ-консультант РЦА · вопрос', text.slice(0, 60));
+    await requestReply(nextHistory);
+  };
+
+  const canRetryLast =
+    !busy && messages.length > 0 && messages[messages.length - 1]?.role === 'user';
+
+  const handleRetryLast = () => {
+    if (!canRetryLast) return;
+    void requestReply(messages);
   };
 
   const handleReset = () => {
@@ -312,10 +324,21 @@ export const RcaAssistantChatWidget: React.FC<RcaAssistantChatWidgetProps> = ({
           {error && (
             <div
               role="alert"
-              className="mx-3.5 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start gap-2"
+              className="mx-3.5 mb-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 flex items-start justify-between gap-2"
             >
-              <AlertCircle className="w-4 h-4 text-red-700 shrink-0 mt-0.5" aria-hidden="true" />
-              <span>{error}</span>
+              <div className="flex items-start gap-2 min-w-0">
+                <AlertCircle className="w-4 h-4 text-red-700 shrink-0 mt-0.5" aria-hidden="true" />
+                <span>{error}</span>
+              </div>
+              {canRetryLast && (
+                <button
+                  type="button"
+                  onClick={handleRetryLast}
+                  className="px-2 py-1 text-[11px] font-semibold bg-white border border-red-200 text-red-800 hover:bg-red-100 rounded shrink-0 cursor-pointer"
+                >
+                  Повторить
+                </button>
+              )}
             </div>
           )}
 
