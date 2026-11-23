@@ -5,7 +5,6 @@ import {
   GitBranch,
   GitCommitHorizontal,
   KeyRound,
-  Lock,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -50,7 +49,7 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
   const [authStatus, setAuthStatus] = useState<GitAuthStatusResponse | null>(null);
   const [repoStatus, setRepoStatus] = useState<GitStatusResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [passcode, setPasscode] = useState<string>('');
+  const [accessKey, setAccessKey] = useState<string>('');
   const [commitMessage, setCommitMessage] = useState<string>(DEFAULT_COMMIT_MESSAGE);
   const [authorName, setAuthorName] = useState<string>('');
   const [authorEmail, setAuthorEmail] = useState<string>('');
@@ -85,25 +84,22 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
     void loadState();
   }, [loadState]);
 
-  const handleAuthSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleVerifyKey = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const res =
-        authStatus?.mode === 'setup_required'
-          ? await gitSyncApi.claimPasscode(passcode)
-          : await gitSyncApi.unlock(passcode);
+      const res = await gitSyncApi.verifyKey(accessKey);
       onTokenChange(res.token);
-      setPasscode('');
+      setAccessKey('');
     } catch (err) {
-      setError(err instanceof GitApiError ? err.message : 'Не удалось подтвердить доступ.');
+      setError(err instanceof GitApiError ? err.message : 'Не удалось проверить ключ доступа.');
     } finally {
       setBusy(false);
     }
   };
 
-  const handleLock = async () => {
+  const handleResetKey = async () => {
     setBusy(true);
     try {
       await gitSyncApi.lock(bearerToken);
@@ -145,6 +141,9 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
       const refreshed = await gitSyncApi.status(bearerToken);
       setRepoStatus(refreshed);
     } catch (err) {
+      if (err instanceof GitApiError && err.status === 401) {
+        onTokenChange(null);
+      }
       setError(err instanceof GitApiError ? err.message : 'Не удалось выполнить коммит и отправку.');
     } finally {
       setBusy(false);
@@ -177,16 +176,16 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
             </button>
           )}
-          {authStatus?.authorized && authStatus.mode === 'passcode' && (
+          {authStatus?.authorized && (
             <button
               type="button"
-              onClick={() => void handleLock()}
+              onClick={() => void handleResetKey()}
               disabled={busy}
-              title="Заблокировать доступ оператора Git"
+              title="Сбросить подтверждённый ключ доступа"
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 cursor-pointer"
             >
-              <Lock className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Закрыть доступ</span>
+              <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Сменить ключ</span>
             </button>
           )}
           {onClose && (
@@ -207,37 +206,34 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
         {loading && !authStatus ? (
           <p className="text-sm text-slate-500">Проверяем состояние репозитория…</p>
         ) : !authStatus?.authorized ? (
-          <form onSubmit={handleAuthSubmit} className="space-y-4">
+          <form onSubmit={handleVerifyKey} className="space-y-4">
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-1.5">
               <p className="text-xs font-semibold text-slate-900 inline-flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-teal-700" aria-hidden="true" />
-                <span>
-                  {authStatus?.mode === 'setup_required'
-                    ? 'Первичная защита операций Git'
-                    : 'Требуется пароль оператора Git'}
-                </span>
+                <span>Требуется ключ доступа к репозиторию GitHub</span>
               </p>
               <p className="text-xs text-slate-600 leading-relaxed">
-                {authStatus?.mode === 'setup_required'
-                  ? 'Задайте пароль оператора (от 8 символов), чтобы защитить фиксацию коммитов и отправку в main. Либо войдите в Личный кабинет под ролью Администратора.'
-                  : 'Введите пароль оператора Git или авторизуйтесь под учётной записью Администратора в Личном кабинете.'}
+                Для фиксации изменений коммитом и отправки в ветку{' '}
+                <code className="font-mono">main</code> репозитория{' '}
+                <code className="font-mono">spawnperm/rca-vostok</code> введите персональный ключ
+                доступа GitHub с правами на запись (push). Ключ проверяется на сервере через GitHub
+                API, не сохраняется на диск и действует только в оперативной памяти текущей сессии.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="git-sync-passcode" className="block text-xs font-medium text-slate-700">
-                {authStatus?.mode === 'setup_required'
-                  ? 'Новый пароль оператора (минимум 8 символов)'
-                  : 'Пароль оператора Git'}
+              <label htmlFor="git-access-key" className="block text-xs font-medium text-slate-700">
+                Ключ доступа GitHub (Personal Access Token)
               </label>
               <input
-                id="git-sync-passcode"
+                id="git-access-key"
                 type="password"
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                autoComplete={authStatus?.mode === 'setup_required' ? 'new-password' : 'current-password'}
-                placeholder="••••••••"
-                className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                value={accessKey}
+                onChange={(e) => setAccessKey(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="ghp_... или github_pat_..."
+                className="w-full px-3 py-2.5 text-sm font-mono border border-slate-300 rounded-lg focus:border-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-100"
               />
             </div>
 
@@ -249,17 +245,11 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
 
             <button
               type="submit"
-              disabled={busy || !passcode.trim()}
+              disabled={busy || !accessKey.trim()}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 cursor-pointer"
             >
               <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>
-                {busy
-                  ? 'Проверяем…'
-                  : authStatus?.mode === 'setup_required'
-                    ? 'Сохранить пароль и открыть Git'
-                    : 'Разблокировать синхронизацию'}
-              </span>
+              <span>{busy ? 'Проверяем ключ…' : 'Подтвердить ключ доступа'}</span>
             </button>
           </form>
         ) : (
@@ -292,8 +282,9 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
                   )}
                 </div>
 
-                <span className="font-mono text-[11px] text-slate-500">
-                  origin/{repoStatus.targetBranch}
+                <span className="text-[11px] font-medium text-emerald-800 inline-flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                  <span>Ключ доступа подтверждён</span>
                 </span>
               </div>
             )}
@@ -414,8 +405,7 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
                 </button>
 
                 <span className="text-[11px] text-slate-500">
-                  Выполнит <code className="font-mono">git commit</code> и{' '}
-                  <code className="font-mono">git push origin main</code>
+                  Отправка с подтверждённым ключом в <code className="font-mono">origin/main</code>
                 </span>
               </div>
             </form>

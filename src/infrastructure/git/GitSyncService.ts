@@ -181,10 +181,17 @@ export class GitSyncService {
     }
   }
 
-  private async withTokenAskPass<T>(fn: (extraEnv: Record<string, string>) => Promise<T>): Promise<T> {
-    const token = (process.env.GITHUB_TOKEN || process.env.GIT_TOKEN || '').trim();
+  private async withTokenAskPass<T>(
+    explicitToken: string | undefined,
+    fn: (extraEnv: Record<string, string>) => Promise<T>
+  ): Promise<T> {
+    const token = (explicitToken || process.env.GITHUB_TOKEN || process.env.GIT_TOKEN || '').trim();
     if (!token) {
-      return fn({});
+      throw new GitSyncError(
+        'Отсутствует действующий ключ доступа GitHub для отправки изменений.',
+        401,
+        'KEY_REQUIRED'
+      );
     }
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-git-askpass-'));
@@ -253,7 +260,7 @@ export class GitSyncService {
     };
   }
 
-  async commitAndPush(rawInput: unknown): Promise<GitCommitPushResult> {
+  async commitAndPush(rawInput: unknown, accessKey?: string): Promise<GitCommitPushResult> {
     const parsed = commitAndPushInputSchema.safeParse(rawInput);
     if (!parsed.success) {
       const issue = parsed.error.issues[0]?.message ?? 'Некорректные параметры коммита.';
@@ -334,8 +341,9 @@ export class GitSyncService {
       }
     }
 
-    await this.withTokenAskPass(async (extraEnv) => {
-      await this.runGit(['push', 'origin', TARGET_BRANCH], extraEnv);
+    await this.withTokenAskPass(accessKey, async (extraEnv) => {
+      // Disable global credential helpers so push strictly uses the verified key.
+      await this.runGit(['-c', 'credential.helper=', 'push', 'origin', TARGET_BRANCH], extraEnv);
     });
 
     if (!commitHash) {

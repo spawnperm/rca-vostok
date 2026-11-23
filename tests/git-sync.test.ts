@@ -1,7 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 import {
   GitAuthError,
@@ -17,79 +14,66 @@ import {
   sanitizeRemoteUrl,
 } from '../src/infrastructure/git/GitSyncService.ts';
 
-test('GitSyncAuthService: supports first-run claim, verification, token resolution, and revocation', async () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-git-auth-'));
-  try {
-    const auth = new GitSyncAuthService({
-      dataDir: tmpDir,
-      getEnvPasscode: () => undefined,
-    });
+test('GitSyncAuthService: requires a verified repository access key with push permission', async () => {
+  const auth = new GitSyncAuthService({
+    getEnvAccessKey: () => undefined,
+    verifyRepoKey: async (key) => {
+      if (key === 'ghp_valid_push_key') {
+        return { valid: true, canPush: true };
+      }
+      if (key === 'ghp_readonly_key') {
+        return { valid: true, canPush: false, reason: 'Нет прав на push.' };
+      }
+      return { valid: false, canPush: false, reason: 'Неверный ключ.' };
+    },
+  });
 
-    assert.deepEqual(auth.getAuthStatus({ isCabinetAdmin: false }), {
-      authorized: false,
-      mode: 'setup_required',
-    });
+  assert.deepEqual(auth.getAuthStatus({}), {
+    authorized: false,
+    mode: 'key_required',
+  });
 
-    await assert.rejects(
-      () => auth.claimPasscode('short'),
-      (err: unknown) => err instanceof GitAuthError && err.statusCode === 400
-    );
+  await assert.rejects(
+    () => auth.verifyAccessKey('short'),
+    (err: unknown) => err instanceof GitAuthError && err.statusCode === 400
+  );
 
-    const claimed = await auth.claimPasscode('vostok-operator-2027');
-    assert.ok(claimed.token.length > 20);
-    assert.equal(auth.resolveBearerToken(`Bearer ${claimed.token}`), true);
-    assert.deepEqual(
-      auth.getAuthStatus({ isCabinetAdmin: false, authHeader: `Bearer ${claimed.token}` }),
-      { authorized: true, mode: 'passcode' }
-    );
+  await assert.rejects(
+    () => auth.verifyAccessKey('ghp_invalid_key'),
+    (err: unknown) => err instanceof GitAuthError && err.statusCode === 401
+  );
 
-    // Second claim must be rejected once claimed.
-    await assert.rejects(
-      () => auth.claimPasscode('another-passcode-123'),
-      (err: unknown) => err instanceof GitAuthError && err.statusCode === 409
-    );
+  await assert.rejects(
+    () => auth.verifyAccessKey('ghp_readonly_key'),
+    (err: unknown) => err instanceof GitAuthError && err.statusCode === 403
+  );
 
-    // Wrong passcode fails with 401.
-    await assert.rejects(
-      () => auth.verifyPasscode('wrong-passcode'),
-      (err: unknown) => err instanceof GitAuthError && err.statusCode === 401
-    );
+  const verified = await auth.verifyAccessKey('ghp_valid_push_key');
+  assert.ok(verified.token.length > 20);
+  assert.deepEqual(auth.getAuthStatus({ authHeader: `Bearer ${verified.token}` }), {
+    authorized: true,
+    mode: 'key',
+  });
+  assert.deepEqual(auth.resolveSession(`Bearer ${verified.token}`), {
+    authorized: true,
+    pushToken: 'ghp_valid_push_key',
+  });
 
-    // Valid passcode issues a working token.
-    const unlocked = await auth.verifyPasscode('vostok-operator-2027');
-    assert.equal(auth.resolveBearerToken(`Bearer ${unlocked.token}`), true);
-
-    // Revocation invalidates token immediately.
-    auth.revokeBearerToken(`Bearer ${unlocked.token}`);
-    assert.equal(auth.resolveBearerToken(`Bearer ${unlocked.token}`), false);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
+  auth.revokeBearerToken(`Bearer ${verified.token}`);
+  assert.equal(auth.resolveBearerToken(`Bearer ${verified.token}`), false);
 });
 
-test('GitSyncAuthService: env passcode takes precedence and cabinet admin always bypasses passcode', async () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-git-env-'));
-  try {
-    const auth = new GitSyncAuthService({
-      dataDir: tmpDir,
-      getEnvPasscode: () => 'env-secret-pass',
-    });
+test('GitSyncAuthService: supports GIT_ACCESS_KEY server override paired with GITHUB_TOKEN', async () => {
+  const auth = new GitSyncAuthService({
+    getEnvAccessKey: () => 'server-access-key-2027',
+    getEnvGitHubToken: () => 'ghp_configured_push_token',
+    verifyRepoKey: async () => ({ valid: false, canPush: false }),
+  });
 
-    assert.deepEqual(auth.getAuthStatus({ isCabinetAdmin: true }), {
-      authorized: true,
-      mode: 'cabinet_admin',
-    });
-
-    assert.deepEqual(auth.getAuthStatus({ isCabinetAdmin: false }), {
-      authorized: false,
-      mode: 'locked',
-    });
-
-    const verified = await auth.verifyPasscode('env-secret-pass');
-    assert.equal(auth.resolveBearerToken(`Bearer ${verified.token}`), true);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  }
+  const verified = await auth.verifyAccessKey('server-access-key-2027');
+  const session = auth.resolveSession(`Bearer ${verified.token}`);
+  assert.equal(session.authorized, true);
+  assert.equal(session.pushToken, 'ghp_configured_push_token');
 });
 
 test('GitSyncService helpers: sanitize credentials, block sensitive paths, and validate commit input', async () => {

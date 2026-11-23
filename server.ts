@@ -633,8 +633,8 @@ async function startServer() {
     }
   });
 
-  // Git repository sync (commit & push to origin/main, admin RBAC or operator passcode)
-  const gitAuth = new GitSyncAuthService({ dataDir: DATA_DIR });
+  // Git repository sync (commit & push to origin/main protected by repository access key)
+  const gitAuth = new GitSyncAuthService();
   const gitSync = new GitSyncService(__dirname);
   app.use(
     createGitRouter({

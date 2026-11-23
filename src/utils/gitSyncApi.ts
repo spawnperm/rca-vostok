@@ -1,4 +1,4 @@
-export type GitSyncAuthMode = 'cabinet_admin' | 'passcode' | 'setup_required' | 'locked';
+export type GitSyncAuthMode = 'key' | 'key_required';
 
 export interface GitAuthStatusResponse {
   authorized: boolean;
@@ -100,17 +100,10 @@ export const gitSyncApi = {
     return requestJson<GitAuthStatusResponse>('/api/git/auth-status', { bearerToken });
   },
 
-  claimPasscode(passcode: string): Promise<{ ok: true; token: string; expiresAt: string }> {
-    return requestJson('/api/git/claim-passcode', {
+  verifyKey(accessKey: string): Promise<{ ok: true; token: string; expiresAt: string }> {
+    return requestJson('/api/git/verify-key', {
       method: 'POST',
-      body: { passcode },
-    });
-  },
-
-  unlock(passcode: string): Promise<{ ok: true; token: string; expiresAt: string }> {
-    return requestJson('/api/git/unlock', {
-      method: 'POST',
-      body: { passcode },
+      body: { accessKey },
     });
   },
 
@@ -126,7 +119,12 @@ export const gitSyncApi = {
   },
 
   commitAndPush(
-    input: { commitMessage: string; authorName?: string; authorEmail?: string },
+    input: {
+      commitMessage: string;
+      accessKey?: string;
+      authorName?: string;
+      authorEmail?: string;
+    },
     bearerToken?: string | null
   ): Promise<GitCommitPushResponse> {
     return requestJson<GitCommitPushResponse>('/api/git/commit-push', {

@@ -1,29 +1,29 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import {
-  atomicWriteJson,
-  resolveConfinedPath,
-} from '../persistence/PathConfinement.ts';
-import {
-  ScryptPasswordHasher,
-  Sha256SessionTokenService,
-} from '../security/ScryptPasswordHasher.ts';
+import { Sha256SessionTokenService } from '../security/ScryptPasswordHasher.ts';
+import { TARGET_REPOSITORY_SLUG } from './GitSyncService.ts';
 
-const CLAIM_FILE_NAME = 'git-sync-passcode.json';
-const CLAIM_TEMP_FILE = 'git-sync-passcode.tmp.json';
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 8; // 8 hours
+const GITHUB_REPO_API_URL = `https://api.github.com/repos/${TARGET_REPOSITORY_SLUG}`;
 
-interface StoredPasscodeClaim {
-  passwordHash: string;
-  passwordSalt: string;
-  claimedAt: string;
+export type GitSyncAuthMode = 'key' | 'key_required';
+
+export interface GitKeyVerificationResult {
+  valid: boolean;
+  canPush: boolean;
+  reason?: string;
 }
 
-export type GitSyncAuthMode = 'cabinet_admin' | 'passcode' | 'setup_required' | 'locked';
+export type GitRepoKeyVerifier = (accessKey: string) => Promise<GitKeyVerificationResult>;
 
 export interface GitSyncAuthOptions {
-  dataDir: string;
-  getEnvPasscode?: () => string | undefined;
+  getEnvAccessKey?: () => string | undefined;
+  getEnvGitHubToken?: () => string | undefined;
+  verifyRepoKey?: GitRepoKeyVerifier;
+}
+
+interface KeySessionRecord {
+  expiresAt: number;
+  pushToken: string;
 }
 
 function timingSafeEqualString(a: string, b: string): boolean {
@@ -33,67 +33,102 @@ function timingSafeEqualString(a: string, b: string): boolean {
 }
 
 /**
- * Server-side authorization guard for the Git commit/push endpoints.
+ * Verifies a GitHub Personal Access Token directly against the target
+ * repository API (`https://api.github.com/repos/spawnperm/rca-vostok`) and
+ * ensures it holds `push` permission.
+ */
+export async function defaultVerifyGitHubRepoKey(
+  accessKey: string
+): Promise<GitKeyVerificationResult> {
+  const trimmed = accessKey.trim();
+  if (!trimmed) {
+    return { valid: false, canPush: false, reason: 'Ключ доступа не может быть пустым.' };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(GITHUB_REPO_API_URL, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${trimmed}`,
+        'User-Agent': 'rca-vostok-git-sync',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    return {
+      valid: false,
+      canPush: false,
+      reason: 'Не удалось связаться с GitHub API для проверки ключа доступа.',
+    };
+  }
+
+  if (response.status === 401) {
+    return {
+      valid: false,
+      canPush: false,
+      reason: 'Ключ доступа отклонён GitHub (неверный или отозванный токен).',
+    };
+  }
+
+  if (response.status === 403 || response.status === 404) {
+    return {
+      valid: false,
+      canPush: false,
+      reason: `Ключ не имеет доступа к репозиторию ${TARGET_REPOSITORY_SLUG}.`,
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      valid: false,
+      canPush: false,
+      reason: `GitHub API вернул ошибку проверки ключа (${response.status}).`,
+    };
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as {
+    permissions?: { push?: boolean; admin?: boolean };
+  };
+  const canPush = Boolean(payload.permissions?.push || payload.permissions?.admin);
+  if (!canPush) {
+    return {
+      valid: true,
+      canPush: false,
+      reason: `Ключ действителен, но у него нет прав на запись (push) в ${TARGET_REPOSITORY_SLUG}.`,
+    };
+  }
+
+  return { valid: true, canPush: true };
+}
+
+/**
+ * Server-side key-based authorization for Git commit & push operations.
  *
- * Precedence:
- * 1. Authenticated cabinet admin (`users:manage`) is always authorized.
- * 2. If `GIT_SYNC_PASSCODE` is configured in the server environment, callers
- *    must unlock with that passcode (`POST /api/git/unlock`) to receive an
- *    in-memory Bearer token.
- * 3. If `GIT_SYNC_PASSCODE` is unset and no passcode has been claimed yet,
- *    the first operator claims a passcode (`POST /api/git/claim-passcode`),
- *    which is stored scrypt-hashed in `data/git-sync-passcode.json` (gitignored).
+ * Keys are never written to disk or echoed back to clients; verified keys stay
+ * only in process memory for the lifetime of the Bearer session (8 hours).
  */
 export class GitSyncAuthService {
-  private readonly dataDir: string;
-  private readonly getEnvPasscode: () => string | undefined;
-  private readonly hasher = new ScryptPasswordHasher();
+  private readonly getEnvAccessKey: () => string | undefined;
+  private readonly getEnvGitHubToken: () => string | undefined;
+  private readonly verifyRepoKey: GitRepoKeyVerifier;
   private readonly tokens = new Sha256SessionTokenService();
-  private readonly sessions = new Map<string, { expiresAt: number }>();
+  private readonly sessions = new Map<string, KeySessionRecord>();
 
-  constructor(options: GitSyncAuthOptions) {
-    this.dataDir = options.dataDir;
-    this.getEnvPasscode = options.getEnvPasscode ?? (() => process.env.GIT_SYNC_PASSCODE);
+  constructor(options: GitSyncAuthOptions = {}) {
+    this.getEnvAccessKey = options.getEnvAccessKey ?? (() => process.env.GIT_ACCESS_KEY);
+    this.getEnvGitHubToken =
+      options.getEnvGitHubToken ?? (() => process.env.GITHUB_TOKEN || process.env.GIT_TOKEN);
+    this.verifyRepoKey = options.verifyRepoKey ?? defaultVerifyGitHubRepoKey;
   }
 
-  private envPasscode(): string {
-    return (this.getEnvPasscode() ?? '').trim();
-  }
-
-  private readClaimedPasscode(): StoredPasscodeClaim | null {
-    try {
-      const filePath = resolveConfinedPath(this.dataDir, CLAIM_FILE_NAME);
-      if (!fs.existsSync(filePath)) return null;
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<StoredPasscodeClaim>;
-      if (
-        typeof parsed.passwordHash === 'string' &&
-        typeof parsed.passwordSalt === 'string' &&
-        parsed.passwordHash.length > 0 &&
-        parsed.passwordSalt.length > 0
-      ) {
-        return {
-          passwordHash: parsed.passwordHash,
-          passwordSalt: parsed.passwordSalt,
-          claimedAt: typeof parsed.claimedAt === 'string' ? parsed.claimedAt : '',
-        };
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  hasPasscodeConfigured(): boolean {
-    if (this.envPasscode().length > 0) return true;
-    return this.readClaimedPasscode() !== null;
-  }
-
-  private issueToken(): { token: string; expiresAt: string } {
+  private issueToken(pushToken: string): { token: string; expiresAt: string } {
     this.purgeExpired();
     const { token, tokenHash } = this.tokens.issue();
     const expiresAtMs = Date.now() + TOKEN_TTL_MS;
-    this.sessions.set(tokenHash, { expiresAt: expiresAtMs });
+    this.sessions.set(tokenHash, { expiresAt: expiresAtMs, pushToken });
     return { token, expiresAt: new Date(expiresAtMs).toISOString() };
   }
 
@@ -106,104 +141,72 @@ export class GitSyncAuthService {
     }
   }
 
-  resolveBearerToken(authHeader: string | undefined): boolean {
-    if (!authHeader) return false;
+  private extractBearer(authHeader: string | undefined): string | null {
+    if (!authHeader) return null;
     const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
-    if (!match) return false;
+    if (!match) return null;
     const rawToken = match[1].trim();
-    if (!rawToken) return false;
+    return rawToken || null;
+  }
+
+  resolveSession(authHeader: string | undefined): { authorized: boolean; pushToken?: string } {
+    const rawToken = this.extractBearer(authHeader);
+    if (!rawToken) return { authorized: false };
 
     const hash = this.tokens.hashToken(rawToken);
     const rec = this.sessions.get(hash);
-    if (!rec) return false;
+    if (!rec) return { authorized: false };
     if (rec.expiresAt <= Date.now()) {
       this.sessions.delete(hash);
-      return false;
+      return { authorized: false };
     }
-    return true;
+    return { authorized: true, pushToken: rec.pushToken };
+  }
+
+  resolveBearerToken(authHeader: string | undefined): boolean {
+    return this.resolveSession(authHeader).authorized;
   }
 
   revokeBearerToken(authHeader: string | undefined): void {
-    if (!authHeader) return;
-    const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
-    if (!match) return;
-    const rawToken = match[1].trim();
+    const rawToken = this.extractBearer(authHeader);
     if (!rawToken) return;
     this.sessions.delete(this.tokens.hashToken(rawToken));
   }
 
-  getAuthStatus(options: { isCabinetAdmin: boolean; authHeader?: string }): {
+  getAuthStatus(options: { authHeader?: string }): {
     authorized: boolean;
     mode: GitSyncAuthMode;
   } {
-    if (options.isCabinetAdmin) {
-      return { authorized: true, mode: 'cabinet_admin' };
-    }
     if (this.resolveBearerToken(options.authHeader)) {
-      return { authorized: true, mode: 'passcode' };
+      return { authorized: true, mode: 'key' };
     }
-    if (!this.hasPasscodeConfigured()) {
-      return { authorized: false, mode: 'setup_required' };
-    }
-    return { authorized: false, mode: 'locked' };
+    return { authorized: false, mode: 'key_required' };
   }
 
-  async claimPasscode(passcode: string): Promise<{ token: string; expiresAt: string }> {
-    const trimmed = passcode.trim();
+  async verifyAccessKey(accessKey: string): Promise<{ token: string; expiresAt: string }> {
+    const trimmed = accessKey.trim();
     if (trimmed.length < 8) {
-      throw new GitAuthError('Пароль оператора Git должен содержать не менее 8 символов.', 400);
+      throw new GitAuthError('Укажите корректный ключ доступа (минимум 8 символов).', 400);
     }
-    if (trimmed.length > 128) {
-      throw new GitAuthError('Пароль слишком длинный (максимум 128 символов).', 400);
+    if (trimmed.length > 256) {
+      throw new GitAuthError('Ключ доступа слишком длинный.', 400);
     }
-    if (this.hasPasscodeConfigured()) {
+
+    const envAccessKey = (this.getEnvAccessKey() ?? '').trim();
+    if (envAccessKey.length > 0 && timingSafeEqualString(trimmed, envAccessKey)) {
+      const configuredPushToken = (this.getEnvGitHubToken() ?? '').trim() || trimmed;
+      return this.issueToken(configuredPushToken);
+    }
+
+    const check = await this.verifyRepoKey(trimmed);
+    if (!check.valid || !check.canPush) {
       throw new GitAuthError(
-        'Пароль оператора Git уже настроен. Используйте вход по паролю.',
-        409
+        check.reason || `Ключ доступа не подходит для отправки в ${TARGET_REPOSITORY_SLUG}.`,
+        check.valid ? 403 : 401
       );
     }
 
-    const material = await this.hasher.hash(trimmed);
-    atomicWriteJson(this.dataDir, CLAIM_FILE_NAME, CLAIM_TEMP_FILE, {
-      passwordHash: material.passwordHash,
-      passwordSalt: material.passwordSalt,
-      claimedAt: new Date().toISOString(),
-    });
-
-    const targetPath = resolveConfinedPath(this.dataDir, CLAIM_FILE_NAME);
-    try {
-      fs.chmodSync(targetPath, 0o600);
-    } catch {
-      // Ignore chmod issues on filesystems without POSIX permissions
-    }
-
-    return this.issueToken();
-  }
-
-  async verifyPasscode(passcode: string): Promise<{ token: string; expiresAt: string }> {
-    const trimmed = passcode.trim();
-    if (!trimmed) {
-      throw new GitAuthError('Введите пароль оператора Git.', 400);
-    }
-
-    const envSecret = this.envPasscode();
-    if (envSecret.length > 0) {
-      if (!timingSafeEqualString(trimmed, envSecret)) {
-        throw new GitAuthError('Неверный пароль оператора Git.', 401);
-      }
-      return this.issueToken();
-    }
-
-    const claimed = this.readClaimedPasscode();
-    if (!claimed) {
-      throw new GitAuthError('Пароль оператора Git ещё не задан.', 409);
-    }
-
-    const ok = await this.hasher.verify(trimmed, claimed);
-    if (!ok) {
-      throw new GitAuthError('Неверный пароль оператора Git.', 401);
-    }
-    return this.issueToken();
+    return this.issueToken(trimmed);
   }
 }
 
