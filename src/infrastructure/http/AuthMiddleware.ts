@@ -33,18 +33,25 @@ export function readSessionCookie(req: express.Request): string | null {
   return null;
 }
 
+export function isHttpsDeployment(): boolean {
+  return (
+    (process.env.APP_URL ?? '').startsWith('https://') ||
+    process.env.K_SERVICE !== undefined
+  );
+}
+
 export function sessionCookieOptions(expiresAt: string): {
   httpOnly: true;
-  sameSite: 'lax';
+  sameSite: 'lax' | 'none';
   secure: boolean;
   path: string;
   expires: Date;
 } {
+  const isHttps = isHttpsDeployment();
   return {
     httpOnly: true, // not readable from JS: mitigates XSS token theft
-    sameSite: 'lax', // blocks cross-site POSTs while keeping normal navigation
-    // TLS terminates at the edge; set Secure only when the public URL is https.
-    secure: (process.env.APP_URL ?? '').startsWith('https://'),
+    sameSite: isHttps ? 'none' : 'lax', // required for AI Studio HTTPS iframe preview
+    secure: isHttps,
     path: '/',
     expires: new Date(expiresAt),
   };

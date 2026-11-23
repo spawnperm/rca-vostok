@@ -121,6 +121,11 @@ import {
   UpdateProfileUseCase,
 } from './src/application/identity/IdentityUseCases.ts';
 import { createIdentityRouter } from './src/infrastructure/http/IdentityRouter.ts';
+import { createLinkedAccountsRouter } from './src/infrastructure/http/LinkedAccountsRouter.ts';
+import { SocialOAuthService } from './src/infrastructure/oauth/SocialOAuthProviders.ts';
+import { JsonFileLinkedAccountsRepository } from './src/infrastructure/persistence/JsonFileLinkedAccountsRepository.ts';
+import { PostgresLinkedAccountsRepository } from './src/infrastructure/persistence/pg/PostgresLinkedAccountsRepository.ts';
+import type { LinkedAccountsRepository } from './src/domain/identity/LinkedAccounts.ts';
 import {
   createAuthMiddleware,
   requireAuth,
@@ -306,6 +311,10 @@ async function startServer() {
   const sessionRepo: SessionRepository = pool
     ? new PostgresSessionRepository(pool)
     : new InMemorySessionRepository();
+  const linkedAccountsRepo: LinkedAccountsRepository = pool
+    ? new PostgresLinkedAccountsRepository(pool)
+    : new JsonFileLinkedAccountsRepository(DATA_DIR);
+  const socialOAuthService = new SocialOAuthService();
   const passwordHasher = new ScryptPasswordHasher();
   const sessionTokens = new Sha256SessionTokenService();
 
@@ -443,8 +452,10 @@ async function startServer() {
   // These require PostgreSQL (they rely on relational joins and arrays). When
   // no database is configured the routers are not mounted, so local dev of the
   // cabinet still works without them.
+  let activeSocialRepo: SocialRepository | null = null;
   if (pool) {
     const socialRepo: SocialRepository = new PostgresSocialRepository(pool);
+    activeSocialRepo = socialRepo;
     const chatRepo: ChatRepository = new PostgresChatRepository(pool);
     const mediaRepo: MediaRepository = new PostgresMediaRepository(pool);
     const objectStorage = createObjectStorageFromEnv();
@@ -613,6 +624,16 @@ async function startServer() {
       });
     });
   }
+
+  app.use(
+    createLinkedAccountsRouter({
+      linkedAccountsRepo,
+      userRepo,
+      oauthService: socialOAuthService,
+      getBaseUrl,
+      socialRepo: activeSocialRepo,
+    })
+  );
 
   // Far East tourism hubs current weather (Open-Meteo with seasonal fallback)
   app.get('/api/weather/hubs', async (req, res) => {

@@ -7,13 +7,21 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Link2,
   LogIn,
   MapPin,
   ShieldCheck,
+  Sparkles,
   UserPlus,
   Users,
 } from 'lucide-react';
 import type { SessionUser } from '../utils/identityApi';
+import type {
+  ExamAutofillPayload,
+  LinkedAccountDTO,
+  LinkedProviderId,
+} from '../domain/identity/LinkedAccounts';
+import { LINKED_PROVIDER_META } from '../domain/identity/LinkedAccounts';
 import {
   buildMonthCalendarGrid,
   filterExamSchedule,
@@ -36,6 +44,10 @@ interface AttestationSessionsCalendarWidgetProps {
   user: SessionUser | null;
   inquiries: InquiryRecord[];
   selectedExamDate?: string;
+  linkedAccounts?: LinkedAccountDTO[];
+  autofill?: ExamAutofillPayload | null;
+  onSelectAutofillSource?: (provider: LinkedProviderId) => void;
+  onJumpToLinkedAccounts?: () => void;
   onSessionBooked?: (sessionDateIso: string) => void;
   onSelectExamDate?: (sessionDateIso: string) => void;
   onJumpToInquiries?: () => void;
@@ -68,12 +80,27 @@ const DISCIPLINE_FILTERS: readonly { id: ExamDisciplineFilter; label: string }[]
   { id: 'спелеологический', label: 'Спелео' },
 ];
 
+const DFO_REGIONS = [
+  'Приморский край',
+  'Камчатский край',
+  'Хабаровский край',
+  'Сахалинская область',
+  'Республика Саха (Якутия)',
+  'Амурская область',
+  'Магаданская область',
+  'Чукотский АО',
+];
+
 export const AttestationSessionsCalendarWidget: React.FC<
   AttestationSessionsCalendarWidgetProps
 > = ({
   user,
   inquiries,
   selectedExamDate,
+  linkedAccounts = [],
+  autofill = null,
+  onSelectAutofillSource,
+  onJumpToLinkedAccounts,
   onSessionBooked,
   onSelectExamDate,
   onJumpToInquiries,
@@ -105,11 +132,27 @@ export const AttestationSessionsCalendarWidget: React.FC<
     getDefaultCalendarMonth(allSessions, selectedExamDate)
   );
 
+  const [applicantName, setApplicantName] = useState<string>(
+    autofill?.fullName || user?.fullName || ''
+  );
+  const [applicantEmail, setApplicantEmail] = useState<string>(
+    autofill?.email || user?.email || ''
+  );
+  const [applicantRegion, setApplicantRegion] = useState<string>(
+    autofill?.region || user?.region || DFO_REGIONS[0]
+  );
   const [discipline, setDiscipline] = useState<string>(
     initialSession?.disciplines[0] ?? 'пешеходный'
   );
-  const [contactChannel, setContactChannel] = useState<string>('');
-  const [experienceNote, setExperienceNote] = useState<string>('');
+  const [contactChannel, setContactChannel] = useState<string>(
+    autofill?.contactChannel || ''
+  );
+  const [experienceNote, setExperienceNote] = useState<string>(
+    autofill?.experienceNote || ''
+  );
+  const [autofillSourceNote, setAutofillSourceNote] = useState<string | null>(
+    autofill ? autofill.sourceLabel : null
+  );
   const [consentAccepted, setConsentAccepted] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -139,13 +182,46 @@ export const AttestationSessionsCalendarWidget: React.FC<
   const selectedSession =
     sessions.find((s) => s.start === selectedSessionStart) ?? sessions[0] ?? allSessions[0];
 
+  // Auto-populate applicant fields from linked Google/social account or base cabinet profile
+  useEffect(() => {
+    if (!user) return;
+    if (autofill) {
+      setApplicantName(autofill.fullName || user.fullName);
+      setApplicantEmail(autofill.email || user.email);
+      setApplicantRegion(autofill.region || user.region);
+      setContactChannel(autofill.contactChannel || user.email);
+      if (autofill.experienceNote) {
+        setExperienceNote(autofill.experienceNote);
+      }
+      if (
+        selectedSession &&
+        selectedSession.disciplines.includes(autofill.preferredDiscipline)
+      ) {
+        setDiscipline(autofill.preferredDiscipline);
+      }
+      setAutofillSourceNote(autofill.sourceLabel);
+    } else {
+      setApplicantName((prev) => prev || user.fullName);
+      setApplicantEmail((prev) => prev || user.email);
+      setApplicantRegion((prev) => prev || user.region);
+      setAutofillSourceNote(null);
+    }
+  }, [user, autofill, selectedSession]);
+
   // Ensure chosen booking discipline belongs to the selected session's exam disciplines
   useEffect(() => {
     if (!selectedSession) return;
     if (!selectedSession.disciplines.includes(discipline)) {
-      setDiscipline(selectedSession.disciplines[0] ?? 'пешеходный');
+      if (
+        autofill?.preferredDiscipline &&
+        selectedSession.disciplines.includes(autofill.preferredDiscipline)
+      ) {
+        setDiscipline(autofill.preferredDiscipline);
+      } else {
+        setDiscipline(selectedSession.disciplines[0] ?? 'пешеходный');
+      }
     }
-  }, [selectedSession, discipline]);
+  }, [selectedSession, discipline, autofill]);
 
   const bookedSessionDates = useMemo(() => {
     const dates = new Set<string>();
@@ -234,15 +310,19 @@ export const AttestationSessionsCalendarWidget: React.FC<
         ? `Регистрация на очный экзамен ${selectedSession.rangeLabel}. ${experienceNote.trim()}`
         : `Регистрация через «Календарь аттестаций» на очный экзамен ${selectedSession.rangeLabel} (${selectedSession.category}).`;
 
+      const finalName = applicantName.trim() || user.fullName;
+      const finalEmail = applicantEmail.trim() || user.email;
+      const finalRegion = applicantRegion.trim() || user.region;
+
       const res = await fetch('/api/inquiries', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
-          fullName: user.fullName,
-          email: user.email,
-          contactChannel: contactChannel.trim() || user.email,
-          region: user.region,
+          fullName: finalName,
+          email: finalEmail,
+          contactChannel: contactChannel.trim() || finalEmail,
+          region: finalRegion,
           track: trackLabel,
           experienceNote: noteText,
           sessionDate: selectedSession.start,
@@ -257,7 +337,6 @@ export const AttestationSessionsCalendarWidget: React.FC<
       }
 
       setJustBookedDate(selectedSession.rangeLabel);
-      setExperienceNote('');
       onSessionBooked?.(selectedSession.start);
       tracker.trackCustomInteraction(
         'Календарь аттестаций · Регистрация на экзамен',
@@ -729,29 +808,180 @@ export const AttestationSessionsCalendarWidget: React.FC<
                 </div>
               ) : (
                 <form onSubmit={handleBookSession} className="space-y-3.5 pt-1 border-t border-slate-200">
-                  <p className="text-xs font-bold text-slate-900 pt-2">
-                    Онлайн-регистрация на очный экзамен ({selectedSession.rangeLabel})
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                    <p className="text-xs font-bold text-slate-900">
+                      Онлайн-регистрация на очный экзамен ({selectedSession.rangeLabel})
+                    </p>
+                    {onJumpToLinkedAccounts && (
+                      <button
+                        type="button"
+                        onClick={onJumpToLinkedAccounts}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 hover:text-teal-900 cursor-pointer"
+                      >
+                        <Link2 className="w-3 h-3" aria-hidden="true" />
+                        <span>
+                          {linkedAccounts.length > 0
+                            ? 'Профили автозаполнения'
+                            : 'Связать Google / соцсеть'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
 
-                  <div className="space-y-1.5">
-                    <label
-                      htmlFor="calendar-booking-discipline"
-                      className="block text-xs font-medium text-slate-700"
-                    >
-                      Направление аттестации
-                    </label>
-                    <select
-                      id="calendar-booking-discipline"
-                      value={discipline}
-                      onChange={(e) => setDiscipline(e.target.value)}
-                      className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
-                    >
-                      {selectedSession.disciplines.map((d) => (
-                        <option key={d} value={d}>
-                          {DISCIPLINE_TO_TRACK[d] ?? d}
-                        </option>
-                      ))}
-                    </select>
+                  {/* Linked Profile Autofill Bar */}
+                  {autofill ? (
+                    <div className="bg-teal-50/70 border border-teal-200 rounded-lg p-3 space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-teal-900">
+                          <Sparkles className="w-3.5 h-3.5 text-teal-700 shrink-0" aria-hidden="true" />
+                          <span>
+                            Автозаполнение: {autofillSourceNote || autofill.sourceLabel}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setApplicantName(autofill.fullName || user.fullName);
+                            setApplicantEmail(autofill.email || user.email);
+                            setApplicantRegion(autofill.region || user.region);
+                            setContactChannel(autofill.contactChannel || user.email);
+                            setExperienceNote(autofill.experienceNote || '');
+                            if (
+                              selectedSession.disciplines.includes(
+                                autofill.preferredDiscipline
+                              )
+                            ) {
+                              setDiscipline(autofill.preferredDiscipline);
+                            }
+                            setAutofillSourceNote(autofill.sourceLabel);
+                          }}
+                          className="text-[11px] font-semibold text-teal-800 hover:underline cursor-pointer"
+                        >
+                          Обновить поля из профиля
+                        </button>
+                      </div>
+
+                      {linkedAccounts.length > 1 && onSelectAutofillSource && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[11px] text-teal-800">Источник:</span>
+                          {linkedAccounts.map((acc) => {
+                            const active = acc.provider === autofill.sourceProvider;
+                            return (
+                              <button
+                                key={acc.provider}
+                                type="button"
+                                onClick={() => onSelectAutofillSource(acc.provider)}
+                                className={`px-2 py-0.5 text-[11px] font-medium rounded border transition-colors cursor-pointer ${
+                                  active
+                                    ? 'bg-teal-700 text-white border-teal-700'
+                                    : 'bg-white text-teal-900 border-teal-200 hover:bg-teal-100'
+                                }`}
+                              >
+                                {LINKED_PROVIDER_META[acc.provider].shortLabel}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    onJumpToLinkedAccounts && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600">
+                        <span>
+                          Свяжите личный кабинет с Google или соцсетью (ВКонтакте, Telegram), чтобы
+                          поля заявки заполнялись автоматически.
+                        </span>
+                        <button
+                          type="button"
+                          onClick={onJumpToLinkedAccounts}
+                          className="font-semibold text-teal-700 hover:underline whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          Настроить →
+                        </button>
+                      </div>
+                    )
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="calendar-booking-fullname"
+                        className="block text-xs font-medium text-slate-700"
+                      >
+                        ФИО соискателя
+                      </label>
+                      <input
+                        id="calendar-booking-fullname"
+                        type="text"
+                        required
+                        value={applicantName}
+                        onChange={(e) => setApplicantName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="calendar-booking-email"
+                        className="block text-xs font-medium text-slate-700"
+                      >
+                        Email для протокола и пропуска
+                      </label>
+                      <input
+                        id="calendar-booking-email"
+                        type="email"
+                        required
+                        value={applicantEmail}
+                        onChange={(e) => setApplicantEmail(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="calendar-booking-region"
+                        className="block text-xs font-medium text-slate-700"
+                      >
+                        Регион соискателя
+                      </label>
+                      <select
+                        id="calendar-booking-region"
+                        value={applicantRegion}
+                        onChange={(e) => setApplicantRegion(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      >
+                        {[...new Set([applicantRegion, ...DFO_REGIONS])]
+                          .filter(Boolean)
+                          .map((r) => (
+                            <option key={r} value={r}>
+                              {r}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label
+                        htmlFor="calendar-booking-discipline"
+                        className="block text-xs font-medium text-slate-700"
+                      >
+                        Направление аттестации
+                      </label>
+                      <select
+                        id="calendar-booking-discipline"
+                        value={discipline}
+                        onChange={(e) => setDiscipline(e.target.value)}
+                        className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                      >
+                        {selectedSession.disciplines.map((d) => (
+                          <option key={d} value={d}>
+                            {DISCIPLINE_TO_TRACK[d] ?? d}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
@@ -759,14 +989,14 @@ export const AttestationSessionsCalendarWidget: React.FC<
                       htmlFor="calendar-booking-contact"
                       className="block text-xs font-medium text-slate-700"
                     >
-                      Телефон или Telegram для связи комиссии
+                      Телефон, Telegram или профиль соцсети для связи комиссии
                     </label>
                     <input
                       id="calendar-booking-contact"
                       type="text"
                       value={contactChannel}
                       onChange={(e) => setContactChannel(e.target.value)}
-                      placeholder="+7 (999) 000-00-00 или @username"
+                      placeholder="+7 (999) 000-00-00, @username или vk.com/..."
                       className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
                     />
                   </div>
@@ -796,8 +1026,9 @@ export const AttestationSessionsCalendarWidget: React.FC<
                       className="mt-0.5 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
                     />
                     <span>
-                      Подтверждаю актуальность сведений профиля ({user.fullName}, {user.region}) и
-                      согласие на передачу заявки в приёмную комиссию РЦА.
+                      Подтверждаю актуальность сведений ({applicantName || user.fullName},{' '}
+                      {applicantRegion || user.region}) и согласие на передачу заявки в приёмную
+                      комиссию РЦА.
                     </span>
                   </label>
 

@@ -63,6 +63,7 @@ async function cleanup() {
   await pool.query('DELETE FROM social_activity');
   await pool.query('DELETE FROM social_follows');
   await pool.query('DELETE FROM social_profiles');
+  await pool.query('DELETE FROM user_linked_accounts');
   await pool.query('DELETE FROM password_reset_tokens');
   await pool.query('DELETE FROM user_sessions');
   await pool.query('DELETE FROM certification_inquiries');
@@ -111,6 +112,7 @@ maybe('Postgres: migrations create every expected table', async () => {
     'media_albums',
     'media_assets',
     'certified_guides_registry',
+    'user_linked_accounts',
   ]) {
     assert.ok(names.includes(expected), `missing table: ${expected}`);
   }

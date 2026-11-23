@@ -7,6 +7,7 @@ import {
   GitBranch,
   GraduationCap,
   HelpCircle,
+  Link2,
   LogIn,
   LogOut,
   MessageSquareText,
@@ -30,6 +31,7 @@ import {
 } from './AttestationProgressWidget';
 import { AttestationPathWidget } from './AttestationPathWidget';
 import { AttestationSessionsCalendarWidget } from './AttestationSessionsCalendarWidget';
+import { LinkedAccountsCard } from './LinkedAccountsCard';
 import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
 import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
@@ -47,6 +49,13 @@ import {
   type Role,
   type SessionUser,
 } from '../utils/identityApi';
+import {
+  linkedAccountsApi,
+  type ExamAutofillPayload,
+  type LinkedAccountDTO,
+  type LinkedProviderId,
+  type OAuthProviderStatusDTO,
+} from '../utils/linkedAccountsApi';
 import type { SiteTabId } from '../utils/seo';
 
 type AuthMode = 'login' | 'register';
@@ -104,6 +113,10 @@ export function AccountSection({
     stageId: AttestationStageId;
     nonce: number;
   } | null>(null);
+  const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccountDTO[]>([]);
+  const [examAutofill, setExamAutofill] = useState<ExamAutofillPayload | null>(null);
+  const [oauthProviders, setOauthProviders] = useState<OAuthProviderStatusDTO[]>([]);
+  const [linkedLoading, setLinkedLoading] = useState<boolean>(false);
 
   const openAiAssistant = useCallback((prompt?: string) => {
     setAssistantRequest((prev) => ({
@@ -163,6 +176,20 @@ export function AccountSection({
     }
   }, []);
 
+  const loadLinkedAccounts = useCallback(async () => {
+    setLinkedLoading(true);
+    try {
+      const data = await linkedAccountsApi.list();
+      setLinkedAccounts(data.accounts);
+      setExamAutofill(data.autofill);
+      setOauthProviders(data.providers);
+    } catch {
+      // keep existing state cleanly
+    } finally {
+      setLinkedLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (user && hasPermission(user, 'inquiries:view_own')) {
       void loadInquiries();
@@ -172,6 +199,27 @@ export function AccountSection({
       setInquiriesLoading(false);
     }
   }, [user, loadInquiries]);
+
+  useEffect(() => {
+    if (user) {
+      void loadLinkedAccounts();
+    } else {
+      setLinkedAccounts([]);
+      setExamAutofill(null);
+      setOauthProviders([]);
+      setLinkedLoading(false);
+    }
+  }, [user, loadLinkedAccounts]);
+
+  const handleSelectAutofillSource = useCallback(async (provider: LinkedProviderId) => {
+    try {
+      const res = await linkedAccountsApi.setAutofillSource(provider, true);
+      setLinkedAccounts(res.accounts);
+      setExamAutofill(res.autofill);
+    } catch {
+      // ignore transient error
+    }
+  }, []);
 
   const handleAuthenticated = useCallback((next: SessionUser) => {
     setUser(next);
@@ -184,6 +232,9 @@ export function AccountSection({
     } finally {
       setUser(null);
       setInquiries([]);
+      setLinkedAccounts([]);
+      setExamAutofill(null);
+      setOauthProviders([]);
       tracker.trackCustomInteraction('Выход из личного кабинета', 'account');
     }
   }, []);
@@ -303,6 +354,7 @@ export function AccountSection({
         user={user}
         onLogout={handleLogout}
         onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
+        onJumpToLinkedProfiles={() => scrollToElementById('account-linked-profiles')}
         onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
         onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
@@ -330,6 +382,10 @@ export function AccountSection({
         user={user}
         inquiries={inquiries}
         selectedExamDate={selectedExamDate}
+        linkedAccounts={linkedAccounts}
+        autofill={examAutofill}
+        onSelectAutofillSource={(provider) => void handleSelectAutofillSource(provider)}
+        onJumpToLinkedAccounts={() => scrollToElementById('account-linked-profiles')}
         onSelectExamDate={setSelectedExamDate}
         onSessionBooked={(sessionDateIso) => {
           setSelectedExamDate(sessionDateIso);
@@ -338,6 +394,19 @@ export function AccountSection({
           }
         }}
         onJumpToInquiries={() => scrollToElementById('my-inquiries-status-table')}
+      />
+      <LinkedAccountsCard
+        user={user}
+        accounts={linkedAccounts}
+        autofill={examAutofill}
+        providers={oauthProviders}
+        loading={linkedLoading}
+        onUpdated={(accounts, autofill) => {
+          setLinkedAccounts(accounts);
+          setExamAutofill(autofill);
+        }}
+        onRefreshAll={loadLinkedAccounts}
+        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
       />
       <MyInquiriesSection
         canView={hasPermission(user, 'inquiries:view_own')}
@@ -767,6 +836,7 @@ function CabinetHeader({
   user,
   onLogout,
   onJumpToCalendar,
+  onJumpToLinkedProfiles,
   onJumpToDiagnostics,
   onJumpToAnalytics,
   onJumpToPassport,
@@ -776,6 +846,7 @@ function CabinetHeader({
   user: SessionUser;
   onLogout: () => void;
   onJumpToCalendar: () => void;
+  onJumpToLinkedProfiles: () => void;
   onJumpToDiagnostics: () => void;
   onJumpToAnalytics: () => void;
   onJumpToPassport: () => void;
@@ -811,6 +882,15 @@ function CabinetHeader({
           >
             <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Календарь аттестаций</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onJumpToLinkedProfiles}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <Link2 className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Связанные профили</span>
           </button>
 
           <button

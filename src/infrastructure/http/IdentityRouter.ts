@@ -19,6 +19,7 @@ import type {
 } from '../../application/identity/PasswordResetUseCases.ts';
 import {
   SESSION_COOKIE,
+  isHttpsDeployment,
   readSessionCookie,
   requireAuth,
   requirePermission,
@@ -114,7 +115,13 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
   router.post('/api/auth/logout', async (req, res) => {
     try {
       await deps.logout.execute(readSessionCookie(req));
-      res.clearCookie(SESSION_COOKIE, { path: '/' });
+      const isHttps = isHttpsDeployment();
+      res.clearCookie(SESSION_COOKIE, {
+        path: '/',
+        httpOnly: true,
+        sameSite: isHttps ? 'none' : 'lax',
+        secure: isHttps,
+      });
       res.json({ ok: true });
     } catch (err) {
       sendError(err, res);
@@ -163,7 +170,13 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
           password: body.password,
         });
         // Every session was revoked, so the client must sign in again.
-        res.clearCookie(SESSION_COOKIE, { path: '/' });
+        const isHttps = isHttpsDeployment();
+        res.clearCookie(SESSION_COOKIE, {
+          path: '/',
+          httpOnly: true,
+          sameSite: isHttps ? 'none' : 'lax',
+          secure: isHttps,
+        });
         res.json({ ...result, reauthenticate: true });
       } catch (err) {
         sendError(err, res);

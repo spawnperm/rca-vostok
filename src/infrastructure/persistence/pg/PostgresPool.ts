@@ -67,6 +67,7 @@ const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> 
   { version: '004_chat', run: (p) => migrateChat(p) },
   { version: '005_media', run: (p) => migrateMedia(p) },
   { version: '006_guide_leaderboard', run: (p) => migrateGuideLeaderboard(p) },
+  { version: '007_linked_accounts', run: (p) => migrateLinkedAccounts(p) },
 ];
 
 /**
@@ -737,3 +738,33 @@ async function migrateGuideLeaderboard(pool: pg.Pool): Promise<void> {
     );
   }
 }
+
+/** Linked Google and social network profiles for personal cabinet autofill. */
+async function migrateLinkedAccounts(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_linked_accounts (
+      user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider              TEXT NOT NULL,
+      connection_method     TEXT NOT NULL DEFAULT 'profile_link',
+      external_id           TEXT NOT NULL,
+      display_name          TEXT NOT NULL DEFAULT '',
+      email                 TEXT NOT NULL DEFAULT '',
+      contact_channel       TEXT NOT NULL DEFAULT '',
+      region                TEXT NOT NULL DEFAULT '',
+      organisation          TEXT NOT NULL DEFAULT '',
+      profile_url           TEXT NOT NULL DEFAULT '',
+      preferred_track       TEXT NOT NULL DEFAULT '',
+      experience_summary    TEXT NOT NULL DEFAULT '',
+      use_for_exam_autofill BOOLEAN NOT NULL DEFAULT TRUE,
+      linked_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, provider)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS user_linked_accounts_user_idx
+      ON user_linked_accounts (user_id, updated_at DESC);
+  `);
+}
+

@@ -38,6 +38,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
+      'X-Requested-With': 'fetch',
       ...(init.headers || {}),
     },
     ...init,
