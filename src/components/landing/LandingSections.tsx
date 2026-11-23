@@ -38,6 +38,7 @@ import {
 } from '../../utils/attestationCalendar';
 import { tracker } from '../../utils/tracker';
 import { AttestationLocationsGoogleMap } from './AttestationLocationsGoogleMap';
+import { CertificationAttestationCalendar } from '../CertificationAttestationCalendar';
 import { FAQSection } from './FAQSection';
 import { PreparationExamSimulator } from './PreparationExamSimulator';
 
@@ -382,6 +383,8 @@ export function CertificationSection() {
           {exportNotice}
         </p>
       )}
+
+      <CertificationAttestationCalendar />
 
       <AttestationLocationsGoogleMap />
     </section>

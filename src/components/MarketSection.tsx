@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Compass } from 'lucide-react';
+import { Compass, FileDown } from 'lucide-react';
 import {
   BOTTLENECKS,
   HORIZON_STAGES,
   MARKET_SEGMENTS,
   RECOMMENDATIONS,
 } from '../data/researchData';
+import { exportMarketAnalyticsPdf } from '../utils/analyticsPdfReports';
+import { tracker } from '../utils/tracker';
 import { DfoMultiRegionConcentrationChart } from './DfoMultiRegionConcentrationChart';
 import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
 import { DfoTwoPeriodDemandComparison } from './DfoTwoPeriodDemandComparison';
@@ -22,6 +24,7 @@ export const MarketSection: React.FC = () => {
     'all' | 'ВВГУ и РЦА' | 'Минтуризма и МЭР' | 'Туроператоры'
   >('all');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [pdfNotice, setPdfNotice] = useState<string | null>(null);
 
   const activeHorizon = HORIZON_STAGES.find((h) => h.id === selectedHorizonId) ?? HORIZON_STAGES[0];
   const filteredRecommendations =
@@ -29,26 +32,57 @@ export const MarketSection: React.FC = () => {
       ? RECOMMENDATIONS
       : RECOMMENDATIONS.filter((rec) => rec.stakeholder === stakeholderFilter);
 
+  const handleDownloadReport = () => {
+    const { fileName } = exportMarketAnalyticsPdf({
+      activeHorizon,
+      stakeholderFilter,
+    });
+    setPdfNotice(`PDF-отчёт ${fileName} сформирован и сохранён.`);
+    tracker.trackCustomInteraction('Рынок ДФО · Скачать отчет (jsPDF)', stakeholderFilter);
+  };
+
   return (
     <div className="space-y-12">
       {/* Section Header */}
       <section className="bg-white border border-slate-200 rounded-xl p-8 space-y-4">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-          <span>Рынок труда ДФО</span>
-          <span aria-hidden="true">·</span>
-          <span>Окно 2026–2028 гг.</span>
-          <span aria-hidden="true">·</span>
-          <span>Сегментация и риски</span>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-3 max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+              <span>Рынок труда ДФО</span>
+              <span aria-hidden="true">·</span>
+              <span>Окно 2026–2028 гг.</span>
+              <span aria-hidden="true">·</span>
+              <span>Сегментация и риски</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 text-balance">
+              Структура рынка, пять узких мест и прогноз потребности до 2029 года
+            </h1>
+            <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+              В Приморье действует более 1 000 коллективных средств размещения (половина — базы отдыха и
+              глэмпинги у воды), а ввод курорта «Приморье» в бухте Алеут (2027) и объектов в Хасанском округе
+              (2028) формирует устойчивый внепиковый спрос. Рынок переходит от фрагментированного к
+              регулируемому — востребованы не «гиды вообще», а аттестованные менеджеры безопасности.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDownloadReport}
+            className="px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <FileDown className="w-4 h-4" aria-hidden="true" />
+            <span>Скачать отчет</span>
+          </button>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 text-balance">
-          Структура рынка, пять узких мест и прогноз потребности до 2029 года
-        </h1>
-        <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-3xl">
-          В Приморье действует более 1 000 коллективных средств размещения (половина — базы отдыха и
-          глэмпинги у воды), а ввод курорта «Приморье» в бухте Алеут (2027) и объектов в Хасанском округе
-          (2028) формирует устойчивый внепиковый спрос. Рынок переходит от фрагментированного к
-          регулируемому — востребованы не «гиды вообще», а аттестованные менеджеры безопасности.
-        </p>
+
+        {pdfNotice && (
+          <p
+            role="status"
+            className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3.5 py-2 font-medium"
+          >
+            {pdfNotice}
+          </p>
+        )}
       </section>
 
       {/* 3 Market Segments */}

@@ -1,13 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { FileDown, RotateCcw } from 'lucide-react';
 import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
 import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
+import { exportCalculatorAnalyticsPdf } from '../utils/analyticsPdfReports';
 import {
   CALCULATOR_FORECAST_SCENARIOS,
   computeCalculatorScenarioProjection,
   type CalculatorForecastScenario,
 } from '../utils/calculatorScenario2030';
 import { tracker } from '../utils/tracker';
+import {
+  CalculatorSensitivityRechartsChart,
+  CalculatorYearly2030RechartsChart,
+} from './CalculatorForecastRechartsCharts';
 import { DemandDynamics2030Chart } from './DemandDynamics2030Chart';
 import { DfoRegionalForecastModule } from './DfoRegionalForecastModule';
 import { TrainingAndAttestationCostEstimator } from './TrainingAndAttestationCostEstimator';
@@ -92,35 +97,27 @@ export const CalculatorSection: React.FC = () => {
     [modelInput, forecastScenario2030]
   );
 
+  const [pdfNotice, setPdfNotice] = useState<string | null>(null);
+
   const handleSelectScenario2030 = (next: CalculatorForecastScenario) => {
     setForecastScenario2030(next);
     setScenarioSyncNonce((n) => n + 1);
     tracker.trackCustomInteraction('Калькулятор · сценарий к 2030 г.', next);
   };
 
-  // SVG Sensitivity chart geometry
-  const chartW = 540;
-  const chartH = 210;
-  const padL = 48;
-  const padR = 16;
-  const padT = 16;
-  const padB = 30;
-  const maxN = Math.max(...results.sensitivityPoints.map((pt) => pt.n), registryCount, 500);
+  const activePresetLabel =
+    DEMAND_PRESETS.find((p) => p.id === activePresetId)?.title ?? 'Пользовательский сценарий';
 
-  const polylinePoints = results.sensitivityPoints
-    .map((pt, idx) => {
-      const x = padL + (idx / (results.sensitivityPoints.length - 1)) * (chartW - padL - padR);
-      const y = chartH - padB - (pt.n / maxN) * (chartH - padT - padB);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-
-  const currentMarkerX =
-    padL + ((Math.min(Math.max(pOrg, 10), 50) - 10) / 40) * (chartW - padL - padR);
-  const currentMarkerY =
-    chartH - padB - (results.totalDemand / maxN) * (chartH - padT - padB);
-  const registryLineY =
-    chartH - padB - (registryCount / maxN) * (chartH - padT - padB);
+  const handleDownloadPdfReport = () => {
+    const { fileName } = exportCalculatorAnalyticsPdf({
+      modelInput,
+      results,
+      scenarioProjection,
+      presetLabel: activePresetLabel,
+    });
+    setPdfNotice(`PDF-отчёт ${fileName} сформирован и сохранён.`);
+    tracker.trackCustomInteraction('Калькулятор · Скачать отчет (jsPDF)', scenarioProjection.option.id);
+  };
 
   return (
     <div className="space-y-10">
@@ -138,15 +135,35 @@ export const CalculatorSection: React.FC = () => {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => applyPreset(DEMAND_PRESETS[0])}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Сбросить к базе нояб. 2026</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleDownloadPdfReport}
+              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <FileDown className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Скачать отчет</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => applyPreset(DEMAND_PRESETS[0])}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium rounded-lg inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Сбросить к базе нояб. 2026</span>
+            </button>
+          </div>
         </div>
+
+        {pdfNotice && (
+          <p
+            role="status"
+            className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3.5 py-2 font-medium"
+          >
+            {pdfNotice}
+          </p>
+        )}
 
         {/* Formula Banner */}
         <div className="bg-slate-900 text-white rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -438,111 +455,12 @@ export const CalculatorSection: React.FC = () => {
             </div>
           </div>
 
-          {/* Sensitivity Chart */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-base font-bold text-slate-900">
-                Чувствительность потребности к доле организованных групп (P_org)
-              </h3>
-              <span className="text-xs text-slate-500 font-mono">
-                10% → 50% (Приморье: коридор 15–30%)
-              </span>
-            </div>
-
-            <div className="w-full overflow-x-auto">
-              <svg
-                viewBox={`0 0 ${chartW} ${chartH}`}
-                className="w-full h-auto min-w-[440px]"
-                role="img"
-                aria-label="График зависимости потребности в инструкторах от доли организованных групп"
-              >
-                {/* Horizontal grid lines */}
-                {[0.25, 0.5, 0.75, 1].map((ratio) => {
-                  const y = chartH - padB - ratio * (chartH - padT - padB);
-                  const val = Math.round(maxN * ratio);
-                  return (
-                    <g key={ratio}>
-                      <line x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#E2E8F0" strokeWidth={1} />
-                      <text x={padL - 8} y={y + 4} textAnchor="end" className="fill-slate-400 text-[10px] font-mono">
-                        {val}
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {/* Axes */}
-                <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#94A3B8" strokeWidth={1.5} />
-                <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#94A3B8" strokeWidth={1.5} />
-
-                {/* Conservative corridor 15%-30% */}
-                <rect
-                  x={padL + ((15 - 10) / 40) * (chartW - padL - padR)}
-                  y={padT}
-                  width={((30 - 15) / 40) * (chartW - padL - padR)}
-                  height={chartH - padT - padB}
-                  fill="#0F766E"
-                  fillOpacity={0.07}
-                />
-
-                {/* Registry baseline */}
-                <line
-                  x1={padL}
-                  y1={registryLineY}
-                  x2={chartW - padR}
-                  y2={registryLineY}
-                  stroke="#B91C1C"
-                  strokeWidth={2}
-                  strokeDasharray="5 4"
-                />
-                <text
-                  x={chartW - padR}
-                  y={Math.max(registryLineY - 6, padT + 10)}
-                  textAnchor="end"
-                  className="fill-red-700 text-[10px] font-mono font-semibold"
-                >
-                  Реестр: {registryCount} чел.
-                </text>
-
-                {/* Demand curve (>=1.5pt thick line) */}
-                <polyline
-                  fill="none"
-                  stroke="#0F766E"
-                  strokeWidth={2.5}
-                  points={polylinePoints}
-                />
-
-                {/* Current P_org marker */}
-                {pOrg >= 10 && pOrg <= 50 && (
-                  <g>
-                    <circle cx={currentMarkerX} cy={currentMarkerY} r={5} fill="#0F172A" stroke="#FFFFFF" strokeWidth={2} />
-                    <text
-                      x={Math.min(currentMarkerX + 8, chartW - 85)}
-                      y={Math.max(currentMarkerY - 8, padT + 12)}
-                      className="fill-slate-900 text-[11px] font-mono font-semibold"
-                    >
-                      {pOrg}%: {results.totalDemand}
-                    </text>
-                  </g>
-                )}
-
-                {/* X-axis ticks */}
-                {results.sensitivityPoints.map((pt, idx) => {
-                  const x = padL + (idx / (results.sensitivityPoints.length - 1)) * (chartW - padL - padR);
-                  return (
-                    <text
-                      key={pt.p}
-                      x={x}
-                      y={chartH - 10}
-                      textAnchor="middle"
-                      className="fill-slate-500 text-[10px] font-mono"
-                    >
-                      {pt.p}%
-                    </text>
-                  );
-                })}
-              </svg>
-            </div>
-          </div>
+          {/* Recharts Sensitivity Chart */}
+          <CalculatorSensitivityRechartsChart
+            pOrg={pOrg}
+            registryCount={registryCount}
+            results={results}
+          />
 
           {/* Cohort Closure Simulator with Active 2030 Scenario */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
@@ -664,6 +582,12 @@ export const CalculatorSection: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* Recharts Bar/ComposedChart: Yearly Demand vs Registry & 2030 Scenario Breakdown */}
+      <CalculatorYearly2030RechartsChart
+        modelInput={modelInput}
+        scenarioProjection={scenarioProjection}
+      />
 
       {/* Recharts LineChart: Instructor Demand Dynamics through 2030 by Tourism Scenarios */}
       <DemandDynamics2030Chart
