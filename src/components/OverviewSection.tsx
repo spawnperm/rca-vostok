@@ -26,6 +26,7 @@ import { AttestationNewsFeed } from './AttestationNewsFeed';
 import { AttestationReadinessCheck } from './AttestationReadinessCheck';
 import { AttestationRoadmap } from './AttestationRoadmap';
 import { CenterReadinessMiniQuiz } from './CenterReadinessMiniQuiz';
+import { CertifiedInstructorsReviewsCarousel } from './CertifiedInstructorsReviewsCarousel';
 import { DfoAttestationPointsWidget } from './DfoAttestationPointsWidget';
 import { DfoHubsWeatherWidget } from './DfoHubsWeatherWidget';
 import { DfoOverviewHoverMap } from './DfoOverviewHoverMap';
@@ -1421,6 +1422,19 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           })}
         </div>
       </section>
+
+      {/* Certified Instructors-Guides Reviews Carousel */}
+      <CertifiedInstructorsReviewsCarousel
+        glossaryHighlightEnabled={glossaryHighlightEnabled}
+        onInspectTerm={handleInspectGlossaryTerm}
+        onApplyForSession={scrollToInquiryForm}
+        onOpenSuccessStories={() =>
+          document
+            .getElementById('success-stories-section')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+        onOpenAccount={() => onNavigate('account')}
+      />
 
       {/* Certified Guides Reviews & Success Stories */}
       <SuccessStoriesSection onApplyForSession={scrollToInquiryForm} />
