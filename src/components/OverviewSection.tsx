@@ -33,6 +33,7 @@ import { ExpertProfileWidget } from './ExpertProfileWidget';
 import { GlossaryText, InteractiveGlossary } from './InteractiveGlossary';
 import { KnowledgeBaseFaq } from './KnowledgeBaseFaq';
 import { PlatformFeedbackForm } from './PlatformFeedbackForm';
+import { RecommendedLiteratureSection } from './RecommendedLiteratureSection';
 import { RegionalSessionsTimeline } from './RegionalSessionsTimeline';
 import { SuccessStoriesSection } from './SuccessStoriesSection';
 import {
@@ -47,7 +48,9 @@ import {
 import { tracker } from '../utils/tracker';
 
 interface OverviewSectionProps {
-  onNavigate: (tab: 'calculator' | 'market' | 'dissertation' | 'presentations') => void;
+  onNavigate: (
+    tab: 'calculator' | 'market' | 'dissertation' | 'presentations' | 'account'
+  ) => void;
 }
 
 export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) => {
@@ -1362,6 +1365,18 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
       {/* Knowledge Base with Searchable FAQ Accordion */}
       <KnowledgeBaseFaq onContactCurator={openCuratorModal} />
+
+      {/* Recommended Literature & Methodological Library with Favorites Sync */}
+      <RecommendedLiteratureSection
+        onOpenCabinetFavorites={() => {
+          onNavigate('account');
+          window.setTimeout(() => {
+            document
+              .getElementById('account-favorite-literature')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 220);
+        }}
+      />
 
       {/* Instructor Feedback & Certification Updates Form */}
       <section

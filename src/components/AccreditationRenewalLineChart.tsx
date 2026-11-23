@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { CalendarCheck2, TrendingUp } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CalendarCheck2, Play, TrendingUp } from 'lucide-react';
 import {
   CartesianGrid,
   Legend,
@@ -22,11 +22,15 @@ import { tracker } from '../utils/tracker';
 interface ChartPoint extends AccreditationRenewalYearPoint {
   activeFact: number | null;
   activePlanned: number | null;
+  contoursDeltaYoY: number;
+  roadmapCompletionPct: number;
 }
 
 interface TooltipPayloadEntry {
   payload?: ChartPoint;
 }
+
+const TOTAL_TARGET_CONTOURS = 7;
 
 const AccreditationDynamicsTooltip: React.FC<{
   active?: boolean;
@@ -38,11 +42,11 @@ const AccreditationDynamicsTooltip: React.FC<{
   if (!pt) return null;
 
   return (
-    <div className="bg-slate-900 text-white border border-slate-700 rounded-lg p-3.5 shadow-lg max-w-xs text-xs space-y-2">
+    <div className="bg-slate-900 text-white border border-slate-700 rounded-lg p-3.5 shadow-xl max-w-xs text-xs space-y-2">
       <div className="flex items-baseline justify-between gap-4 border-b border-slate-700 pb-1.5">
         <span className="font-mono font-bold text-teal-300 tabular-nums">{label} г.</span>
         <span className="text-[11px] font-medium text-slate-300">
-          {pt.phase === 'факт' ? 'Факт реестра' : 'План продления'}
+          {pt.phase === 'факт' ? 'Факт реестра' : 'План развития'} · {pt.roadmapCompletionPct}% модели
         </span>
       </div>
 
@@ -52,10 +56,20 @@ const AccreditationDynamicsTooltip: React.FC<{
         <div className="flex items-center justify-between gap-4">
           <span className="text-slate-300 inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-xs bg-teal-500 shrink-0" aria-hidden="true" />
-            Действующих контуров/лицензий:
+            Действующих контуров:
           </span>
           <span className="font-mono font-bold text-white tabular-nums">
-            {pt.activeContours}
+            {pt.activeContours} из {TOTAL_TARGET_CONTOURS}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-slate-300 inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-xs bg-emerald-400 shrink-0" aria-hidden="true" />
+            Прирост за год:
+          </span>
+          <span className="font-mono font-bold text-emerald-300 tabular-nums">
+            {pt.contoursDeltaYoY > 0 ? `+${pt.contoursDeltaYoY}` : '0'} конт.
           </span>
         </div>
 
@@ -89,15 +103,31 @@ const AccreditationDynamicsTooltip: React.FC<{
 
 export const AccreditationRenewalLineChart: React.FC = () => {
   const [horizon, setHorizon] = useState<AccreditationHorizonFilter>('all');
+  const [animationKey, setAnimationKey] = useState<number>(0);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   const chartData: ChartPoint[] = useMemo(() => {
     const filtered = getAccreditationRenewalSeries(horizon);
-    return filtered.map((pt) => {
+    return filtered.map((pt, idx) => {
       const yr = Number(pt.year);
+      const prevPoint = idx > 0 ? filtered[idx - 1] : null;
+      const contoursDeltaYoY = prevPoint ? Math.max(0, pt.activeContours - prevPoint.activeContours) : 0;
+      const roadmapCompletionPct = Math.round((pt.activeContours / TOTAL_TARGET_CONTOURS) * 100);
       return {
         ...pt,
         activeFact: yr <= 2026 ? pt.activeContours : null,
         activePlanned: yr >= 2026 ? pt.activeContours : null,
+        contoursDeltaYoY,
+        roadmapCompletionPct,
       };
     });
   }, [horizon]);
@@ -123,6 +153,8 @@ export const AccreditationRenewalLineChart: React.FC = () => {
     []
   );
 
+  const animationsEnabled = !prefersReducedMotion;
+
   return (
     <section
       aria-labelledby="accreditation-renewal-chart-heading"
@@ -136,46 +168,60 @@ export const AccreditationRenewalLineChart: React.FC = () => {
             <span>Визуализация данных «Реестра аккредитации» (Recharts)</span>
           </p>
           <h2 id="accreditation-renewal-chart-heading" className="text-xl font-bold text-slate-900">
-            Динамика продления лицензий и аккредитации РЦА по годам (2024–2030 гг.)
+            Динамика роста и продления аккредитации РЦА по годам (2024–2030 гг.)
           </h2>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            График отражает рост числа действующих правовых контуров ВВГУ и РЦА «Русский Восток»,
-            ежегодную частоту продлений/аудитов и контрольные циклы перепаспортизации полигонов
-            и записей Единого федерального реестра МЭР РФ.
+            Анимированный график отражает ежегодный рост действующих правовых контуров ВВГУ и РЦА
+            «Русский Восток», частоту аудитов и контрольные циклы Единого федерального реестра МЭР РФ.
           </p>
         </div>
 
-        <div
-          role="group"
-          aria-label="Горизонт графика продления лицензий"
-          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0"
-        >
-          {(
-            [
-              { id: 'all', label: 'Весь цикл (2024–2030)' },
-              { id: 'fact', label: 'Факт 2024–2026' },
-              { id: 'forecast', label: 'План 2026–2030' },
-            ] as const
-          ).map((opt) => (
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div
+            role="group"
+            aria-label="Горизонт графика продления лицензий"
+            className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
+          >
+            {(
+              [
+                { id: 'all', label: 'Весь цикл (2024–2030)' },
+                { id: 'fact', label: 'Факт 2024–2026' },
+                { id: 'forecast', label: 'План 2026–2030' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  setHorizon(opt.id);
+                  setAnimationKey((k) => k + 1);
+                  tracker.trackCustomInteraction(
+                    'График продления лицензий: горизонт',
+                    opt.label
+                  );
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  horizon === opt.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {animationsEnabled && (
             <button
-              key={opt.id}
               type="button"
-              onClick={() => {
-                setHorizon(opt.id);
-                tracker.trackCustomInteraction(
-                  'График продления лицензий: горизонт',
-                  opt.label
-                );
-              }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                horizon === opt.id
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+              onClick={() => setAnimationKey((k) => k + 1)}
+              title="Перезапустить анимацию построения графика"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 rounded-lg hover:bg-teal-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              {opt.label}
+              <Play className="w-3 h-3 fill-current" aria-hidden="true" />
+              <span>Анимация</span>
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -215,10 +261,14 @@ export const AccreditationRenewalLineChart: React.FC = () => {
         </div>
       </div>
 
-      {/* Recharts LineChart */}
-      <div className="w-full h-[300px]">
+      {/* Animated Recharts LineChart with Rich Year-by-Year Tooltips */}
+      <div className="w-full h-[310px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 24, right: 20, left: -10, bottom: 8 }}>
+          <LineChart
+            key={`${horizon}-${animationKey}`}
+            data={chartData}
+            margin={{ top: 24, right: 20, left: -10, bottom: 8 }}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
             <XAxis
               dataKey="year"
@@ -235,6 +285,7 @@ export const AccreditationRenewalLineChart: React.FC = () => {
             />
             <Tooltip
               trigger="hover"
+              shared
               cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
               allowEscapeViewBox={{ x: true, y: true }}
               content={<AccreditationDynamicsTooltip />}
@@ -263,8 +314,12 @@ export const AccreditationRenewalLineChart: React.FC = () => {
                 stroke="#0F766E"
                 strokeWidth={3}
                 dot={{ r: 4.5, strokeWidth: 2, fill: '#0F766E', stroke: '#FFFFFF' }}
-                activeDot={{ r: 6.5 }}
+                activeDot={{ r: 7, fill: '#0F766E', stroke: '#FFFFFF', strokeWidth: 2 }}
                 connectNulls={false}
+                isAnimationActive={animationsEnabled}
+                animationDuration={850}
+                animationBegin={0}
+                animationEasing="ease-out"
               />
             )}
 
@@ -276,9 +331,13 @@ export const AccreditationRenewalLineChart: React.FC = () => {
                 stroke="#0F766E"
                 strokeWidth={2.5}
                 strokeDasharray="6 4"
-                dot={{ r: 4, strokeWidth: 2, fill: '#FFFFFF', stroke: '#0F766E' }}
-                activeDot={{ r: 6 }}
+                dot={{ r: 4.5, strokeWidth: 2, fill: '#FFFFFF', stroke: '#0F766E' }}
+                activeDot={{ r: 7, fill: '#0F766E', stroke: '#FFFFFF', strokeWidth: 2 }}
                 connectNulls={false}
+                isAnimationActive={animationsEnabled}
+                animationDuration={950}
+                animationBegin={140}
+                animationEasing="ease-out"
               />
             )}
 
@@ -289,7 +348,11 @@ export const AccreditationRenewalLineChart: React.FC = () => {
               stroke="#0284C7"
               strokeWidth={2.5}
               dot={{ r: 4, strokeWidth: 2, fill: '#0284C7', stroke: '#FFFFFF' }}
-              activeDot={{ r: 6 }}
+              activeDot={{ r: 6.5, fill: '#0284C7', stroke: '#FFFFFF', strokeWidth: 2 }}
+              isAnimationActive={animationsEnabled}
+              animationDuration={1000}
+              animationBegin={220}
+              animationEasing="ease-out"
             />
 
             <Line
@@ -300,7 +363,11 @@ export const AccreditationRenewalLineChart: React.FC = () => {
               strokeWidth={2}
               strokeDasharray="3 3"
               dot={{ r: 3.5, strokeWidth: 1.5, fill: '#FFFFFF', stroke: '#D97706' }}
-              activeDot={{ r: 5.5 }}
+              activeDot={{ r: 6, fill: '#D97706', stroke: '#FFFFFF', strokeWidth: 2 }}
+              isAnimationActive={animationsEnabled}
+              animationDuration={900}
+              animationBegin={320}
+              animationEasing="ease-out"
             />
           </LineChart>
         </ResponsiveContainer>

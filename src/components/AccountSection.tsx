@@ -40,6 +40,7 @@ import { LinkedAccountsCard } from './LinkedAccountsCard';
 import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
 import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
+import { FavoriteLiteratureCabinetWidget } from './FavoriteLiteratureCabinetWidget';
 import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
 import { AttestationSelfDiagnosticsWidget } from './AttestationSelfDiagnosticsWidget';
 import { InstructorPassportCard } from './InstructorPassportCard';
@@ -358,6 +359,21 @@ export function AccountSection({
             openAiAssistant('Подскажите, какие документы нужны для аттестации?')
           }
         />
+        <FavoriteLiteratureCabinetWidget
+          userId={null}
+          onOpenOverviewLibrary={
+            onNavigate
+              ? () => {
+                  onNavigate('overview');
+                  window.setTimeout(() => {
+                    document
+                      .getElementById('recommended-literature')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 240);
+                }
+              : undefined
+          }
+        />
         <section
           id="account-analytics-section"
           aria-labelledby="account-analytics-guest-heading"
@@ -579,6 +595,22 @@ export function AccountSection({
         onNavigate={onNavigate}
         onJumpToChecklist={() => scrollToElementById('qualification-self-check')}
         onJumpToConsultant={() => openAiAssistant()}
+      />
+
+      <FavoriteLiteratureCabinetWidget
+        userId={user.id}
+        onOpenOverviewLibrary={
+          onNavigate
+            ? () => {
+                onNavigate('overview');
+                window.setTimeout(() => {
+                  document
+                    .getElementById('recommended-literature')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 240);
+              }
+            : undefined
+        }
       />
 
       {/* Instructor Reviews & Feedback with Rating List */}
