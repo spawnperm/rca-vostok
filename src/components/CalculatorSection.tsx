@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
 import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
+import { DemandDynamics2030Chart } from './DemandDynamics2030Chart';
 import { DfoRegionalForecastModule } from './DfoRegionalForecastModule';
 import { TrainingAndAttestationCostEstimator } from './TrainingAndAttestationCostEstimator';
 import { TrainingCostByComplexityChart } from './TrainingCostByComplexityChart';
@@ -54,21 +55,25 @@ export const CalculatorSection: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const results = useMemo(
-    () =>
-      DemandForecastService.calculate({
-        tAct,
-        pOrg,
-        gSize,
-        groupsPerSeason,
-        kSeason,
-        kTurnover,
-        registryCount,
-        groupsPerYear,
-        cohortSize,
-        conversionRate,
-      }),
+  const modelInput = useMemo(
+    () => ({
+      tAct,
+      pOrg,
+      gSize,
+      groupsPerSeason,
+      kSeason,
+      kTurnover,
+      registryCount,
+      groupsPerYear,
+      cohortSize,
+      conversionRate,
+    }),
     [tAct, pOrg, gSize, groupsPerSeason, kSeason, kTurnover, registryCount, groupsPerYear, cohortSize, conversionRate]
+  );
+
+  const results = useMemo(
+    () => DemandForecastService.calculate(modelInput),
+    [modelInput]
   );
 
   // SVG Sensitivity chart geometry
@@ -566,6 +571,9 @@ export const CalculatorSection: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* Recharts LineChart: Instructor Demand Dynamics through 2030 by Tourism Scenarios */}
+      <DemandDynamics2030Chart modelInput={modelInput} />
 
       {/* Regional DFO 2030 Forecast Module with Tourist Flow */}
       <DfoRegionalForecastModule onApplyRegionToCalculator={applyRegionToMainCalculator} />

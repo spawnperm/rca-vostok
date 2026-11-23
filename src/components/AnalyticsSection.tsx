@@ -28,6 +28,7 @@ import { DfoDemandForecastChart, type DfoRegionFilterId } from './DfoDemandForec
 import { DfoHubsInteractiveMap } from './DfoHubsInteractiveMap';
 import { DfoRegionsComparisonTable } from './DfoRegionsComparisonTable';
 import { DfoRegionsDistributionMap } from './DfoRegionsDistributionMap';
+import { PrimoryeRouteFlowHeatmap } from './PrimoryeRouteFlowHeatmap';
 
 interface SessionRecord {
   sessionId: string;
@@ -757,6 +758,9 @@ export const AnalyticsSection: React.FC = () => {
                 regionFilter={dfoRegionFilter}
                 onSelectRegionFilter={setDfoRegionFilter}
               />
+
+              {/* Primorye Tourist Route Flow Intensity Heatmap (D3) */}
+              <PrimoryeRouteFlowHeatmap />
 
               {/* DFO Regional Representatives & Partner Tourism Hubs Map */}
               <DfoHubsInteractiveMap

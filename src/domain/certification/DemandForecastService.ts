@@ -252,7 +252,202 @@ export const DemandForecastService = {
       },
     };
   },
+
+  forecastTourismScenarios2030(input: DemandModelInput): TourismScenarios2030Result {
+    if (input.gSize <= 0 || input.groupsPerSeason <= 0) {
+      throw new InvariantViolationError(
+        'Норма нагрузки группы и число групп за сезон должны быть больше нуля.'
+      );
+    }
+    if (input.tAct < 0 || input.registryCount < 0) {
+      throw new InvariantViolationError(
+        'Численность турпотока и реестра не может быть отрицательной.'
+      );
+    }
+    if (input.kSeason < 1 || input.kTurnover < 1) {
+      throw new InvariantViolationError(
+        'Коэффициенты сезонности и текучести не могут быть меньше 1.0.'
+      );
+    }
+
+    const scenarioDefs: TourismScenarioConfig[] = [
+      {
+        id: 'conservative',
+        label: 'Инерционный',
+        shortLabel: 'Инерционный (+3,5%/год)',
+        description:
+          'Умеренный рост турпотока при высокой доле самостоятельного автотуризма и плавной легализации гидов.',
+        annualFlowGrowthPct: 3.5,
+        pOrgShiftBy2030Pct: 2,
+        kSeasonDeltaBy2030: 0.02,
+        registryMultiplier: 0.85,
+        color: '#64748B',
+      },
+      {
+        id: 'baseline',
+        label: 'Базовый (ПП № 1893)',
+        shortLabel: 'Базовый (+7,5%/год)',
+        description:
+          'Опорный сценарий Минтуризма ДФО и РЦА «Русский Восток»: легализация рынка после 01.10.2026 и ввод курорта «Приморье» в 2027 г.',
+        annualFlowGrowthPct: 7.5,
+        pOrgShiftBy2030Pct: 8,
+        kSeasonDeltaBy2030: 0,
+        registryMultiplier: 1.0,
+        color: '#0F766E',
+      },
+      {
+        id: 'accelerated',
+        label: 'Ускоренный кластерный',
+        shortLabel: 'Ускоренный (+11,5%/год)',
+        description:
+          'Запуск Хасанского морского кластера (+500 тыс. туристов с 2028 г.), новых экотроп ООПТ и высокой доли организованных туров.',
+        annualFlowGrowthPct: 11.5,
+        pOrgShiftBy2030Pct: 14,
+        kSeasonDeltaBy2030: 0.05,
+        registryMultiplier: 1.2,
+        color: '#B91C1C',
+      },
+      {
+        id: 'allSeason',
+        label: 'Всесезонный трек',
+        shortLabel: 'Всесезонный (сглаженный пик)',
+        description:
+          'Продление туристического сезона с 7 до 9,5 месяцев (глэмпинги, зимние восхождения, термальные маршруты), снижающее пиковую нагрузку K_season.',
+        annualFlowGrowthPct: 8.5,
+        pOrgShiftBy2030Pct: 10,
+        kSeasonDeltaBy2030: -0.14,
+        registryMultiplier: 1.1,
+        color: '#D97706',
+      },
+    ];
+
+    const annualTrained = Math.max(0, input.groupsPerYear) * Math.max(0, input.cohortSize);
+    const annualNewCertified = Math.round(annualTrained * (input.conversionRate / 100));
+    const attritionRate = Math.max(input.kTurnover - 1, 0);
+    const years = [2025, 2026, 2027, 2028, 2029, 2030];
+
+    const scenarioValues = new Map<TourismScenarioId, number[]>();
+    for (const sc of scenarioDefs) {
+      const series = years.map((_, idx) => {
+        const tYear = input.tAct * Math.pow(1 + sc.annualFlowGrowthPct / 100, idx);
+        const pYear = Math.min(95, Math.max(5, input.pOrg + sc.pOrgShiftBy2030Pct * (idx / 5)));
+        const kSeasonYear = Math.max(1.0, input.kSeason + sc.kSeasonDeltaBy2030 * (idx / 5));
+        return Math.round(
+          ((tYear * (pYear / 100)) / input.gSize / input.groupsPerSeason) *
+            kSeasonYear *
+            input.kTurnover
+        );
+      });
+      scenarioValues.set(sc.id, series);
+    }
+
+    const milestoneNotes: Record<string, string> = {
+      '2025': 'Базовая калибровка по текущему потоку и параметрам модели N',
+      '2026': 'Вступление ПП № 1893 (01.03) и дедлайн обязательной аттестации 01.10.2026',
+      '2027': 'Ввод 1-й очереди курорта «Приморье» (бухта Алеут) и водного трека ВВГУ',
+      '2028': 'Запуск Хасанского курортного кластера (+500 тыс. чел.) и новых экотроп ООПТ',
+      '2029': 'Масштабирование мультипрофильных и всесезонных программ на ДФО',
+      '2030': 'Завершение 5-летнего цикла переаттестации и целевой горизонт отрасли',
+    };
+
+    const registryBaseSeries: number[] = [];
+    let currentReg = input.registryCount;
+    for (let idx = 0; idx < years.length; idx += 1) {
+      if (idx >= 2) {
+        currentReg = Math.round(currentReg * (1 - attritionRate) + annualNewCertified);
+      }
+      registryBaseSeries.push(currentReg);
+    }
+
+    const points: TourismScenarioYearPoint[] = years.map((year, idx) => {
+      const yStr = String(year);
+      return {
+        year: yStr,
+        conservative: scenarioValues.get('conservative')![idx],
+        baseline: scenarioValues.get('baseline')![idx],
+        accelerated: scenarioValues.get('accelerated')![idx],
+        allSeason: scenarioValues.get('allSeason')![idx],
+        projectedRegistry: registryBaseSeries[idx],
+        milestoneNote: milestoneNotes[yStr] ?? '',
+      };
+    });
+
+    const summaries = {} as Record<TourismScenarioId, TourismScenarioSummary>;
+    for (const sc of scenarioDefs) {
+      const vals = scenarioValues.get(sc.id)!;
+      const demand2025 = vals[0];
+      const demand2026 = vals[1];
+      const demand2030 = vals[vals.length - 1];
+      const reg2030 = Math.round(
+        input.registryCount * Math.pow(1 - attritionRate, 4) +
+          annualNewCertified * sc.registryMultiplier * 4
+      );
+      const effectivePOrg2030 = Math.min(95, Math.max(5, Math.round(input.pOrg + sc.pOrgShiftBy2030Pct)));
+      const effectiveKSeason2030 =
+        Math.round(Math.max(1.0, input.kSeason + sc.kSeasonDeltaBy2030) * 100) / 100;
+
+      summaries[sc.id] = {
+        ...sc,
+        demand2025,
+        demand2026,
+        demand2030,
+        growthPct:
+          demand2025 > 0 ? Math.round(((demand2030 - demand2025) / demand2025) * 100) : 0,
+        deficit2030: Math.max(0, demand2030 - registryBaseSeries[registryBaseSeries.length - 1]),
+        scenarioAdjustedRegistry2030: reg2030,
+        pOrg2030: effectivePOrg2030,
+        kSeason2030: effectiveKSeason2030,
+      };
+    }
+
+    return {
+      points,
+      scenarios: scenarioDefs,
+      summaries,
+    };
+  },
 };
+
+export type TourismScenarioId = 'conservative' | 'baseline' | 'accelerated' | 'allSeason';
+
+export interface TourismScenarioConfig {
+  id: TourismScenarioId;
+  label: string;
+  shortLabel: string;
+  description: string;
+  annualFlowGrowthPct: number;
+  pOrgShiftBy2030Pct: number;
+  kSeasonDeltaBy2030: number;
+  registryMultiplier: number;
+  color: string;
+}
+
+export interface TourismScenarioYearPoint {
+  year: string;
+  conservative: number;
+  baseline: number;
+  accelerated: number;
+  allSeason: number;
+  projectedRegistry: number;
+  milestoneNote: string;
+}
+
+export interface TourismScenarioSummary extends TourismScenarioConfig {
+  demand2025: number;
+  demand2026: number;
+  demand2030: number;
+  growthPct: number;
+  deficit2030: number;
+  scenarioAdjustedRegistry2030: number;
+  pOrg2030: number;
+  kSeason2030: number;
+}
+
+export interface TourismScenarios2030Result {
+  points: TourismScenarioYearPoint[];
+  scenarios: TourismScenarioConfig[];
+  summaries: Record<TourismScenarioId, TourismScenarioSummary>;
+}
 
 export interface DfoRegionalProfileInput {
   id: string;
@@ -321,4 +516,3 @@ export interface DfoRegionalForecastResult {
     growthPct: number;
   };
 }
-
