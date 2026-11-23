@@ -311,15 +311,30 @@ export const ApplicationProgressIndicator: React.FC<ApplicationProgressIndicator
         </div>
       </div>
 
-      {/* Linear Progress Bar */}
+      {/* Linear Progress Bar with 4-Stage Milestones */}
       <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="font-medium text-slate-700">
+            Текущая стадия:{' '}
+            <span className="font-semibold text-slate-900">
+              {user
+                ? model.steps.find((s) => s.state === 'current' || s.state === 'attention' || s.state === 'rejected')
+                    ?.title ?? model.steps[model.steps.length - 1]?.title
+                : 'Заявка подана'}
+            </span>
+          </span>
+          <span className="font-mono text-[11px] text-slate-500 tabular-nums">
+            {user ? `${model.progressPercent}% / 100%` : '0% / 100%'}
+          </span>
+        </div>
+
         <div
           role="progressbar"
           aria-label="Прогресс прохождения аттестации по статусу заявки"
           aria-valuenow={user ? model.progressPercent : 0}
           aria-valuemin={0}
           aria-valuemax={100}
-          className="relative h-3 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200"
+          className="relative h-3.5 w-full bg-slate-100 rounded-full overflow-hidden border border-slate-200"
         >
           <div
             className={`h-full transition-all duration-200 ${
@@ -329,16 +344,32 @@ export const ApplicationProgressIndicator: React.FC<ApplicationProgressIndicator
           />
           <span
             aria-hidden="true"
-            className="absolute left-1/4 top-0 bottom-0 w-px bg-white/80"
+            className="absolute left-1/4 top-0 bottom-0 w-px bg-white/85"
           />
           <span
             aria-hidden="true"
-            className="absolute left-2/4 top-0 bottom-0 w-px bg-white/80"
+            className="absolute left-2/4 top-0 bottom-0 w-px bg-white/85"
           />
           <span
             aria-hidden="true"
-            className="absolute left-3/4 top-0 bottom-0 w-px bg-white/80"
+            className="absolute left-3/4 top-0 bottom-0 w-px bg-white/85"
           />
+        </div>
+
+        <div
+          aria-hidden="true"
+          className="hidden lg:grid grid-cols-4 gap-3 text-[11px] font-medium text-slate-500"
+        >
+          {model.steps.map((step) => (
+            <span
+              key={`scale-${step.id}`}
+              className={`truncate ${
+                user && step.state !== 'pending' ? getStepStateTextClass(step.state) : ''
+              }`}
+            >
+              {step.stepNumber}. {step.title}
+            </span>
+          ))}
         </div>
       </div>
 

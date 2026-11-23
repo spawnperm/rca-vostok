@@ -82,7 +82,7 @@ export function buildApplicationProgressModel({
           {
             id: 'submitted',
             stepNumber: '01',
-            title: 'Подача заявки',
+            title: 'Заявка подана',
             subtitle: 'Анкета и трек подтверждены',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -90,7 +90,7 @@ export function buildApplicationProgressModel({
           {
             id: 'verification',
             stepNumber: '02',
-            title: 'Проверка документов',
+            title: 'Документы проверены',
             subtitle: 'Стаж и меддопуск сверены',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -98,15 +98,15 @@ export function buildApplicationProgressModel({
           {
             id: 'commission',
             stepNumber: '03',
-            title: 'Допуск комиссии',
-            subtitle: 'Одобрено комиссией РЦА',
+            title: 'К тестированию готов',
+            subtitle: 'Допуск комиссии получен',
             state: 'completed',
             stateLabel: 'Выполнено',
           },
           {
             id: 'attestation',
             stepNumber: '04',
-            title: 'Экзамен и реестр',
+            title: 'Аттестован',
             subtitle: 'Свидетельство активно (5 лет)',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -132,7 +132,7 @@ export function buildApplicationProgressModel({
         {
           id: 'submitted',
           stepNumber: '01',
-          title: 'Подача заявки',
+          title: 'Заявка подана',
           subtitle: 'Выбор сессии и трека',
           state: 'current',
           stateLabel: 'Ожидает подачи',
@@ -140,7 +140,7 @@ export function buildApplicationProgressModel({
         {
           id: 'verification',
           stepNumber: '02',
-          title: 'Проверка документов',
+          title: 'Документы проверены',
           subtitle: 'Медсправка, стаж, паспорт',
           state: 'pending',
           stateLabel: 'Далее',
@@ -148,7 +148,7 @@ export function buildApplicationProgressModel({
         {
           id: 'commission',
           stepNumber: '03',
-          title: 'Допуск комиссии',
+          title: 'К тестированию готов',
           subtitle: 'Согласование экзамена',
           state: 'pending',
           stateLabel: 'Далее',
@@ -156,8 +156,8 @@ export function buildApplicationProgressModel({
         {
           id: 'attestation',
           stepNumber: '04',
-          title: 'Экзамен и реестр',
-          subtitle: 'Сессия РЦА и бейдж',
+          title: 'Аттестован',
+          subtitle: 'Сессия РЦА и реестр',
           state: 'pending',
           stateLabel: 'Далее',
         },
@@ -187,7 +187,7 @@ export function buildApplicationProgressModel({
           {
             id: 'submitted',
             stepNumber: '01',
-            title: 'Подача заявки',
+            title: 'Заявка подана',
             subtitle: 'Зарегистрирована в РЦА',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -195,7 +195,7 @@ export function buildApplicationProgressModel({
           {
             id: 'verification',
             stepNumber: '02',
-            title: 'Проверка документов',
+            title: 'Документы проверены',
             subtitle: 'Первичная сверка пакета',
             state: 'current',
             stateLabel: 'Текущий этап',
@@ -203,7 +203,7 @@ export function buildApplicationProgressModel({
           {
             id: 'commission',
             stepNumber: '03',
-            title: 'Допуск комиссии',
+            title: 'К тестированию готов',
             subtitle: 'Рассмотрение стажа',
             state: 'pending',
             stateLabel: 'Ожидает',
@@ -211,8 +211,8 @@ export function buildApplicationProgressModel({
           {
             id: 'attestation',
             stepNumber: '04',
-            title: 'Экзамен и реестр',
-            subtitle: 'Сессия РЦА и бейдж',
+            title: 'Аттестован',
+            subtitle: 'Сессия РЦА и реестр',
             state: 'pending',
             stateLabel: 'Ожидает',
           },
@@ -238,7 +238,7 @@ export function buildApplicationProgressModel({
           {
             id: 'submitted',
             stepNumber: '01',
-            title: 'Подача заявки',
+            title: 'Заявка подана',
             subtitle: 'Заявка зарегистрирована',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -246,7 +246,7 @@ export function buildApplicationProgressModel({
           {
             id: 'verification',
             stepNumber: '02',
-            title: 'Проверка документов',
+            title: 'Документы проверены',
             subtitle: 'Нужно дослать документы',
             state: 'attention',
             stateLabel: 'Требует внимания',
@@ -254,7 +254,7 @@ export function buildApplicationProgressModel({
           {
             id: 'commission',
             stepNumber: '03',
-            title: 'Допуск комиссии',
+            title: 'К тестированию готов',
             subtitle: 'После сверки пакета',
             state: 'pending',
             stateLabel: 'На паузе',
@@ -262,8 +262,8 @@ export function buildApplicationProgressModel({
           {
             id: 'attestation',
             stepNumber: '04',
-            title: 'Экзамен и реестр',
-            subtitle: 'Сессия РЦА и бейдж',
+            title: 'Аттестован',
+            subtitle: 'Сессия РЦА и реестр',
             state: 'pending',
             stateLabel: 'Ожидает',
           },
@@ -289,7 +289,7 @@ export function buildApplicationProgressModel({
           {
             id: 'submitted',
             stepNumber: '01',
-            title: 'Подача заявки',
+            title: 'Заявка подана',
             subtitle: 'Заявка зарегистрирована',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -297,7 +297,7 @@ export function buildApplicationProgressModel({
           {
             id: 'verification',
             stepNumber: '02',
-            title: 'Проверка документов',
+            title: 'Документы проверены',
             subtitle: 'Базовый комплект принят',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -305,7 +305,7 @@ export function buildApplicationProgressModel({
           {
             id: 'commission',
             stepNumber: '03',
-            title: 'Допуск комиссии',
+            title: 'К тестированию готов',
             subtitle: 'Экспертиза стажа и трека',
             state: 'current',
             stateLabel: 'На рассмотрении',
@@ -313,7 +313,7 @@ export function buildApplicationProgressModel({
           {
             id: 'attestation',
             stepNumber: '04',
-            title: 'Экзамен и реестр',
+            title: 'Аттестован',
             subtitle: 'Очная сессия и выдача',
             state: 'pending',
             stateLabel: 'Ожидает',
@@ -341,7 +341,7 @@ export function buildApplicationProgressModel({
             {
               id: 'submitted',
               stepNumber: '01',
-              title: 'Подача заявки',
+              title: 'Заявка подана',
               subtitle: 'Заявка зарегистрирована',
               state: 'completed',
               stateLabel: 'Выполнено',
@@ -349,7 +349,7 @@ export function buildApplicationProgressModel({
             {
               id: 'verification',
               stepNumber: '02',
-              title: 'Проверка документов',
+              title: 'Документы проверены',
               subtitle: 'Комплект проверен',
               state: 'completed',
               stateLabel: 'Выполнено',
@@ -357,7 +357,7 @@ export function buildApplicationProgressModel({
             {
               id: 'commission',
               stepNumber: '03',
-              title: 'Допуск комиссии',
+              title: 'К тестированию готов',
               subtitle: 'Заявка одобрена',
               state: 'completed',
               stateLabel: 'Выполнено',
@@ -365,7 +365,7 @@ export function buildApplicationProgressModel({
             {
               id: 'attestation',
               stepNumber: '04',
-              title: 'Экзамен и реестр',
+              title: 'Аттестован',
               subtitle: 'Свидетельство выдано',
               state: 'completed',
               stateLabel: 'Завершено',
@@ -392,7 +392,7 @@ export function buildApplicationProgressModel({
           {
             id: 'submitted',
             stepNumber: '01',
-            title: 'Подача заявки',
+            title: 'Заявка подана',
             subtitle: 'Заявка зарегистрирована',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -400,7 +400,7 @@ export function buildApplicationProgressModel({
           {
             id: 'verification',
             stepNumber: '02',
-            title: 'Проверка документов',
+            title: 'Документы проверены',
             subtitle: 'Комплект подтверждён',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -408,15 +408,15 @@ export function buildApplicationProgressModel({
           {
             id: 'commission',
             stepNumber: '03',
-            title: 'Допуск комиссии',
-            subtitle: 'Заявка одобрена',
+            title: 'К тестированию готов',
+            subtitle: 'Допуск к сессии открыт',
             state: 'completed',
             stateLabel: 'Одобрено',
           },
           {
             id: 'attestation',
             stepNumber: '04',
-            title: 'Экзамен и реестр',
+            title: 'Аттестован',
             subtitle: 'Сдача сессии и выдача',
             state: 'current',
             stateLabel: 'Финальный этап',
@@ -443,7 +443,7 @@ export function buildApplicationProgressModel({
           {
             id: 'submitted',
             stepNumber: '01',
-            title: 'Подача заявки',
+            title: 'Заявка подана',
             subtitle: 'Заявка была подана',
             state: 'completed',
             stateLabel: 'Выполнено',
@@ -451,7 +451,7 @@ export function buildApplicationProgressModel({
           {
             id: 'verification',
             stepNumber: '02',
-            title: 'Проверка документов',
+            title: 'Документы проверены',
             subtitle: 'Отклонено при сверке',
             state: 'rejected',
             stateLabel: 'Отклонено',
@@ -459,7 +459,7 @@ export function buildApplicationProgressModel({
           {
             id: 'commission',
             stepNumber: '03',
-            title: 'Допуск комиссии',
+            title: 'К тестированию готов',
             subtitle: 'Приостановлено',
             state: 'pending',
             stateLabel: 'Остановлено',
@@ -467,7 +467,7 @@ export function buildApplicationProgressModel({
           {
             id: 'attestation',
             stepNumber: '04',
-            title: 'Экзамен и реестр',
+            title: 'Аттестован',
             subtitle: 'После повторной заявки',
             state: 'pending',
             stateLabel: 'Ожидает',

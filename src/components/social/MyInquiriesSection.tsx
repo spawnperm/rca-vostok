@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ArrowUpDown,
   CalendarDays,
   CheckCircle2,
   Clock,
@@ -12,6 +13,16 @@ import {
 } from 'lucide-react';
 import { SocialApiError } from '../../utils/socialApi';
 import { formatDate } from '../../utils/format.ts';
+import {
+  computeInquiryStatusCounts,
+  computeInquiryYearCounts,
+  filterAndSortInquiriesHistory,
+  getAvailableInquiryYears,
+  getInquirySubmissionYear,
+  type InquirySortOrder,
+  type InquiryStatusFilterKey,
+  type InquiryYearFilterKey,
+} from '../../utils/inquiriesHistoryFilter';
 
 export interface InquiryRecord {
   id: string;
@@ -28,8 +39,6 @@ export interface InquiryRecord {
   status: 'new' | 'in_review' | 'needs_documents' | 'approved' | 'rejected';
   createdAt: string;
 }
-
-type StatusFilterKey = 'all' | InquiryRecord['status'];
 
 const STATUS_META: Record<
   InquiryRecord['status'],
@@ -121,7 +130,9 @@ export function MyInquiriesSection({
   const [internalInquiries, setInternalInquiries] = useState<InquiryRecord[]>([]);
   const [internalLoading, setInternalLoading] = useState<boolean>(true);
   const [internalError, setInternalError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilterKey>('all');
+  const [statusFilter, setStatusFilter] = useState<InquiryStatusFilterKey>('all');
+  const [yearFilter, setYearFilter] = useState<InquiryYearFilterKey>('all');
+  const [sortOrder, setSortOrder] = useState<InquirySortOrder>('newest');
 
   const load = useCallback(async () => {
     if (onRefresh) {
@@ -157,34 +168,45 @@ export function MyInquiriesSection({
   const loading = isControlled ? Boolean(externalLoading) : internalLoading;
   const error = isControlled ? (externalError ?? null) : internalError;
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<StatusFilterKey, number> = {
-      all: inquiries.length,
-      new: 0,
-      in_review: 0,
-      needs_documents: 0,
-      approved: 0,
-      rejected: 0,
-    };
-    for (const item of inquiries) {
-      if (item.status in counts) {
-        counts[item.status] += 1;
-      }
-    }
-    return counts;
-  }, [inquiries]);
+  const availableYears = useMemo(
+    () => getAvailableInquiryYears(inquiries),
+    [inquiries]
+  );
+
+  const yearCounts = useMemo(
+    () => computeInquiryYearCounts(inquiries),
+    [inquiries]
+  );
+
+  const statusCounts = useMemo(
+    () => computeInquiryStatusCounts(inquiries, yearFilter),
+    [inquiries, yearFilter]
+  );
+
+  const overallCounts = useMemo(
+    () => computeInquiryStatusCounts(inquiries, 'all'),
+    [inquiries]
+  );
 
   const filteredInquiries = useMemo(
     () =>
-      statusFilter === 'all'
-        ? inquiries
-        : inquiries.filter((inq) => inq.status === statusFilter),
-    [inquiries, statusFilter]
+      filterAndSortInquiriesHistory(inquiries, {
+        year: yearFilter,
+        status: statusFilter,
+        sortOrder,
+      }),
+    [inquiries, yearFilter, statusFilter, sortOrder]
   );
+
+  useEffect(() => {
+    if (yearFilter !== 'all' && !availableYears.includes(yearFilter)) {
+      setYearFilter('all');
+    }
+  }, [availableYears, yearFilter]);
 
   if (!canView) return null;
 
-  const filterTabs: { key: StatusFilterKey; label: string }[] = [
+  const filterTabs: { key: InquiryStatusFilterKey; label: string }[] = [
     { key: 'all', label: `Все (${statusCounts.all})` },
     { key: 'in_review', label: `На рассмотрении (${statusCounts.in_review})` },
     { key: 'needs_documents', label: `Требуются документы (${statusCounts.needs_documents})` },
@@ -192,7 +214,7 @@ export function MyInquiriesSection({
     { key: 'new', label: `Новые (${statusCounts.new})` },
   ];
 
-  if (statusCounts.rejected > 0) {
+  if (statusCounts.rejected > 0 || overallCounts.rejected > 0) {
     filterTabs.push({ key: 'rejected', label: `Отклонено (${statusCounts.rejected})` });
   }
 
@@ -207,17 +229,17 @@ export function MyInquiriesSection({
         <div className="space-y-1 max-w-2xl">
           <p className="text-xs font-medium text-teal-700 inline-flex items-center gap-1.5">
             <FileText className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-            <span>Реестр обращений кандидата · Самопроверка без звонка в поддержку</span>
+            <span>Реестр обращений кандидата · История и статусы</span>
           </p>
           <h3
             id="my-inquiries-status-heading"
             className="text-lg sm:text-xl font-bold text-slate-900"
           >
-            Статусы заявок на аттестацию
+            История поданных заявок на аттестацию
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Актуальное состояние ваших заявок, выбранные даты сессий и регламентные пояснения по
-            следующему шагу.
+            Полная история ваших заявок за все периоды с фильтрацией по годам и статусам, датами
+            сессий и регламентными комментариями комиссии.
           </p>
         </div>
 
@@ -244,32 +266,101 @@ export function MyInquiriesSection({
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Summary Counters */}
       {inquiries.length > 0 && (
-        <div
-          role="tablist"
-          aria-label="Фильтр заявок по статусу"
-          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
-        >
-          {filterTabs.map((tab) => {
-            const active = statusFilter === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setStatusFilter(tab.key)}
-                className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  active
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-3 border-y border-slate-200">
+          <div className="space-y-0.5">
+            <dt className="text-[11px] text-slate-500">Всего подано</dt>
+            <dd className="text-sm font-bold font-mono text-slate-900 tabular-nums">
+              {overallCounts.all}
+            </dd>
+          </div>
+          <div className="space-y-0.5">
+            <dt className="text-[11px] text-slate-500">Одобрено</dt>
+            <dd className="text-sm font-bold font-mono text-emerald-700 tabular-nums">
+              {overallCounts.approved}
+            </dd>
+          </div>
+          <div className="space-y-0.5">
+            <dt className="text-[11px] text-slate-500">На рассмотрении / доработке</dt>
+            <dd className="text-sm font-bold font-mono text-amber-800 tabular-nums">
+              {overallCounts.new + overallCounts.in_review + overallCounts.needs_documents}
+            </dd>
+          </div>
+          <div className="space-y-0.5">
+            <dt className="text-[11px] text-slate-500">Показано в таблице</dt>
+            <dd className="text-sm font-bold font-mono text-teal-800 tabular-nums">
+              {filteredInquiries.length} из {inquiries.length}
+            </dd>
+          </div>
+        </dl>
+      )}
+
+      {/* Combined Filters: Years + Statuses + Sort */}
+      {inquiries.length > 0 && (
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div
+            role="tablist"
+            aria-label="Фильтр заявок по статусу"
+            className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
+          >
+            {filterTabs.map((tab) => {
+              const active = statusFilter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setStatusFilter(tab.key)}
+                  className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    active
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <label
+              htmlFor="inquiries-year-filter"
+              className="text-xs font-medium text-slate-600 whitespace-nowrap"
+            >
+              Год подачи:
+            </label>
+            <select
+              id="inquiries-year-filter"
+              aria-label="Фильтр заявок по году"
+              value={yearFilter === 'all' ? 'all' : String(yearFilter)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setYearFilter(val === 'all' ? 'all' : Number(val));
+              }}
+              className="px-2.5 py-1.5 text-xs font-medium font-mono tabular-nums border border-slate-300 rounded-lg bg-white text-slate-800 focus:border-teal-700 focus:outline-none"
+            >
+              <option value="all">Все годы ({inquiries.length})</option>
+              {availableYears.map((yr) => (
+                <option key={yr} value={String(yr)}>
+                  {yr} год ({yearCounts.get(yr) ?? 0})
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSortOrder((prev) => (prev === 'newest' ? 'oldest' : 'newest'))
+              }
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <ArrowUpDown className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+              <span>{sortOrder === 'newest' ? 'Сначала новые' : 'Сначала старые'}</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -306,14 +397,17 @@ export function MyInquiriesSection({
         <div className="py-8 px-4 text-center bg-slate-50 border border-slate-200 rounded-xl space-y-2">
           <AlertCircle className="w-6 h-6 mx-auto text-slate-400" aria-hidden="true" />
           <p className="text-xs sm:text-sm text-slate-600">
-            Заявок с выбранным статусом сейчас нет.
+            Заявок по выбранному году и статусу не найдено.
           </p>
           <button
             type="button"
-            onClick={() => setStatusFilter('all')}
+            onClick={() => {
+              setStatusFilter('all');
+              setYearFilter('all');
+            }}
             className="text-xs font-semibold text-teal-700 hover:underline cursor-pointer"
           >
-            Показать все заявки ({inquiries.length})
+            Сбросить фильтры и показать все ({inquiries.length})
           </button>
         </div>
       ) : (
@@ -356,8 +450,8 @@ export function MyInquiriesSection({
                         <p className="font-mono text-xs font-semibold text-slate-900 tabular-nums">
                           {formatDate(inquiry.createdAt)}
                         </p>
-                        <p className="font-mono text-[11px] text-slate-500 mt-0.5">
-                          № {inquiry.id.slice(-8)}
+                        <p className="font-mono text-[11px] text-slate-500 mt-0.5 tabular-nums">
+                          № {inquiry.id.slice(-8)} · {getInquirySubmissionYear(inquiry) ?? '—'} г.
                         </p>
                       </td>
 
