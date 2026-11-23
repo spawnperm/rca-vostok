@@ -37,7 +37,9 @@ import {
   downloadCalendarIcs,
 } from '../../utils/attestationCalendar';
 import { tracker } from '../../utils/tracker';
+import { AttestationLocationsGoogleMap } from './AttestationLocationsGoogleMap';
 import { FAQSection } from './FAQSection';
+import { PreparationExamSimulator } from './PreparationExamSimulator';
 
 export { FAQSection };
 
@@ -197,6 +199,8 @@ export function PreparationSection() {
           );
         })}
       </ol>
+
+      <PreparationExamSimulator />
     </section>
   );
 }
@@ -378,6 +382,8 @@ export function CertificationSection() {
           {exportNotice}
         </p>
       )}
+
+      <AttestationLocationsGoogleMap />
     </section>
   );
 }
