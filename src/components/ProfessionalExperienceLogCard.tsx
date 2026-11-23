@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 import {
   BarChart3,
+  Calendar,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Compass,
   Filter,
   MapPin,
@@ -30,11 +33,15 @@ import { DFO_LABEL_OFFSETS, buildDfoD3MapLayout } from '../utils/dfoD3MapData';
 import {
   EXPERIENCE_COMPLEXITIES,
   JOURNAL_DFO_REGIONS,
+  buildJournalCalendarMonth,
   computeJournalMetrics,
+  extractActiveCalendarMonths,
   formatRussianJournalDate,
   getDefaultJournalEntries,
   readStoredExperienceJournal,
+  resolveInitialCalendarMonth,
   resolveJournalRegionId,
+  shiftCalendarMonth,
   validateJournalEntryInput,
   writeStoredExperienceJournal,
   type DfoJournalRegionId,
@@ -48,7 +55,7 @@ interface ProfessionalExperienceLogCardProps {
   user: SessionUser | null;
 }
 
-type VisualizationTab = 'map' | 'timeline' | 'complexity';
+type VisualizationTab = 'map' | 'calendar' | 'timeline' | 'complexity';
 
 const COMPLEXITY_BADGE_CLASS: Record<ExpeditionComplexity, string> = {
   'н/к': 'bg-slate-100 text-slate-700 border-slate-300',
@@ -103,6 +110,11 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
   const [regionFilter, setRegionFilter] = useState<DfoJournalRegionId | 'all'>('all');
   const [complexityFilter, setComplexityFilter] = useState<ExpeditionComplexity | 'all'>('all');
 
+  const initialCal = useMemo(() => resolveInitialCalendarMonth(entries), []);
+  const [calendarYear, setCalendarYear] = useState<number>(initialCal.year);
+  const [calendarMonth, setCalendarMonth] = useState<number>(initialCal.month);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(initialCal.selectedIso);
+
   useEffect(() => {
     const resolved = resolveJournalRegionId(preferredRegion);
     setRegionId(resolved);
@@ -110,6 +122,18 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
   }, [preferredRegion]);
 
   const metrics = useMemo(() => computeJournalMetrics(entries), [entries]);
+  const calendarModel = useMemo(
+    () => buildJournalCalendarMonth(calendarYear, calendarMonth, entries),
+    [calendarYear, calendarMonth, entries]
+  );
+  const activeCalendarMonths = useMemo(
+    () => extractActiveCalendarMonths(entries),
+    [entries]
+  );
+  const selectedDayEntries = useMemo(
+    () => entries.filter((item) => item.date === selectedCalendarDate),
+    [entries, selectedCalendarDate]
+  );
 
   const mapLayout = useMemo(() => buildDfoD3MapLayout(760, 460), []);
 
@@ -165,6 +189,14 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
     const next = [validated.entry, ...entries];
     persistEntries(next);
     setSelectedMapRegionId(validated.entry.regionId);
+    const [yStr, mStr] = validated.entry.date.split('-');
+    const yNum = Number.parseInt(yStr, 10);
+    const mNum = Number.parseInt(mStr, 10);
+    if (!Number.isNaN(yNum) && !Number.isNaN(mNum)) {
+      setCalendarYear(yNum);
+      setCalendarMonth(mNum);
+    }
+    setSelectedCalendarDate(validated.entry.date);
     setRouteTitle('');
     setNotes('');
     setStatusNotice(
@@ -408,11 +440,12 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
             <div
               role="tablist"
               aria-label="Режим визуализации журнала опыта"
-              className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg"
+              className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
             >
               {(
                 [
                   { id: 'map', label: 'Карта ДФО', icon: MapPin },
+                  { id: 'calendar', label: 'Календарь', icon: Calendar },
                   { id: 'timeline', label: 'По месяцам', icon: CalendarDays },
                   { id: 'complexity', label: 'По сложности', icon: BarChart3 },
                 ] as const
@@ -602,6 +635,213 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
                   >
                     Показать все регионы
                   </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'calendar' && (
+            <div className="space-y-3">
+              {/* Month Header Controls */}
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    aria-label="Предыдущий месяц"
+                    onClick={() => {
+                      const prev = shiftCalendarMonth(calendarYear, calendarMonth, -1);
+                      setCalendarYear(prev.year);
+                      setCalendarMonth(prev.month);
+                    }}
+                    className="p-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                  <span className="text-xs sm:text-sm font-bold text-slate-900 min-w-[132px] text-center">
+                    {calendarModel.monthTitle}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Следующий месяц"
+                    onClick={() => {
+                      const next = shiftCalendarMonth(calendarYear, calendarMonth, 1);
+                      setCalendarYear(next.year);
+                      setCalendarMonth(next.month);
+                    }}
+                    className="p-1.5 bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-100 cursor-pointer"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                  <span>
+                    В месяце: <strong className="text-slate-900">{calendarModel.monthTripsCount}</strong>{' '}
+                    поход(ов) ·{' '}
+                    <strong className="text-slate-900">
+                      {calendarModel.monthParticipantsCount} чел.
+                    </strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const today = getTodayIso();
+                      const [yStr, mStr] = today.split('-');
+                      setCalendarYear(Number.parseInt(yStr, 10));
+                      setCalendarMonth(Number.parseInt(mStr, 10));
+                      setSelectedCalendarDate(today);
+                      setDate(today);
+                    }}
+                    className="px-2 py-1 bg-white border border-slate-300 text-slate-700 font-semibold rounded-md hover:bg-slate-100 cursor-pointer"
+                  >
+                    Текущий месяц
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick jump pills to months with trips */}
+              {activeCalendarMonths.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="text-slate-500 mr-1">Активные месяцы:</span>
+                  {activeCalendarMonths.map((am) => {
+                    const isCurrent = am.year === calendarYear && am.month === calendarMonth;
+                    return (
+                      <button
+                        key={am.monthKey}
+                        type="button"
+                        onClick={() => {
+                          setCalendarYear(am.year);
+                          setCalendarMonth(am.month);
+                        }}
+                        className={`px-2 py-0.5 rounded-md border font-semibold transition-colors cursor-pointer ${
+                          isCurrent
+                            ? 'bg-teal-700 border-teal-700 text-white'
+                            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {am.label} ({am.tripsCount})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 7-column Monday-start Calendar Grid */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200 text-center text-[11px] font-semibold text-slate-600">
+                  {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((wd) => (
+                    <div key={wd} className="py-2">
+                      {wd}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-px bg-slate-200">
+                  {calendarModel.cells.map((cell) => {
+                    const hasTrips = cell.entries.length > 0;
+                    const isSelected = selectedCalendarDate === cell.isoDate;
+                    return (
+                      <button
+                        key={cell.isoDate}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCalendarDate(cell.isoDate);
+                          setDate(cell.isoDate);
+                          if (!cell.inCurrentMonth) {
+                            const [yStr, mStr] = cell.isoDate.split('-');
+                            setCalendarYear(Number.parseInt(yStr, 10));
+                            setCalendarMonth(Number.parseInt(mStr, 10));
+                          }
+                        }}
+                        className={`min-h-[62px] p-1.5 text-left flex flex-col justify-between transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-teal-50 ring-2 ring-inset ring-teal-700'
+                            : hasTrips
+                            ? 'bg-emerald-50/70 hover:bg-emerald-100/70'
+                            : cell.inCurrentMonth
+                            ? 'bg-white hover:bg-slate-50'
+                            : 'bg-slate-50/70 text-slate-400 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 w-full">
+                          <span
+                            className={`text-[11px] font-semibold tabular-nums ${
+                              hasTrips
+                                ? 'text-teal-900'
+                                : cell.inCurrentMonth
+                                ? 'text-slate-700'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            {cell.dayOfMonth}
+                          </span>
+                          {hasTrips && (
+                            <span className="w-2 h-2 rounded-full bg-teal-700 shrink-0" />
+                          )}
+                        </div>
+
+                        {hasTrips && cell.highestComplexity && (
+                          <div className="space-y-0.5 w-full">
+                            <span
+                              className={`block w-fit px-1.5 py-0.5 rounded-xs border text-[10px] font-bold leading-none ${
+                                COMPLEXITY_BADGE_CLASS[cell.highestComplexity]
+                              }`}
+                            >
+                              {cell.highestComplexity}
+                            </span>
+                            <span className="block text-[10px] text-slate-600 truncate leading-none">
+                              {cell.entries.length > 1
+                                ? `${cell.entries.length} похода`
+                                : `${cell.totalParticipants} чел.`}
+                            </span>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selected Date Details & Planning Prompt */}
+              <div className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-bold text-slate-900">
+                    Выбранная дата: {formatRussianJournalDate(selectedCalendarDate)}
+                  </span>
+                  <span className="text-[11px] text-teal-800 font-medium">
+                    Дата подставлена в форму добавления слева
+                  </span>
+                </div>
+
+                {selectedDayEntries.length > 0 ? (
+                  <div className="space-y-2 pt-1">
+                    {selectedDayEntries.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex flex-wrap items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="font-semibold text-slate-900">{item.routeTitle}</p>
+                          <p className="text-[11px] text-slate-600">
+                            {item.regionName} · {item.participantsCount} чел.
+                            {item.notes ? ` · ${item.notes}` : ''}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-semibold ${
+                            COMPLEXITY_BADGE_CLASS[item.complexity]
+                          }`}
+                        >
+                          {item.complexity}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-slate-600">
+                    На эту дату походы не зафиксированы — окно свободно для планирования будущего
+                    маршрута или внесения прошедшего выхода.
+                  </p>
                 )}
               </div>
             </div>

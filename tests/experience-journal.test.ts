@@ -1,14 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildJournalCalendarMonth,
   classifyComplexityTier,
   computeComplexityTierDistribution,
   computeJournalMetrics,
+  extractActiveCalendarMonths,
   forecastNextRouteComplexity,
   formatJournalMonthLabel,
   formatRussianJournalDate,
   getDefaultJournalEntries,
+  resolveInitialCalendarMonth,
   resolveJournalRegionId,
+  shiftCalendarMonth,
   validateJournalEntryInput,
   type ExperienceLogEntry,
 } from '../src/utils/experienceJournal.ts';
@@ -224,3 +228,32 @@ test('forecastNextRouteComplexity predicts upward, stable, downward, and empty b
   assert.ok(falling.slopePerTrip < 0);
   assert.equal(falling.recommendedComplexity, '1 КС');
 });
+
+test('buildJournalCalendarMonth builds Monday-start grids, maps entries by date, and shifts months cleanly', () => {
+  const entries = getDefaultJournalEntries('Приморский край');
+  const initial = resolveInitialCalendarMonth(entries);
+  assert.equal(initial.year, 2026);
+  assert.equal(initial.month, 10);
+  assert.equal(initial.selectedIso, '2026-10-12');
+
+  const octModel = buildJournalCalendarMonth(2026, 10, entries);
+  assert.equal(octModel.monthTitle, 'Октябрь 2026');
+  assert.equal(octModel.cells.length % 7, 0);
+  assert.equal(octModel.monthTripsCount, 1);
+  assert.equal(octModel.monthParticipantsCount, 14);
+  assert.equal(octModel.activeDaysCount, 1);
+
+  const oct12 = octModel.cells.find((c) => c.isoDate === '2026-10-12');
+  assert.ok(oct12);
+  assert.equal(oct12.inCurrentMonth, true);
+  assert.equal(oct12.entries.length, 1);
+  assert.equal(oct12.highestComplexity, '2 КС');
+
+  const activeMonths = extractActiveCalendarMonths(entries);
+  assert.equal(activeMonths.length, 5);
+  assert.equal(activeMonths[0].monthKey, '2026-06');
+
+  assert.deepEqual(shiftCalendarMonth(2026, 12, 1), { year: 2027, month: 1 });
+  assert.deepEqual(shiftCalendarMonth(2026, 1, -1), { year: 2025, month: 12 });
+});
+

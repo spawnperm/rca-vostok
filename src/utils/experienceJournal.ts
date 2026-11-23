@@ -840,4 +840,195 @@ export function forecastNextRouteComplexity(
   };
 }
 
+export interface JournalCalendarCell {
+  isoDate: string; // YYYY-MM-DD
+  dayOfMonth: number;
+  inCurrentMonth: boolean;
+  entries: ExperienceLogEntry[];
+  totalParticipants: number;
+  highestComplexity: ExpeditionComplexity | null;
+}
+
+export interface JournalCalendarMonthModel {
+  year: number;
+  month: number; // 1..12
+  monthKey: string; // YYYY-MM
+  monthTitle: string;
+  cells: JournalCalendarCell[];
+  monthTripsCount: number;
+  monthParticipantsCount: number;
+  activeDaysCount: number;
+}
+
+export interface CalendarYearMonth {
+  year: number;
+  month: number; // 1..12
+  monthKey: string;
+  label: string;
+  tripsCount: number;
+}
+
+const MONTH_FULL_RU: readonly string[] = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
+];
+
+function formatUtcIsoDate(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function shiftCalendarMonth(
+  year: number,
+  month: number,
+  deltaMonths: number
+): { year: number; month: number } {
+  const shifted = new Date(Date.UTC(year, month - 1 + deltaMonths, 1));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+  };
+}
+
+export function resolveInitialCalendarMonth(
+  entries: readonly ExperienceLogEntry[],
+  fallbackNow: Date = new Date()
+): { year: number; month: number; selectedIso: string } {
+  if (entries.length > 0) {
+    const latest = [...entries].sort((a, b) => b.date.localeCompare(a.date))[0];
+    const parts = latest.date.split('-');
+    if (parts.length === 3) {
+      const y = Number.parseInt(parts[0], 10);
+      const m = Number.parseInt(parts[1], 10);
+      if (!Number.isNaN(y) && !Number.isNaN(m) && m >= 1 && m <= 12) {
+        return { year: y, month: m, selectedIso: latest.date };
+      }
+    }
+  }
+  const y = fallbackNow.getFullYear();
+  const m = fallbackNow.getMonth() + 1;
+  const d = String(fallbackNow.getDate()).padStart(2, '0');
+  return {
+    year: y,
+    month: m,
+    selectedIso: `${y}-${String(m).padStart(2, '0')}-${d}`,
+  };
+}
+
+export function extractActiveCalendarMonths(
+  entries: readonly ExperienceLogEntry[]
+): CalendarYearMonth[] {
+  const counts = new Map<string, number>();
+  for (const e of entries) {
+    const ym = e.date.slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(ym)) {
+      counts.set(ym, (counts.get(ym) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([monthKey, tripsCount]) => {
+      const [yStr, mStr] = monthKey.split('-');
+      return {
+        year: Number.parseInt(yStr, 10),
+        month: Number.parseInt(mStr, 10),
+        monthKey,
+        label: formatJournalMonthLabel(monthKey),
+        tripsCount,
+      };
+    });
+}
+
+export function buildJournalCalendarMonth(
+  year: number,
+  month: number,
+  entries: readonly ExperienceLogEntry[]
+): JournalCalendarMonthModel {
+  const monthIdx = month - 1;
+  const firstDayUtc = new Date(Date.UTC(year, monthIdx, 1));
+  const daysInMonth = new Date(Date.UTC(year, monthIdx + 1, 0)).getUTCDate();
+
+  // Monday-first weekday offset: Mon=0 .. Sun=6
+  const startWeekday = (firstDayUtc.getUTCDay() + 6) % 7;
+  const totalSlots = Math.ceil((startWeekday + daysInMonth) / 7) * 7;
+
+  const entriesByDate = new Map<string, ExperienceLogEntry[]>();
+  for (const entry of entries) {
+    const list = entriesByDate.get(entry.date);
+    if (list) {
+      list.push(entry);
+    } else {
+      entriesByDate.set(entry.date, [entry]);
+    }
+  }
+
+  const cells: JournalCalendarCell[] = [];
+  let monthTripsCount = 0;
+  let monthParticipantsCount = 0;
+  let activeDaysCount = 0;
+
+  for (let i = 0; i < totalSlots; i += 1) {
+    const cellDate = new Date(Date.UTC(year, monthIdx, 1 - startWeekday + i));
+    const isoDate = formatUtcIsoDate(cellDate);
+    const inCurrentMonth =
+      cellDate.getUTCFullYear() === year && cellDate.getUTCMonth() === monthIdx;
+    const dayEntries = entriesByDate.get(isoDate) ?? [];
+
+    let totalParticipants = 0;
+    let highestComplexity: ExpeditionComplexity | null = null;
+    let maxRank = -1;
+
+    for (const e of dayEntries) {
+      totalParticipants += e.participantsCount;
+      const r = COMPLEXITY_RANK[e.complexity] ?? 0;
+      if (r > maxRank) {
+        maxRank = r;
+        highestComplexity = e.complexity;
+      }
+    }
+
+    if (inCurrentMonth && dayEntries.length > 0) {
+      monthTripsCount += dayEntries.length;
+      monthParticipantsCount += totalParticipants;
+      activeDaysCount += 1;
+    }
+
+    cells.push({
+      isoDate,
+      dayOfMonth: cellDate.getUTCDate(),
+      inCurrentMonth,
+      entries: dayEntries,
+      totalParticipants,
+      highestComplexity,
+    });
+  }
+
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+  const monthTitle = `${MONTH_FULL_RU[monthIdx] ?? ''} ${year}`.trim();
+
+  return {
+    year,
+    month,
+    monthKey,
+    monthTitle,
+    cells,
+    monthTripsCount,
+    monthParticipantsCount,
+    activeDaysCount,
+  };
+}
+
+
 
