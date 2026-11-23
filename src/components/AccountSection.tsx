@@ -44,6 +44,7 @@ import { FavoriteLiteratureCabinetWidget } from './FavoriteLiteratureCabinetWidg
 import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
 import { AttestationSelfDiagnosticsWidget } from './AttestationSelfDiagnosticsWidget';
 import { InstructorPassportCard } from './InstructorPassportCard';
+import { ProfileAttestationCertificateCard } from './ProfileAttestationCertificateCard';
 import {
   dispatchOpenRcaAssistant,
   dispatchRcaUserContext,
@@ -337,6 +338,10 @@ export function AccountSection({
             scrollToElementById('account-auth-panel');
           }}
         />
+        <ProfileAttestationCertificateCard
+          user={null}
+          onFocusAuth={() => scrollToElementById('account-auth-panel')}
+        />
         <AttestationSelfDiagnosticsWidget
           user={null}
           onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
@@ -439,6 +444,7 @@ export function AccountSection({
         onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
         onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
+        onJumpToCertificateGenerator={() => scrollToElementById('account-certificate-generator')}
         onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
         onJumpToReviews={() => scrollToElementById('account-reviews-section')}
       />
@@ -588,6 +594,14 @@ export function AccountSection({
         summary={effectiveProgressSummary}
         inquiries={inquiries}
         selfCheckRevision={selfCheckRevision}
+      />
+      <ProfileAttestationCertificateCard
+        user={user}
+        summary={effectiveProgressSummary}
+        inquiries={inquiries}
+        selectedExamDate={selectedExamDate}
+        selectedContour={selectedContour}
+        onJumpToProfile={() => scrollToElementById('account-profile-card')}
       />
       <AccountKnowledgeBaseWidget
         user={user}
@@ -1033,6 +1047,7 @@ function CabinetHeader({
   onJumpToDiagnostics,
   onJumpToAnalytics,
   onJumpToPassport,
+  onJumpToCertificateGenerator,
   onJumpToFaq,
   onJumpToReviews,
 }: {
@@ -1046,6 +1061,7 @@ function CabinetHeader({
   onJumpToDiagnostics: () => void;
   onJumpToAnalytics: () => void;
   onJumpToPassport: () => void;
+  onJumpToCertificateGenerator: () => void;
   onJumpToFaq: () => void;
   onJumpToReviews: () => void;
 }) {
@@ -1117,6 +1133,15 @@ function CabinetHeader({
           >
             <FileBadge2 className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
             <span>Цифровой паспорт</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onJumpToCertificateGenerator}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <Award className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Сертификат PDF</span>
           </button>
 
           <button
@@ -1200,7 +1225,10 @@ function ProfileCard({
   };
 
   return (
-    <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+    <section
+      id="account-profile-card"
+      className="bg-white border border-slate-200 rounded-xl p-6 space-y-5 scroll-mt-24"
+    >
       <div className="space-y-1">
         <h3 className="text-base font-bold text-slate-900">Профиль</h3>
         <p className="text-sm text-slate-600">
