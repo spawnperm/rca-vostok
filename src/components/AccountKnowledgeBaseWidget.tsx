@@ -213,7 +213,24 @@ export const AccountKnowledgeBaseWidget: React.FC<AccountKnowledgeBaseWidgetProp
           <input
             type="search"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setSearchQuery(nextValue);
+              const trimmed = nextValue.trim();
+              if (trimmed.length >= 2) {
+                const matched = searchAccountKnowledgeBase({
+                  query: trimmed,
+                  scope: 'all',
+                  faqCategory,
+                });
+                if (matched.faqItems.length > 0) {
+                  setOpenFaqIds(matched.faqItems.slice(0, 3).map((item) => item.id));
+                }
+                if (matched.materials.length > 0) {
+                  setOpenMaterialIds([matched.materials[0].id]);
+                }
+              }
+            }}
             placeholder="Быстрый поиск по FAQ и нормативам: Контур А, паспорт маршрута № 760, ПП № 1893, 27 200 ₽..."
             aria-label="Быстрый поиск по FAQ, аттестации и нормативным требованиям"
             className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-700 focus:bg-white transition-colors"

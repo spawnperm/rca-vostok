@@ -33,6 +33,7 @@ import {
 import {
   buildGoogleCalendarUrl,
   buildScheduleSlotCalendarEvent,
+  buildYandexCalendarUrl,
   downloadCalendarIcs,
 } from '../../utils/attestationCalendar';
 import { tracker } from '../../utils/tracker';
@@ -326,6 +327,22 @@ export function CertificationSection() {
             className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
           >
             <span>Google Календарь</span>
+            <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+          </a>
+
+          <a
+            href={buildYandexCalendarUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() =>
+              tracker.trackCustomInteraction(
+                `График аттестаций · Яндекс Календарь: ${activeSlot.start}`,
+                activeSlot.category
+              )
+            }
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-white border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+          >
+            <span>Яндекс Календарь</span>
             <ExternalLink className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
           </a>
 

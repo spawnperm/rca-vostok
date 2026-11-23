@@ -143,6 +143,9 @@ import {
   AssistantServiceError,
   generateRcaAssistantReply,
 } from './src/infrastructure/ai/RcaAssistantService.ts';
+import { GitSyncAuthService } from './src/infrastructure/git/GitSyncAuth.ts';
+import { GitSyncService } from './src/infrastructure/git/GitSyncService.ts';
+import { createGitRouter } from './src/infrastructure/http/GitRouter.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -629,6 +632,18 @@ async function startServer() {
       handleDomainError(err, res);
     }
   });
+
+  // Git repository sync (commit & push to origin/main, admin RBAC or operator passcode)
+  const gitAuth = new GitSyncAuthService({ dataDir: DATA_DIR });
+  const gitSync = new GitSyncService(__dirname);
+  app.use(
+    createGitRouter({
+      gitAuth,
+      gitSync,
+      unlockRateLimit: createRateLimit(rateLimiter, 'git-unlock-ip'),
+      pushRateLimit: createRateLimit(rateLimiter, 'git-push-ip'),
+    })
+  );
 
   // Interactive API documentation (Scalar) + raw OpenAPI document.
   mountApiDocs(app);

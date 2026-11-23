@@ -18,6 +18,7 @@ import {
   ATTESTATION_CALENDAR_EVENTS,
   buildCalendarMonthCells,
   buildGoogleCalendarUrl,
+  buildYandexCalendarUrl,
   CALENDAR_KEY_MONTHS,
   downloadCalendarIcs,
   getEventsForDate,
@@ -436,6 +437,22 @@ export const AttestationEventsCalendarWidget: React.FC<
                   className="px-3.5 py-2 bg-white border border-slate-300 text-slate-800 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
                 >
                   <span>Google Календарь</span>
+                  <ExternalLink className="w-3 h-3 text-slate-500" aria-hidden="true" />
+                </a>
+
+                <a
+                  href={buildYandexCalendarUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() =>
+                    tracker.trackCustomInteraction(
+                      `Яндекс Календарь: ${selectedEvent.shortTitle}`,
+                      selectedEvent.startDateIso
+                    )
+                  }
+                  className="px-3.5 py-2 bg-white border border-slate-300 text-slate-800 text-xs font-medium rounded-lg hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <span>Яндекс Календарь</span>
                   <ExternalLink className="w-3 h-3 text-slate-500" aria-hidden="true" />
                 </a>
 

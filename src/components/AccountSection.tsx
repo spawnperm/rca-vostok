@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   CheckCircle2,
+  GitBranch,
+  HelpCircle,
   LogIn,
   LogOut,
   ShieldCheck,
@@ -54,7 +56,13 @@ function hasPermission(user: SessionUser | null, permission: string): boolean {
   return Boolean(user?.permissions?.includes(permission));
 }
 
-export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) => void } = {}) {
+export function AccountSection({
+  onNavigate,
+  onOpenGitSync,
+}: {
+  onNavigate?: (tab: SiteTabId) => void;
+  onOpenGitSync?: () => void;
+} = {}) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -224,7 +232,11 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
 
   return (
     <div className="space-y-6">
-      <CabinetHeader user={user} onLogout={handleLogout} />
+      <CabinetHeader
+        user={user}
+        onLogout={handleLogout}
+        onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
+      />
       <AttestationProgressWidget
         user={user}
         inquiries={inquiries}
@@ -294,6 +306,28 @@ export function AccountSection({ onNavigate }: { onNavigate?: (tab: SiteTabId) =
         <div className="space-y-6">
           <PermissionsCard user={user} />
           {hasPermission(user, 'users:manage') && <UserAdminCard currentUserId={user.id} />}
+          {onOpenGitSync && hasPermission(user, 'users:manage') && (
+            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900 inline-flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-teal-700" aria-hidden="true" />
+                  <span>Публикация в репозиторий</span>
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Фиксация изменений коммитом и отправка в ветку <code className="font-mono">main</code>{' '}
+                  репозитория <code className="font-mono">spawnperm/rca-vostok</code>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenGitSync}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <GitBranch className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
+                <span>Зафиксировать и отправить в main</span>
+              </button>
+            </section>
+          )}
         </div>
       </div>
 
@@ -550,7 +584,15 @@ function Field({
 
 // ── Cabinet header ──────────────────────────────────────────────────────────
 
-function CabinetHeader({ user, onLogout }: { user: SessionUser; onLogout: () => void }) {
+function CabinetHeader({
+  user,
+  onLogout,
+  onJumpToFaq,
+}: {
+  user: SessionUser;
+  onLogout: () => void;
+  onJumpToFaq: () => void;
+}) {
   return (
     <section className="bg-white border border-slate-200 rounded-xl p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -571,14 +613,25 @@ function CabinetHeader({ user, onLogout }: { user: SessionUser; onLogout: () => 
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onLogout}
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-        >
-          <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
-          Выйти
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onJumpToFaq}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold rounded-lg hover:bg-teal-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>FAQ и нормативы</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onLogout}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-50 border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Выйти</span>
+          </button>
+        </div>
       </div>
     </section>
   );

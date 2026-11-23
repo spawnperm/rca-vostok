@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { Bell, ChevronLeft, ChevronRight, Menu, UserRound, X } from 'lucide-react';
+import { Bell, ChevronLeft, ChevronRight, GitBranch, Menu, UserRound, X } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { GitSyncModal } from './components/GitSyncModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import {
   LandingHero,
@@ -165,6 +166,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
+  const [gitSyncOpen, setGitSyncOpen] = useState<boolean>(false);
+  const [gitBearerToken, setGitBearerToken] = useState<string | null>(null);
 
   useEffect(() => {
     const cleanup = tracker.init(activeTab);
@@ -350,7 +353,12 @@ export default function App() {
               {activeTab === 'dissertation' && <DissertationSection />}
               {activeTab === 'presentations' && <PresentationsSection />}
               {activeTab === 'analytics' && <AnalyticsSection />}
-              {activeTab === 'account' && <AccountSection onNavigate={navigateTo} />}
+              {activeTab === 'account' && (
+                <AccountSection
+                  onNavigate={navigateTo}
+                  onOpenGitSync={() => setGitSyncOpen(true)}
+                />
+              )}
             </Suspense>
           </ErrorBoundary>
         </main>
@@ -404,6 +412,23 @@ export default function App() {
                 );
               })}
             </nav>
+
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setGitSyncOpen(true);
+                  tracker.trackCustomInteraction('Открытие синхронизации Git', 'sidebar');
+                }}
+                title={!sidebarOpen ? 'Отправить в main (Git)' : undefined}
+                className={`w-full inline-flex items-center gap-2 rounded-lg text-xs font-semibold border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                  sidebarOpen ? 'px-3 py-2 justify-start' : 'px-2 py-2 justify-center'
+                }`}
+              >
+                <GitBranch className="w-3.5 h-3.5 text-teal-700 shrink-0" aria-hidden="true" />
+                {sidebarOpen && <span>Отправить в main</span>}
+              </button>
+            </div>
           </div>
         </aside>
       </div>
@@ -451,6 +476,20 @@ export default function App() {
                 </button>
               );
             })}
+            <div className="pt-3 mt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileSidebarOpen(false);
+                  setGitSyncOpen(true);
+                  tracker.trackCustomInteraction('Открытие синхронизации Git', 'mobile_drawer');
+                }}
+                className="w-full inline-flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <GitBranch className="w-4 h-4 text-teal-700 shrink-0" aria-hidden="true" />
+                <span>Отправить в main</span>
+              </button>
+            </div>
           </nav>
         </div>
       )}
@@ -488,6 +527,13 @@ export default function App() {
         open={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
         onNavigate={navigateTo}
+      />
+
+      <GitSyncModal
+        open={gitSyncOpen}
+        onClose={() => setGitSyncOpen(false)}
+        bearerToken={gitBearerToken}
+        onTokenChange={setGitBearerToken}
       />
     </div>
   );
