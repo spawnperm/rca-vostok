@@ -36,6 +36,7 @@ export interface ExperienceLogEntry {
   regionName: string;
   complexity: ExpeditionComplexity;
   participantsCount: number;
+  distanceKm?: number | null;
   notes: string;
   createdAt: string;
 }
@@ -46,6 +47,7 @@ export interface JournalEntryDraftInput {
   regionId: DfoJournalRegionId;
   complexity: ExpeditionComplexity;
   participantsCount: number | string;
+  distanceKm?: number | string | null;
   notes?: string;
 }
 
@@ -225,6 +227,7 @@ export class ExperienceEntry {
   readonly regionName: string;
   readonly complexity: ExpeditionComplexity;
   readonly participantsCount: number;
+  readonly distanceKm: number | null;
   readonly notes: string;
   readonly createdAt: string;
 
@@ -236,6 +239,7 @@ export class ExperienceEntry {
     this.regionName = props.regionName;
     this.complexity = props.complexity;
     this.participantsCount = props.participantsCount;
+    this.distanceKm = props.distanceKm ?? null;
     this.notes = props.notes;
     this.createdAt = props.createdAt;
   }
@@ -271,6 +275,20 @@ export class ExperienceEntry {
       );
     }
 
+    let distanceKm: number | null = null;
+    if (input.distanceKm !== undefined && input.distanceKm !== null) {
+      const rawDist = String(input.distanceKm).trim().replace(',', '.');
+      if (rawDist !== '') {
+        const parsedDist = Number.parseFloat(rawDist);
+        if (!Number.isFinite(parsedDist) || parsedDist <= 0 || parsedDist > 5000) {
+          throw new ValidationError(
+            'Протяжённость маршрута должна быть от 0.1 до 5000 км.'
+          );
+        }
+        distanceKm = Math.round(parsedDist * 10) / 10;
+      }
+    }
+
     const cleanTitle =
       (typeof input.routeTitle === 'string' ? input.routeTitle.trim() : '').slice(0, 140) ||
       `Маршрут ${input.complexity} · ${region.shortName}`;
@@ -288,6 +306,7 @@ export class ExperienceEntry {
       regionName: region.name,
       complexity: input.complexity,
       participantsCount: Math.round(countNum),
+      distanceKm,
       notes: cleanNotes,
       createdAt: now.toISOString(),
     });
@@ -306,6 +325,7 @@ export class ExperienceEntry {
       regionName: this.regionName,
       complexity: this.complexity,
       participantsCount: this.participantsCount,
+      distanceKm: this.distanceKm,
       notes: this.notes,
       createdAt: this.createdAt,
     };
@@ -343,6 +363,7 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       regionName: homeRegion.name,
       complexity: '2 КС',
       participantsCount: 14,
+      distanceKm: 18.5,
       notes: 'Уведомление МЧС за 10 дней, проверка групповой аптечки WFA и раций.',
       createdAt: '2026-10-13T08:00:00Z',
     },
@@ -354,6 +375,7 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       regionName: 'Камчатский край',
       complexity: '3 КС',
       participantsCount: 10,
+      distanceKm: 54.0,
       notes: 'Рафтинг и катамараны-4, страховка с берега, безаварийное прохождение.',
       createdAt: '2026-09-20T10:00:00Z',
     },
@@ -365,6 +387,7 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       regionName: 'Хабаровский край',
       complexity: '4 КС',
       participantsCount: 9,
+      distanceKm: 82.0,
       notes: 'Согласование маршрута с администрацией Буреинского заповедника.',
       createdAt: '2026-08-26T09:30:00Z',
     },
@@ -376,6 +399,7 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       regionName: 'Сахалинская область',
       complexity: '1 КС',
       participantsCount: 16,
+      distanceKm: 16.2,
       notes: 'Контроль приливно-отливной таблицы и брифинг по технике безопасности.',
       createdAt: '2026-07-12T14:00:00Z',
     },
@@ -387,6 +411,7 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       regionName: 'Приморский край',
       complexity: '1 КС',
       participantsCount: 12,
+      distanceKm: 21.4,
       notes: 'Отработка навигации в тумане по ГЛОНАСС и бумажной топокарте.',
       createdAt: '2026-06-07T11:15:00Z',
     },

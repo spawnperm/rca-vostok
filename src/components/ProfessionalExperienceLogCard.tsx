@@ -1,12 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import {
   BarChart3,
   Calendar,
   CalendarDays,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Compass,
+  FileUp,
   Filter,
   MapPin,
   Plus,
@@ -14,6 +16,7 @@ import {
   Route,
   Trash2,
   TrendingUp,
+  Upload,
   Users,
 } from 'lucide-react';
 import {
@@ -33,11 +36,13 @@ import { DFO_LABEL_OFFSETS, buildDfoD3MapLayout } from '../utils/dfoD3MapData';
 import {
   EXPERIENCE_COMPLEXITIES,
   JOURNAL_DFO_REGIONS,
+  SAMPLE_DFO_GPX_TRACK,
   buildJournalCalendarMonth,
   computeJournalMetrics,
   experienceJournalGateway,
   extractActiveCalendarMonths,
   formatRussianJournalDate,
+  parseGpxTrack,
   readStoredExperienceJournal,
   resolveInitialCalendarMonth,
   resolveJournalRegionId,
@@ -45,6 +50,7 @@ import {
   type DfoJournalRegionId,
   type ExpeditionComplexity,
   type ExperienceLogEntry,
+  type ParsedGpxTrackResult,
 } from '../utils/experienceJournal';
 import type { SessionUser } from '../utils/identityApi';
 import { tracker } from '../utils/tracker';
@@ -115,10 +121,14 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
   );
   const [complexity, setComplexity] = useState<ExpeditionComplexity>('2 КС');
   const [participantsCount, setParticipantsCount] = useState<string>('10');
+  const [distanceKm, setDistanceKm] = useState<string>('');
   const [routeTitle, setRouteTitle] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [gpxPreview, setGpxPreview] = useState<ParsedGpxTrackResult | null>(null);
+  const [isDraggingGpx, setIsDraggingGpx] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
+  const gpxInputRef = useRef<HTMLInputElement | null>(null);
 
   // Visualization & table filters
   const [activeTab, setActiveTab] = useState<VisualizationTab>('map');
@@ -180,6 +190,70 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
     });
   }, [entries, regionFilter, complexityFilter]);
 
+  const applyGpxXml = (xmlText: string, fileName: string) => {
+    setFormError(null);
+    setStatusNotice(null);
+    try {
+      const parsed = parseGpxTrack(xmlText, fileName);
+      setRegionId(parsed.regionId);
+      setSelectedMapRegionId(parsed.regionId);
+      if (parsed.date) {
+        setDate(parsed.date);
+        const [yStr, mStr] = parsed.date.split('-');
+        const yNum = Number.parseInt(yStr, 10);
+        const mNum = Number.parseInt(mStr, 10);
+        if (!Number.isNaN(yNum) && !Number.isNaN(mNum)) {
+          setCalendarYear(yNum);
+          setCalendarMonth(mNum);
+        }
+        setSelectedCalendarDate(parsed.date);
+      }
+      setDistanceKm(parsed.distanceKm > 0 ? String(parsed.distanceKm) : '');
+      setRouteTitle(parsed.routeTitle);
+      setNotes(parsed.suggestedNotes);
+      setGpxPreview(parsed);
+      setStatusNotice(
+        `Трек «${parsed.routeTitle}» импортирован: ${parsed.regionName}, ${parsed.distanceKm.toFixed(1)} км${
+          parsed.date ? `, дата ${formatRussianJournalDate(parsed.date)}` : ''
+        }. Проверьте параметры и нажмите «Добавить запись в журнал».`
+      );
+      tracker.trackCustomInteraction(
+        'Журнал опыта · Импорт GPX-трека',
+        `${parsed.regionId}:${parsed.distanceKm}км`
+      );
+    } catch (err) {
+      setGpxPreview(null);
+      setFormError(
+        err instanceof Error ? err.message : 'Не удалось прочитать GPX-файл.'
+      );
+    }
+  };
+
+  const handleGpxFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      applyGpxXml(text, file.name);
+    } catch {
+      setFormError('Не удалось прочитать содержимое выбранного файла.');
+    }
+  };
+
+  const handleGpxDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingGpx(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      applyGpxXml(text, file.name);
+    } catch {
+      setFormError('Не удалось прочитать перетащенный GPX-файл.');
+    }
+  };
+
   const handleAddEntry = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isSyncing) return;
@@ -197,6 +271,7 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
           regionId,
           complexity,
           participantsCount,
+          distanceKm: distanceKm.trim() || null,
           notes,
         },
       });
@@ -211,9 +286,13 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
       }
       setSelectedCalendarDate(result.entry.date);
       setRouteTitle('');
+      setDistanceKm('');
       setNotes('');
+      setGpxPreview(null);
       setStatusNotice(
-        `Запись добавлена: ${result.entry.routeTitle} (${result.entry.regionName}, ${result.entry.complexity}, ${result.entry.participantsCount} чел.).`
+        `Запись добавлена: ${result.entry.routeTitle} (${result.entry.regionName}, ${result.entry.complexity}${
+          result.entry.distanceKm ? `, ${result.entry.distanceKm} км` : ''
+        }, ${result.entry.participantsCount} чел.).`
       );
       tracker.trackCustomInteraction(
         'Журнал опыта · Добавлен поход',
@@ -315,7 +394,14 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
             <Route className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
             <span>Проведено походов</span>
           </p>
-          <p className="text-xl font-bold text-slate-900 tabular-nums">{metrics.totalTrips}</p>
+          <p className="text-xl font-bold text-slate-900 tabular-nums">
+            {metrics.totalTrips}{' '}
+            {metrics.totalDistanceKm > 0 && (
+              <span className="text-xs font-semibold text-teal-700">
+                · {metrics.totalDistanceKm} км
+              </span>
+            )}
+          </p>
         </div>
 
         <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 space-y-1">
@@ -365,6 +451,78 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
             <span className="text-[11px] text-slate-500">
               {userId ? 'Синхронизация с ЛК' : 'Сохраняется локально'}
             </span>
+          </div>
+
+          {/* GPX Track Importer */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDraggingGpx(true);
+            }}
+            onDragLeave={() => setIsDraggingGpx(false)}
+            onDrop={(e) => void handleGpxDrop(e)}
+            className={`rounded-lg border border-dashed p-3.5 transition-colors space-y-2.5 ${
+              isDraggingGpx
+                ? 'border-teal-600 bg-teal-50/80'
+                : 'border-slate-300 bg-white'
+            }`}
+          >
+            <input
+              ref={gpxInputRef}
+              type="file"
+              accept=".gpx,application/gpx+xml,text/xml,application/xml"
+              onChange={(e) => void handleGpxFileInput(e)}
+              aria-label="Импортировать GPX-трек похода"
+              className="hidden"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-slate-900 inline-flex items-center gap-1.5">
+                  <FileUp className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                  <span>Импорт GPX-трека</span>
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Автозаполнение региона ДФО, даты и протяжённости из GPS-трека
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => gpxInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-900 text-[11px] font-semibold rounded-md transition-colors cursor-pointer"
+                >
+                  <Upload className="w-3 h-3" aria-hidden="true" />
+                  <span>Выбрать .gpx</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyGpxXml(SAMPLE_DFO_GPX_TRACK, 'pidan_traverse.gpx')}
+                  className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-medium rounded-md transition-colors cursor-pointer"
+                >
+                  Пример GPX
+                </button>
+              </div>
+            </div>
+
+            {gpxPreview && (
+              <div className="bg-emerald-50/80 border border-emerald-200 rounded-md px-3 py-2 text-[11px] text-emerald-950 space-y-1">
+                <p className="font-semibold inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />
+                  <span>Распознан трек ({gpxPreview.fileName})</span>
+                </p>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-emerald-900">
+                  <span>Регион: <strong>{gpxPreview.regionName}</strong></span>
+                  <span>Дистанция: <strong>{gpxPreview.distanceKm.toFixed(1)} км</strong></span>
+                  {gpxPreview.date && (
+                    <span>Дата: <strong>{formatRussianJournalDate(gpxPreview.date)}</strong></span>
+                  )}
+                  {gpxPreview.elevationGainM !== null && gpxPreview.elevationGainM > 0 && (
+                    <span>Набор: <strong>+{gpxPreview.elevationGainM} м</strong></span>
+                  )}
+                  <span>Точек: <strong>{gpxPreview.pointsCount}</strong></span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -426,18 +584,34 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
             </label>
           </div>
 
-          <label className="block space-y-1">
-            <span className="text-xs font-medium text-slate-700">
-              Нитка маршрута / объект (необязательно)
-            </span>
-            <input
-              type="text"
-              value={routeTitle}
-              onChange={(e) => setRouteTitle(e.target.value)}
-              placeholder="Напр.: Хребет Чандалаз или сплав по р. Кема"
-              className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
-            />
-          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1 sm:col-span-2">
+              <span className="text-xs font-medium text-slate-700">
+                Нитка маршрута / объект (необязательно)
+              </span>
+              <input
+                type="text"
+                value={routeTitle}
+                onChange={(e) => setRouteTitle(e.target.value)}
+                placeholder="Напр.: Хребет Чандалаз или сплав по р. Кема"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-slate-700">Дистанция, км</span>
+              <input
+                type="number"
+                min={0.1}
+                max={5000}
+                step={0.1}
+                value={distanceKm}
+                onChange={(e) => setDistanceKm(e.target.value)}
+                placeholder="Напр. 18.5"
+                className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
+              />
+            </label>
+          </div>
 
           <label className="block space-y-1">
             <span className="text-xs font-medium text-slate-700">
@@ -1091,7 +1265,14 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
                       {formatRussianJournalDate(entry.date)}
                     </td>
                     <td className="py-3 px-3.5 align-top">
-                      <p className="font-semibold text-slate-900">{entry.routeTitle}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold text-slate-900">{entry.routeTitle}</p>
+                        {typeof entry.distanceKm === 'number' && entry.distanceKm > 0 && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px] font-semibold text-slate-700 tabular-nums">
+                            {entry.distanceKm} км
+                          </span>
+                        )}
+                      </div>
                       {entry.notes && (
                         <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
                           {entry.notes}

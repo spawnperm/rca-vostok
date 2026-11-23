@@ -18,6 +18,7 @@ import type { ExperienceJournalRepository } from '../domain/experience/Experienc
 
 export * from '../domain/experience/ExperienceEntry.ts';
 export * from '../domain/experience/ExperienceAnalyticsService.ts';
+export * from '../domain/experience/GpxTrackParser.ts';
 export type { ExperienceJournalRepository } from '../domain/experience/ExperienceJournalRepository.ts';
 export {
   GetExperienceJournalUseCase,

@@ -40,6 +40,7 @@ export interface ComplexityJournalPoint {
 export interface ExperienceJournalMetrics {
   totalTrips: number;
   totalParticipants: number;
+  totalDistanceKm: number;
   activeRegionsCount: number;
   maxComplexity: ExpeditionComplexity | '—';
   avgGroupSize: number;
@@ -177,11 +178,15 @@ export function computeJournalMetrics(
   }
 
   let totalParticipants = 0;
+  let totalDistanceKmRaw = 0;
   let globalMaxRank = -1;
   let globalMaxComplexity: ExpeditionComplexity | '—' = '—';
 
   for (const entry of entries) {
     totalParticipants += entry.participantsCount;
+    if (typeof entry.distanceKm === 'number' && Number.isFinite(entry.distanceKm)) {
+      totalDistanceKmRaw += entry.distanceKm;
+    }
 
     const rank = COMPLEXITY_RANK[entry.complexity] ?? 0;
     if (rank > globalMaxRank) {
@@ -250,6 +255,7 @@ export function computeJournalMetrics(
   return {
     totalTrips,
     totalParticipants,
+    totalDistanceKm: Math.round(totalDistanceKmRaw * 10) / 10,
     activeRegionsCount,
     maxComplexity: globalMaxComplexity,
     avgGroupSize,

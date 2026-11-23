@@ -77,6 +77,12 @@ export function createExperienceJournalRouter(
             typeof body.participantsCount === 'string'
               ? body.participantsCount
               : '',
+          distanceKm:
+            typeof body.distanceKm === 'number' ||
+            typeof body.distanceKm === 'string' ||
+            body.distanceKm === null
+              ? body.distanceKm
+              : undefined,
           notes: typeof body.notes === 'string' ? body.notes : '',
         },
       });
