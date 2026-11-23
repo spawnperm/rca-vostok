@@ -3,6 +3,7 @@ import {
   Award,
   BarChart3,
   Briefcase,
+  CalendarClock,
   CalendarDays,
   CheckCircle2,
   Compass,
@@ -38,6 +39,7 @@ import {
   type UserAttestationSummary,
 } from './AttestationProgressWidget';
 import { ApplicationProgressIndicator } from './ApplicationProgressIndicator';
+import { AttestationExpiryMonitorWidget } from './AttestationExpiryMonitorWidget';
 import { AttestationPathWidget } from './AttestationPathWidget';
 import { AttestationSessionsCalendarWidget } from './AttestationSessionsCalendarWidget';
 import { LinkedAccountsCard } from './LinkedAccountsCard';
@@ -121,6 +123,10 @@ export function AccountSection({
     null
   );
   const [selectedExamDate, setSelectedExamDate] = useState<string | undefined>(undefined);
+  const [reattestationPrefill, setReattestationPrefill] = useState<{
+    note: string;
+    nonce: number;
+  } | null>(null);
   const [selectedContour, setSelectedContour] = useState<'contour_b' | 'contour_a'>('contour_b');
   const [reviewsRefreshKey, setReviewsRefreshKey] = useState<number>(0);
   const [selfCheckRevision, setSelfCheckRevision] = useState<number>(0);
@@ -338,6 +344,21 @@ export function AccountSection({
           onAuthenticated={handleAuthenticated}
           onForgotPassword={() => setShowForgot(true)}
         />
+        <AttestationExpiryMonitorWidget
+          user={null}
+          inquiries={[]}
+          onBookReattestation={({ recommendedSessionDate, note }) => {
+            if (recommendedSessionDate) {
+              setSelectedExamDate(recommendedSessionDate);
+            }
+            setReattestationPrefill((prev) => ({
+              note,
+              nonce: (prev?.nonce ?? 0) + 1,
+            }));
+            scrollToElementById('attestation-sessions-calendar');
+          }}
+          onFocusAuth={() => scrollToElementById('account-auth-panel')}
+        />
         <ApplicationProgressIndicator
           user={null}
           inquiries={[]}
@@ -473,6 +494,7 @@ export function AccountSection({
         onDownloadCertificate={handleDownloadFinalCertificate}
         onLogout={handleLogout}
         onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
+        onJumpToExpiryMonitor={() => scrollToElementById('attestation-expiry-monitor')}
         onJumpToLinkedProfiles={() => scrollToElementById('account-linked-profiles')}
         onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
         onJumpToLearningPlan={() => scrollToElementById('personal-learning-plan')}
@@ -523,6 +545,22 @@ export function AccountSection({
           </div>
         </div>
       )}
+      <AttestationExpiryMonitorWidget
+        user={user}
+        inquiries={inquiries}
+        onUserUpdated={handleAuthenticated}
+        onJumpToProfile={() => scrollToElementById('account-profile-card')}
+        onBookReattestation={({ recommendedSessionDate, note }) => {
+          if (recommendedSessionDate) {
+            setSelectedExamDate(recommendedSessionDate);
+          }
+          setReattestationPrefill((prev) => ({
+            note,
+            nonce: (prev?.nonce ?? 0) + 1,
+          }));
+          scrollToElementById('attestation-sessions-calendar');
+        }}
+      />
       <ApplicationProgressIndicator
         user={user}
         inquiries={inquiries}
@@ -561,6 +599,7 @@ export function AccountSection({
         selectedExamDate={selectedExamDate}
         linkedAccounts={linkedAccounts}
         autofill={examAutofill}
+        externalReattestationPrefill={reattestationPrefill}
         onSelectAutofillSource={(provider) => void handleSelectAutofillSource(provider)}
         onJumpToLinkedAccounts={() => scrollToElementById('account-linked-profiles')}
         onSelectExamDate={setSelectedExamDate}
@@ -1120,6 +1159,7 @@ function CabinetHeader({
   onDownloadCertificate,
   onLogout,
   onJumpToCalendar,
+  onJumpToExpiryMonitor,
   onJumpToLinkedProfiles,
   onJumpToDiagnostics,
   onJumpToLearningPlan,
@@ -1139,6 +1179,7 @@ function CabinetHeader({
   onDownloadCertificate: () => void;
   onLogout: () => void;
   onJumpToCalendar: () => void;
+  onJumpToExpiryMonitor: () => void;
   onJumpToLinkedProfiles: () => void;
   onJumpToDiagnostics: () => void;
   onJumpToLearningPlan: () => void;
@@ -1193,6 +1234,15 @@ function CabinetHeader({
           >
             <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Календарь аттестаций</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onJumpToExpiryMonitor}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <CalendarClock className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>Срок аттестации</span>
           </button>
 
           <button
@@ -1329,6 +1379,9 @@ function ProfileCard({
   const [fullName, setFullName] = useState<string>(user.fullName);
   const [region, setRegion] = useState<string>(user.region);
   const [organisation, setOrganisation] = useState<string>(user.organisation);
+  const [attestationExpiresAt, setAttestationExpiresAt] = useState<string>(
+    user.attestationExpiresAt ?? ''
+  );
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -1336,6 +1389,7 @@ function ProfileCard({
     setFullName(user.fullName);
     setRegion(user.region);
     setOrganisation(user.organisation);
+    setAttestationExpiresAt(user.attestationExpiresAt ?? '');
   }, [user]);
 
   const canEdit = user.permissions.includes('profile:edit_own');
@@ -1345,7 +1399,12 @@ function ProfileCard({
     setError(null);
     setStatus('saving');
     try {
-      const updated = await identityApi.updateProfile({ fullName, region, organisation });
+      const updated = await identityApi.updateProfile({
+        fullName,
+        region,
+        organisation,
+        attestationExpiresAt: attestationExpiresAt.trim() || null,
+      });
       onUpdated(updated);
       setStatus('saved');
       tracker.trackCustomInteraction('Обновление профиля', 'account');
@@ -1419,6 +1478,21 @@ function ProfileCard({
             />
           </Field>
         </div>
+
+        <Field
+          label="Дата окончания текущей аттестации"
+          htmlFor="profile-attestation-expires-at"
+          hint="Монитор в личном кабинете выведет предупреждение за 3 месяца до указанной даты"
+        >
+          <input
+            id="profile-attestation-expires-at"
+            type="date"
+            value={attestationExpiresAt}
+            disabled={!canEdit}
+            onChange={(e) => setAttestationExpiresAt(e.target.value)}
+            className="w-full sm:max-w-xs px-3 py-2.5 text-sm border border-slate-300 rounded-lg bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100 disabled:bg-slate-50 disabled:text-slate-500"
+          />
+        </Field>
 
         {error && (
           <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

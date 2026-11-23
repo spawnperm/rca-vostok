@@ -24,6 +24,7 @@ export interface UserDTO {
   role: Role;
   permissions: Permission[];
   isActive: boolean;
+  attestationExpiresAt: string | null;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -35,12 +36,14 @@ export interface CreateUserInput {
   region?: unknown;
   organisation?: unknown;
   role?: unknown;
+  attestationExpiresAt?: unknown;
 }
 
 export interface UpdateProfileInput {
   fullName?: unknown;
   region?: unknown;
   organisation?: unknown;
+  attestationExpiresAt?: unknown;
 }
 
 /** Password policy is a domain rule, not a controller concern. */
@@ -57,6 +60,7 @@ export class User {
   readonly passwordHash: string;
   readonly passwordSalt: string;
   readonly isActive: boolean;
+  readonly attestationExpiresAt: string | null;
   readonly createdAt: string;
   readonly lastLoginAt: string | null;
 
@@ -70,6 +74,7 @@ export class User {
     passwordHash: string;
     passwordSalt: string;
     isActive: boolean;
+    attestationExpiresAt: string | null;
     createdAt: string;
     lastLoginAt: string | null;
   }) {
@@ -82,8 +87,41 @@ export class User {
     this.passwordHash = props.passwordHash;
     this.passwordSalt = props.passwordSalt;
     this.isActive = props.isActive;
+    this.attestationExpiresAt = props.attestationExpiresAt;
     this.createdAt = props.createdAt;
     this.lastLoginAt = props.lastLoginAt;
+  }
+
+  static parseAttestationExpiresAt(input: unknown): string | null {
+    if (input === null || input === undefined) {
+      return null;
+    }
+    if (typeof input !== 'string') {
+      throw new ValidationError('Некорректный формат даты истечения аттестации.');
+    }
+    const trimmed = input.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      throw new ValidationError(
+        'Укажите дату истечения аттестации в формате ГГГГ-ММ-ДД.'
+      );
+    }
+    const [yStr, mStr, dStr] = trimmed.split('-');
+    const year = Number(yStr);
+    const month = Number(mStr);
+    const day = Number(dStr);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() + 1 !== month ||
+      parsed.getUTCDate() !== day
+    ) {
+      throw new ValidationError('Указана несуществующая календарная дата аттестации.');
+    }
+    return trimmed;
   }
 
   /**
@@ -103,6 +141,10 @@ export class User {
       SanitizedText.sanitizeRaw(input.region, 80) || 'Приморский край';
     const organisation = SanitizedText.sanitizeRaw(input.organisation, 160);
     const role = parseRole(input.role, ROLES.CANDIDATE);
+    const attestationExpiresAt =
+      input.attestationExpiresAt === undefined
+        ? null
+        : User.parseAttestationExpiresAt(input.attestationExpiresAt);
 
     const user = new User({
       id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -115,6 +157,7 @@ export class User {
       passwordHash: '',
       passwordSalt: '',
       isActive: true,
+      attestationExpiresAt,
       createdAt: new Date().toISOString(),
       lastLoginAt: null,
     });
@@ -161,6 +204,7 @@ export class User {
       passwordHash: material.passwordHash,
       passwordSalt: material.passwordSalt,
       isActive: this.isActive,
+      attestationExpiresAt: this.attestationExpiresAt,
       createdAt: this.createdAt,
       lastLoginAt: this.lastLoginAt,
     });
@@ -177,6 +221,7 @@ export class User {
     passwordHash: string;
     passwordSalt: string;
     isActive: boolean;
+    attestationExpiresAt?: string | null;
     createdAt: string;
     lastLoginAt: string | null;
   }): User {
@@ -190,6 +235,7 @@ export class User {
       passwordHash: props.passwordHash,
       passwordSalt: props.passwordSalt,
       isActive: props.isActive,
+      attestationExpiresAt: props.attestationExpiresAt ?? null,
       createdAt: props.createdAt,
       lastLoginAt: props.lastLoginAt,
     });
@@ -212,6 +258,10 @@ export class User {
       input.organisation === undefined
         ? this.organisation
         : SanitizedText.sanitizeRaw(input.organisation, 160);
+    const attestationExpiresAt =
+      input.attestationExpiresAt === undefined
+        ? this.attestationExpiresAt
+        : User.parseAttestationExpiresAt(input.attestationExpiresAt);
 
     return new User({
       id: this.id,
@@ -223,6 +273,7 @@ export class User {
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
       isActive: this.isActive,
+      attestationExpiresAt,
       createdAt: this.createdAt,
       lastLoginAt: this.lastLoginAt,
     });
@@ -243,6 +294,7 @@ export class User {
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
       isActive: this.isActive,
+      attestationExpiresAt: this.attestationExpiresAt,
       createdAt: this.createdAt,
       lastLoginAt: this.lastLoginAt,
     });
@@ -259,6 +311,7 @@ export class User {
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
       isActive: this.isActive,
+      attestationExpiresAt: this.attestationExpiresAt,
       createdAt: this.createdAt,
       lastLoginAt: at,
     });
@@ -276,6 +329,7 @@ export class User {
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
       isActive,
+      attestationExpiresAt: this.attestationExpiresAt,
       createdAt: this.createdAt,
       lastLoginAt: this.lastLoginAt,
     });
@@ -303,6 +357,7 @@ export class User {
       role: this.role,
       permissions: [...rolePermissions(this.role)],
       isActive: this.isActive,
+      attestationExpiresAt: this.attestationExpiresAt,
       createdAt: this.createdAt,
       lastLoginAt: this.lastLoginAt,
     };

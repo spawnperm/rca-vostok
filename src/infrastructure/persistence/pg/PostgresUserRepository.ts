@@ -12,6 +12,7 @@ interface UserRow {
   password_hash: string;
   password_salt: string;
   is_active: boolean;
+  attestation_expires_at?: string | null;
   created_at: Date;
   last_login_at: Date | null;
 }
@@ -27,6 +28,7 @@ function toAggregate(row: UserRow): User {
     passwordHash: row.password_hash,
     passwordSalt: row.password_salt,
     isActive: row.is_active,
+    attestationExpiresAt: row.attestation_expires_at ?? null,
     createdAt: row.created_at.toISOString(),
     lastLoginAt: row.last_login_at ? row.last_login_at.toISOString() : null,
   });
@@ -60,8 +62,9 @@ export class PostgresUserRepository implements UserRepository {
     await this.pool.query(
       `INSERT INTO users (
          id, email, full_name, region, organisation, role,
-         password_hash, password_salt, is_active, created_at, last_login_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         password_hash, password_salt, is_active, attestation_expires_at,
+         created_at, last_login_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO UPDATE SET
          email = EXCLUDED.email,
          full_name = EXCLUDED.full_name,
@@ -71,6 +74,7 @@ export class PostgresUserRepository implements UserRepository {
          password_hash = EXCLUDED.password_hash,
          password_salt = EXCLUDED.password_salt,
          is_active = EXCLUDED.is_active,
+         attestation_expires_at = EXCLUDED.attestation_expires_at,
          last_login_at = EXCLUDED.last_login_at`,
       [
         user.id,
@@ -82,6 +86,7 @@ export class PostgresUserRepository implements UserRepository {
         user.passwordHash,
         user.passwordSalt,
         user.isActive,
+        user.attestationExpiresAt,
         user.createdAt,
         user.lastLoginAt,
       ]

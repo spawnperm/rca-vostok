@@ -68,6 +68,7 @@ const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> 
   { version: '005_media', run: (p) => migrateMedia(p) },
   { version: '006_guide_leaderboard', run: (p) => migrateGuideLeaderboard(p) },
   { version: '007_linked_accounts', run: (p) => migrateLinkedAccounts(p) },
+  { version: '008_user_attestation_expiry', run: (p) => migrateUserAttestationExpiry(p) },
 ];
 
 /**
@@ -767,4 +768,13 @@ async function migrateLinkedAccounts(pool: pg.Pool): Promise<void> {
       ON user_linked_accounts (user_id, updated_at DESC);
   `);
 }
+
+/** User profile attestation expiry column for re-attestation monitoring. */
+async function migrateUserAttestationExpiry(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS attestation_expires_at TEXT;
+  `);
+}
+
 

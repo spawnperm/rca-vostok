@@ -80,6 +80,7 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
         fullName: body.fullName,
         region: body.region,
         organisation: body.organisation,
+        attestationExpiresAt: body.attestationExpiresAt,
       });
 
       // Registrations signed in immediately, so the cabinet is usable at once.
@@ -210,6 +211,7 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
           fullName: body.fullName,
           region: body.region,
           organisation: body.organisation,
+          attestationExpiresAt: body.attestationExpiresAt,
         })
       );
     } catch (err) {

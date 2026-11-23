@@ -55,6 +55,7 @@ interface AttestationSessionsCalendarWidgetProps {
   onSelectExamDate?: (sessionDateIso: string) => void;
   onJumpToInquiries?: () => void;
   onFocusAuth?: (mode?: 'login' | 'register') => void;
+  externalReattestationPrefill?: { note: string; nonce: number } | null;
 }
 
 const DISCIPLINE_TO_TRACK: Record<string, string> = {
@@ -108,6 +109,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
   onSelectExamDate,
   onJumpToInquiries,
   onFocusAuth,
+  externalReattestationPrefill,
 }) => {
   const allSessions = useMemo(() => getInPersonExamSchedule(), []);
   const [disciplineFilter, setDisciplineFilter] = useState<ExamDisciplineFilter>('all');
@@ -171,6 +173,11 @@ export const AttestationSessionsCalendarWidget: React.FC<
       setViewMonth({ year: matched.year, month: matched.month });
     }
   }, [selectedExamDate, allSessions]);
+
+  useEffect(() => {
+    if (!externalReattestationPrefill?.note) return;
+    setExperienceNote(externalReattestationPrefill.note);
+  }, [externalReattestationPrefill]);
 
   // Keep selectedSessionStart aligned if a discipline filter hides the current selection
   useEffect(() => {

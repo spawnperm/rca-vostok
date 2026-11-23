@@ -44,6 +44,7 @@ export class RegisterUserUseCase {
     fullName: unknown;
     region?: unknown;
     organisation?: unknown;
+    attestationExpiresAt?: unknown;
   }): Promise<UserDTO> {
     // Build the aggregate from an explicit whitelist. TypeScript types are
     // erased at runtime, so spreading `input` here would let a caller smuggle
@@ -55,6 +56,7 @@ export class RegisterUserUseCase {
       fullName: input.fullName,
       region: input.region,
       organisation: input.organisation,
+      attestationExpiresAt: input.attestationExpiresAt,
       role: ROLES.CANDIDATE,
     });
 
