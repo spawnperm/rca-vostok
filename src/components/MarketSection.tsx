@@ -9,6 +9,7 @@ import {
 import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
 import { DfoSubjectsD3SvgMap } from './DfoSubjectsD3SvgMap';
 import { DfoGeographyLeafletMap } from './DfoGeographyLeafletMap';
+import { MarketDfoDemandTableBlock } from './MarketDfoDemandTableBlock';
 import { PrimoryeActivityMap } from './PrimoryeActivityMap';
 
 export const MarketSection: React.FC = () => {
@@ -109,8 +110,11 @@ export const MarketSection: React.FC = () => {
       {/* React-Leaflet Geography: Certified Routes & RCA Offices */}
       <DfoGeographyLeafletMap />
 
-      {/* Interactive Map of Primorsky Krai Guide Activity */}
+      {/* Interactive Map of Primorsky Krai Guide Activity & Route Layers */}
       <PrimoryeActivityMap />
+
+      {/* Interactive DFO Instructor Demand Dropdown & Simple Comparison Table */}
+      <MarketDfoDemandTableBlock />
 
       {/* Visual Comparison of Two Selected DFO Regions */}
       <DfoRegionComparisonChart />
