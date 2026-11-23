@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  classifyComplexityTier,
+  computeComplexityTierDistribution,
   computeJournalMetrics,
   formatJournalMonthLabel,
   formatRussianJournalDate,
@@ -132,4 +134,36 @@ test('getDefaultJournalEntries and date formatters produce sorted Russian entrie
   assert.equal(defaults[0].regionId, 'khabarovsk');
   assert.equal(formatRussianJournalDate('2026-10-12'), '12.10.2026');
   assert.equal(formatJournalMonthLabel('2026-10'), 'Окт 2026');
+});
+
+test('computeComplexityTierDistribution groups trips into easy, medium, and hard slices', () => {
+  assert.equal(classifyComplexityTier('н/к'), 'easy');
+  assert.equal(classifyComplexityTier('1 КС'), 'easy');
+  assert.equal(classifyComplexityTier('2 КС'), 'medium');
+  assert.equal(classifyComplexityTier('3 КС'), 'medium');
+  assert.equal(classifyComplexityTier('4 КС'), 'hard');
+  assert.equal(classifyComplexityTier('5 КС'), 'hard');
+
+  const defaults = getDefaultJournalEntries('Приморский край');
+  const dist = computeComplexityTierDistribution(defaults);
+
+  assert.equal(dist.totalTrips, 5);
+  assert.equal(dist.slices.length, 3);
+  assert.equal(dist.nonZeroSlices.length, 3);
+
+  const easy = dist.slices.find((s) => s.key === 'easy');
+  const medium = dist.slices.find((s) => s.key === 'medium');
+  const hard = dist.slices.find((s) => s.key === 'hard');
+
+  assert.equal(easy?.tripsCount, 2);
+  assert.equal(easy?.sharePct, 40);
+  assert.equal(medium?.tripsCount, 2);
+  assert.equal(medium?.sharePct, 40);
+  assert.equal(hard?.tripsCount, 1);
+  assert.equal(hard?.sharePct, 20);
+
+  const emptyDist = computeComplexityTierDistribution([]);
+  assert.equal(emptyDist.totalTrips, 0);
+  assert.equal(emptyDist.nonZeroSlices.length, 0);
+  assert.equal(emptyDist.dominantTier, null);
 });

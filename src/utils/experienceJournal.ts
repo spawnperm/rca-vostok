@@ -261,10 +261,10 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
     {
       id: 'exp-seed-3',
       date: '2026-08-24',
-      routeTitle: 'Хребет Дуссе-Алинь · радиальные выходы к оз. Медвежье',
+      routeTitle: 'Хребет Дуссе-Алинь · автономный горно-таёжный траверс',
       regionId: 'khabarovsk',
       regionName: 'Хабаровский край',
-      complexity: '2 КС',
+      complexity: '4 КС',
       participantsCount: 9,
       notes: 'Согласование маршрута с администрацией Буреинского заповедника.',
       createdAt: '2026-08-26T09:30:00Z',
@@ -333,6 +333,8 @@ export function readStoredExperienceJournal(
   }
 }
 
+export const EXPERIENCE_JOURNAL_UPDATED_EVENT = 'rca-experience-journal-updated';
+
 export function writeStoredExperienceJournal(
   userId: string | null | undefined,
   entries: readonly ExperienceLogEntry[]
@@ -340,6 +342,11 @@ export function writeStoredExperienceJournal(
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(getStorageKey(userId), JSON.stringify(entries));
+    window.dispatchEvent(
+      new CustomEvent(EXPERIENCE_JOURNAL_UPDATED_EVENT, {
+        detail: { userId: userId ?? null },
+      })
+    );
   } catch {
     // ignore storage quota errors gracefully
   }
@@ -511,3 +518,98 @@ export function computeJournalMetrics(
     complexitySeries,
   };
 }
+
+export type ComplexityTierKey = 'easy' | 'medium' | 'hard';
+
+export interface ComplexityTierSlice {
+  key: ComplexityTierKey;
+  shortName: 'Лёгкие' | 'Средние' | 'Сложные';
+  name: string;
+  description: string;
+  tripsCount: number;
+  participantsCount: number;
+  sharePct: number;
+  color: string;
+}
+
+export interface ComplexityTierDistribution {
+  totalTrips: number;
+  totalParticipants: number;
+  slices: ComplexityTierSlice[];
+  nonZeroSlices: ComplexityTierSlice[];
+  dominantTier: ComplexityTierSlice | null;
+}
+
+export function classifyComplexityTier(complexity: ExpeditionComplexity): ComplexityTierKey {
+  if (complexity === 'н/к' || complexity === '1 КС') return 'easy';
+  if (complexity === '2 КС' || complexity === '3 КС') return 'medium';
+  return 'hard';
+}
+
+export function computeComplexityTierDistribution(
+  entries: readonly ExperienceLogEntry[]
+): ComplexityTierDistribution {
+  const buckets: Record<ComplexityTierKey, { tripsCount: number; participantsCount: number }> = {
+    easy: { tripsCount: 0, participantsCount: 0 },
+    medium: { tripsCount: 0, participantsCount: 0 },
+    hard: { tripsCount: 0, participantsCount: 0 },
+  };
+
+  let totalParticipants = 0;
+  for (const entry of entries) {
+    const tier = classifyComplexityTier(entry.complexity);
+    buckets[tier].tripsCount += 1;
+    buckets[tier].participantsCount += entry.participantsCount;
+    totalParticipants += entry.participantsCount;
+  }
+
+  const totalTrips = entries.length;
+
+  const slices: ComplexityTierSlice[] = [
+    {
+      key: 'easy',
+      shortName: 'Лёгкие',
+      name: 'Лёгкие (н/к, 1 КС)',
+      description: 'Экотропы, ПВД и базовые маршруты начальной категории',
+      tripsCount: buckets.easy.tripsCount,
+      participantsCount: buckets.easy.participantsCount,
+      sharePct: totalTrips > 0 ? Math.round((buckets.easy.tripsCount / totalTrips) * 100) : 0,
+      color: '#14B8A6',
+    },
+    {
+      key: 'medium',
+      shortName: 'Средние',
+      name: 'Средние (2–3 КС)',
+      description: 'Многодневные таёжные, горные и водные маршруты ДФО',
+      tripsCount: buckets.medium.tripsCount,
+      participantsCount: buckets.medium.participantsCount,
+      sharePct: totalTrips > 0 ? Math.round((buckets.medium.tripsCount / totalTrips) * 100) : 0,
+      color: '#0F766E',
+    },
+    {
+      key: 'hard',
+      shortName: 'Сложные',
+      name: 'Сложные (4–5 КС)',
+      description: 'Автономные экспедиционные и сложные категорированные маршруты',
+      tripsCount: buckets.hard.tripsCount,
+      participantsCount: buckets.hard.participantsCount,
+      sharePct: totalTrips > 0 ? Math.round((buckets.hard.tripsCount / totalTrips) * 100) : 0,
+      color: '#D97706',
+    },
+  ];
+
+  const nonZeroSlices = slices.filter((s) => s.tripsCount > 0);
+  const dominantTier =
+    nonZeroSlices.length > 0
+      ? [...nonZeroSlices].sort((a, b) => b.tripsCount - a.tripsCount)[0]
+      : null;
+
+  return {
+    totalTrips,
+    totalParticipants,
+    slices,
+    nonZeroSlices,
+    dominantTier,
+  };
+}
+
