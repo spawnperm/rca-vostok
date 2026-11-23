@@ -353,6 +353,9 @@ export const DfoCertifiedDynamicsLineChart: React.FC<DfoCertifiedDynamicsLineCha
               tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
             />
             <Tooltip
+              trigger="hover"
+              cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+              allowEscapeViewBox={{ x: true, y: true }}
               content={
                 <CertifiedDynamicsTooltip
                   selectedName={selectedRegion.shortName}
@@ -384,8 +387,32 @@ export const DfoCertifiedDynamicsLineChart: React.FC<DfoCertifiedDynamicsLineCha
                 name={`${selectedRegion.shortName}: факт (реестр)`}
                 stroke="#0F766E"
                 strokeWidth={3}
-                dot={{ r: 4.5, strokeWidth: 2, fill: '#0F766E', stroke: '#FFFFFF' }}
-                activeDot={{ r: 6.5 }}
+                dot={(dotProps) => {
+                  const { cx, cy, payload, value } = dotProps as {
+                    cx?: number;
+                    cy?: number;
+                    value?: number | null;
+                    payload?: ChartYearPoint;
+                  };
+                  if (typeof cx !== 'number' || typeof cy !== 'number' || value === null || value === undefined) {
+                    return <g key={`empty-fact-${payload?.year ?? 'x'}`} />;
+                  }
+                  return (
+                    <g key={`dot-fact-${payload?.year}`}>
+                      <title>{`${payload?.year} г. (${selectedRegion.shortName}, факт): ${value.toLocaleString('ru-RU')} инструкторов`}</title>
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={5}
+                        fill="#0F766E"
+                        stroke="#FFFFFF"
+                        strokeWidth={2}
+                        className="cursor-pointer"
+                      />
+                    </g>
+                  );
+                }}
+                activeDot={{ r: 7, fill: '#0F172A', stroke: '#FFFFFF', strokeWidth: 2 }}
                 connectNulls={false}
               />
             )}
@@ -398,8 +425,32 @@ export const DfoCertifiedDynamicsLineChart: React.FC<DfoCertifiedDynamicsLineCha
                 stroke="#0F766E"
                 strokeWidth={2.5}
                 strokeDasharray="6 4"
-                dot={{ r: 4, strokeWidth: 2, fill: '#FFFFFF', stroke: '#0F766E' }}
-                activeDot={{ r: 6 }}
+                dot={(dotProps) => {
+                  const { cx, cy, payload, value } = dotProps as {
+                    cx?: number;
+                    cy?: number;
+                    value?: number | null;
+                    payload?: ChartYearPoint;
+                  };
+                  if (typeof cx !== 'number' || typeof cy !== 'number' || value === null || value === undefined) {
+                    return <g key={`empty-fc-${payload?.year ?? 'x'}`} />;
+                  }
+                  return (
+                    <g key={`dot-fc-${payload?.year}`}>
+                      <title>{`${payload?.year} г. (${selectedRegion.shortName}, прогноз): ${value.toLocaleString('ru-RU')} инструкторов`}</title>
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={4.5}
+                        fill="#FFFFFF"
+                        stroke="#0F766E"
+                        strokeWidth={2}
+                        className="cursor-pointer"
+                      />
+                    </g>
+                  );
+                }}
+                activeDot={{ r: 7, fill: '#0F766E', stroke: '#FFFFFF', strokeWidth: 2 }}
                 connectNulls={false}
               />
             )}
@@ -411,8 +462,32 @@ export const DfoCertifiedDynamicsLineChart: React.FC<DfoCertifiedDynamicsLineCha
                 name={`${comparisonRegion.shortName} (для сравнения)`}
                 stroke="#D97706"
                 strokeWidth={2.25}
-                dot={{ r: 3.5, strokeWidth: 1.75, fill: '#FFFFFF', stroke: '#D97706' }}
-                activeDot={{ r: 5.5 }}
+                dot={(dotProps) => {
+                  const { cx, cy, payload, value } = dotProps as {
+                    cx?: number;
+                    cy?: number;
+                    value?: number | null;
+                    payload?: ChartYearPoint;
+                  };
+                  if (typeof cx !== 'number' || typeof cy !== 'number' || value === null || value === undefined) {
+                    return <g key={`empty-cmp-${payload?.year ?? 'x'}`} />;
+                  }
+                  return (
+                    <g key={`dot-cmp-${payload?.year}`}>
+                      <title>{`${payload?.year} г. (${comparisonRegion.shortName}): ${value.toLocaleString('ru-RU')} инструкторов`}</title>
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={4}
+                        fill="#FFFFFF"
+                        stroke="#D97706"
+                        strokeWidth={1.75}
+                        className="cursor-pointer"
+                      />
+                    </g>
+                  );
+                }}
+                activeDot={{ r: 6.5, fill: '#D97706', stroke: '#FFFFFF', strokeWidth: 2 }}
               />
             )}
           </LineChart>

@@ -340,6 +340,9 @@ export const DfoDemandForecastChart: React.FC<DfoDemandForecastChartProps> = ({
                 tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
               />
               <Tooltip
+                trigger="hover"
+                cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                allowEscapeViewBox={{ x: true, y: true }}
                 content={
                   <CustomForecastTooltip
                     regionFilter={regionFilter}
@@ -362,7 +365,7 @@ export const DfoDemandForecastChart: React.FC<DfoDemandForecastChartProps> = ({
                       stroke={reg.color}
                       strokeWidth={2.5}
                       dot={{ r: 4, strokeWidth: 2, fill: '#FFFFFF' }}
-                      activeDot={{ r: 6 }}
+                      activeDot={{ r: 6.5, stroke: '#FFFFFF', strokeWidth: 2 }}
                     />
                   ))}
                   <Line
@@ -372,7 +375,8 @@ export const DfoDemandForecastChart: React.FC<DfoDemandForecastChartProps> = ({
                     stroke="#0D9488"
                     strokeDasharray="5 5"
                     strokeWidth={2}
-                    dot={{ r: 3, fill: '#0D9488' }}
+                    dot={{ r: 3.5, fill: '#0D9488' }}
+                    activeDot={{ r: 6, fill: '#0D9488', stroke: '#FFFFFF', strokeWidth: 2 }}
                   />
                 </>
               ) : (
@@ -414,6 +418,9 @@ export const DfoDemandForecastChart: React.FC<DfoDemandForecastChartProps> = ({
                 tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
               />
               <Tooltip
+                trigger="hover"
+                cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                allowEscapeViewBox={{ x: true, y: true }}
                 content={
                   <CustomForecastTooltip
                     regionFilter={regionFilter}

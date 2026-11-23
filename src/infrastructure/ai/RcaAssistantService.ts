@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { ATTESTATION_FAQ } from '../../data/researchData.ts';
 import { CERTIFICATION_SCHEDULE, CONTACTS, formatSessionRange } from '../../data/landingContent.ts';
 import { METHODOLOGICAL_MATERIALS } from '../../utils/accountKnowledgeBase.ts';
+import { retrieveSectionRagContext } from '../../utils/rcaRagEngine.ts';
+import type { SiteTabId } from '../../utils/seo.ts';
 
 export const ASSISTANT_MODEL = 'gemini-4-hydrogen';
 
@@ -17,6 +19,10 @@ export const assistantContextSchema = z
     roleLabel: z.string().trim().max(80).optional(),
     progressPercent: z.number().min(0).max(100).optional(),
     activeStageTitle: z.string().trim().max(160).optional(),
+    activeTab: z.string().trim().max(40).optional(),
+    sectionName: z.string().trim().max(120).optional(),
+    sectionDescription: z.string().trim().max(320).optional(),
+    ragPassages: z.array(z.string().trim().max(600)).max(6).optional(),
   })
   .optional();
 
@@ -43,7 +49,10 @@ export class AssistantServiceError extends Error {
   }
 }
 
-export function buildRcaSystemInstruction(context?: AssistantUserContext): string {
+export function buildRcaSystemInstruction(
+  context?: AssistantUserContext,
+  latestQuery?: string
+): string {
   const faqDigest = ATTESTATION_FAQ.map(
     (item) => `- Вопрос: ${item.question}\n  Ответ: ${item.answer}`
   ).join('\n');
@@ -56,9 +65,32 @@ export function buildRcaSystemInstruction(context?: AssistantUserContext): strin
     (slot) => `- ${formatSessionRange(slot.start, slot.end)} (${slot.category})`
   ).join('\n');
 
+  const sectionTab = (context?.activeTab as SiteTabId | undefined) ?? 'home';
+  const serverRag = retrieveSectionRagContext(
+    latestQuery?.trim() || context?.sectionName || 'аттестация',
+    sectionTab,
+    4
+  );
+  const ragBlocks =
+    context?.ragPassages && context.ragPassages.length > 0
+      ? context.ragPassages
+      : serverRag.promptDigest;
+
+  const sectionCtx = context?.sectionName || context?.activeTab
+    ? [
+        'Контекст текущего раздела сайта (RAG):',
+        `- Раздел: ${context?.sectionName ?? serverRag.section.sectionName}`,
+        context?.sectionDescription
+          ? `- Описание раздела: ${context.sectionDescription}`
+          : `- Фокус раздела: ${serverRag.section.contextFocus}`,
+        'Приоритетные фрагменты базы знаний под запрос и текущий раздел:',
+        ...ragBlocks.map((p) => `- ${p}`),
+      ].join('\n')
+    : '';
+
   const candidateCtx = context
     ? [
-        'Контекст текущего пользователя в Личном кабинете:',
+        'Контекст текущего пользователя:',
         context.region ? `- Регион: ${context.region}` : null,
         context.roleLabel ? `- Роль: ${context.roleLabel}` : null,
         typeof context.progressPercent === 'number'
@@ -73,7 +105,7 @@ export function buildRcaSystemInstruction(context?: AssistantUserContext): strin
   return [
     'Ты — официальный ИИ-консультант службы поддержки Регионального центра аттестации (РЦА) «Русский Восток» на базе ВВГУ (г. Владивосток) и Федерации спортивного туризма России (ФСТР).',
     'Отвечай на русском языке — точно, структурированно, доброжелательно и строго по существу правил, регламентов и нормативной базы РЦА. Пиши чистым текстом (без символов разметки ** и #; для списков используй нумерацию 1., 2. или тире).',
-    'Не выдумывай несуществующие приказы, цены или даты. Если вопрос выходит за рамки регламентов РЦА или требует индивидуальной проверки документов комиссией, предложи обратиться к куратору центра по контактам ниже.',
+    'Учитывай контекст раздела, в котором сейчас находится пользователь (RAG), и опирайся на релевантные фрагменты FAQ и методики. Не выдумывай несуществующие приказы, цены или даты. Если вопрос выходит за рамки регламентов РЦА или требует индивидуальной проверки документов комиссией, предложи обратиться к куратору центра по контактам ниже.',
     '',
     'Официальные контакты и площадки:',
     `- Адрес центра и приёмной комиссии: ${CONTACTS.address} (ИТКИ ВВГУ)`,
@@ -89,6 +121,7 @@ export function buildRcaSystemInstruction(context?: AssistantUserContext): strin
     '',
     'Методические регламенты:',
     methodsDigest,
+    sectionCtx ? `\n${sectionCtx}` : '',
     candidateCtx ? `\n${candidateCtx}` : '',
   ]
     .filter(Boolean)
@@ -210,7 +243,7 @@ export async function generateRcaAssistantReply(rawInput: unknown): Promise<{
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.text }],
   }));
-  const systemInstruction = buildRcaSystemInstruction(context);
+  const systemInstruction = buildRcaSystemInstruction(context, lastMsg.text);
 
   let lastError: unknown;
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {

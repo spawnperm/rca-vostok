@@ -120,6 +120,62 @@ const ForecastYearTooltip: React.FC<{
   );
 };
 
+interface RegionalBarSummaryRow {
+  id: string;
+  name: string;
+  shortName: string;
+  registryCount: number;
+  demand2025: number;
+  demand2030: number;
+  deficit2030: number;
+  demandGrowthPct: number;
+}
+
+const RegionalForecastBarTooltip: React.FC<{
+  active?: boolean;
+  payload?: { name?: string; value?: number; color?: string; payload?: RegionalBarSummaryRow }[];
+  label?: string;
+}> = ({ active, payload, label }) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0]?.payload;
+
+  return (
+    <div className="bg-slate-900 text-white border border-slate-700 rounded-lg p-3.5 shadow-lg max-w-xs text-xs space-y-2">
+      <div className="flex items-baseline justify-between gap-4 border-b border-slate-700 pb-1.5">
+        <span className="font-semibold text-teal-300">{row?.name ?? label}</span>
+        {row && (
+          <span className="font-mono text-[11px] text-amber-300 tabular-nums">
+            +{row.demandGrowthPct}% к 2030
+          </span>
+        )}
+      </div>
+      <div className="space-y-1">
+        {payload.map((entry) => (
+          <div key={String(entry.name)} className="flex items-center justify-between gap-4">
+            <span className="flex items-center gap-2 text-slate-200 truncate">
+              <span
+                className="w-2.5 h-2.5 rounded-xs shrink-0"
+                style={{ backgroundColor: entry.color }}
+                aria-hidden="true"
+              />
+              <span className="truncate">{entry.name}</span>
+            </span>
+            <span className="font-mono font-semibold tabular-nums text-white shrink-0">
+              {typeof entry.value === 'number' ? entry.value.toLocaleString('ru-RU') : entry.value} чел.
+            </span>
+          </div>
+        ))}
+      </div>
+      {row && (
+        <div className="pt-1.5 border-t border-slate-700/80 flex items-center justify-between text-[11px] font-mono text-rose-300 tabular-nums">
+          <span>Дефицит к реестру (2030):</span>
+          <span>{row.deficit2030.toLocaleString('ru-RU')} чел.</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const DfoRegionalForecastModule: React.FC<DfoRegionalForecastModuleProps> = ({
   onApplyRegionToCalculator,
 }) => {
@@ -628,7 +684,11 @@ export const DfoRegionalForecastModule: React.FC<DfoRegionalForecastModuleProps>
                       tickLine={false}
                       tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
                     />
-                    <Tooltip />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(15, 118, 110, 0.08)' }}
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      content={<RegionalForecastBarTooltip />}
+                    />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                     <Bar
                       dataKey="registryCount"
@@ -667,7 +727,11 @@ export const DfoRegionalForecastModule: React.FC<DfoRegionalForecastModuleProps>
                       tickLine={false}
                       tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
                     />
-                    <Tooltip content={<ForecastYearTooltip isAllRegions={true} />} />
+                    <Tooltip
+                      cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      content={<ForecastYearTooltip isAllRegions={true} />}
+                    />
                     <Legend wrapperStyle={{ fontSize: '11.5px', paddingTop: '8px' }} />
                     {REGION_STACK_SERIES.map((reg) => (
                       <Area
@@ -680,6 +744,7 @@ export const DfoRegionalForecastModule: React.FC<DfoRegionalForecastModuleProps>
                         fill={reg.color}
                         fillOpacity={0.22}
                         strokeWidth={2}
+                        activeDot={{ r: 5.5, stroke: '#FFFFFF', strokeWidth: 2 }}
                       />
                     ))}
                   </AreaChart>
@@ -710,7 +775,11 @@ export const DfoRegionalForecastModule: React.FC<DfoRegionalForecastModuleProps>
                       tickLine={false}
                       tickFormatter={(v: number) => `${Math.round(v)} т.`}
                     />
-                    <Tooltip content={<ForecastYearTooltip isAllRegions={false} />} />
+                    <Tooltip
+                      cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      content={<ForecastYearTooltip isAllRegions={false} />}
+                    />
                     <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                     <Bar
                       yAxisId="flow"

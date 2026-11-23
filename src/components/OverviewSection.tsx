@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Compass,
   ExternalLink,
   MessageSquare,
@@ -60,6 +62,46 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
   );
   const [glossaryHighlightEnabled, setGlossaryHighlightEnabled] =
     useState<boolean>(true);
+  const [hoveredMilestoneId, setHoveredMilestoneId] = useState<string | null>(null);
+  const [focusedMilestoneId, setFocusedMilestoneId] = useState<string | null>(null);
+
+  const getMilestoneStatusMeta = (
+    phase: 'Завершён' | 'Активный этап' | 'Прогноз'
+  ) => {
+    switch (phase) {
+      case 'Завершён':
+        return {
+          statusLabel: 'Выполнено',
+          description: 'Веха реализована и подтверждена в реестре РЦА.',
+          Icon: CheckCircle2,
+          badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+          nodeSelectedClass: 'bg-emerald-700 border-emerald-800 text-white shadow-sm',
+          nodeIdleClass: 'bg-emerald-50 border-emerald-600 text-emerald-800',
+          iconClass: 'text-emerald-700',
+        };
+      case 'Активный этап':
+        return {
+          statusLabel: 'В процессе',
+          description: 'Текущий этап исполнения: приём заявок и проведение сессий.',
+          Icon: Clock,
+          badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+          nodeSelectedClass: 'bg-teal-700 border-teal-800 text-white shadow-sm ring-2 ring-amber-300',
+          nodeIdleClass: 'bg-amber-50 border-amber-500 text-amber-900',
+          iconClass: 'text-amber-700',
+        };
+      case 'Прогноз':
+      default:
+        return {
+          statusLabel: 'Запланировано',
+          description: 'Целевая веха дорожной карты на 2027–2030 гг.',
+          Icon: CalendarClock,
+          badgeClass: 'bg-sky-50 text-sky-800 border-sky-200',
+          nodeSelectedClass: 'bg-slate-900 border-slate-900 text-white shadow-sm',
+          nodeIdleClass: 'bg-white border-sky-300 text-sky-800 group-hover:border-teal-700 group-hover:text-teal-800',
+          iconClass: 'text-sky-700',
+        };
+    }
+  };
 
   const activeExpert = EXPERT_TESTIMONIALS[expertIndex] ?? EXPERT_TESTIMONIALS[0];
   const activeMilestone =
@@ -839,11 +881,28 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
       {/* Horizontal Attestation Development Timeline 2025-2030 */}
       <section aria-labelledby="timeline-2030-heading" className="bg-white border border-slate-200 rounded-xl p-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <p className="text-xs font-medium text-teal-700">Дорожная карта регулятора и ВВГУ</p>
             <h2 id="timeline-2030-heading" className="text-xl font-bold text-slate-900">
               Этапы развития аттестации 2025-2030
             </h2>
+            <div
+              className="flex flex-wrap items-center gap-3 pt-1 text-[11px] font-medium text-slate-600"
+              aria-label="Обозначения статусов этапов"
+            >
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-800 border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                <span>Выполнено</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border bg-amber-50 text-amber-800 border-amber-200">
+                <Clock className="w-3.5 h-3.5 text-amber-700" aria-hidden="true" />
+                <span>В процессе</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border bg-sky-50 text-sky-800 border-sky-200">
+                <CalendarClock className="w-3.5 h-3.5 text-sky-700" aria-hidden="true" />
+                <span>Запланировано</span>
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -873,8 +932,8 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
 
         {/* Horizontal Visual Timeline Ribbon */}
-        <div className="overflow-x-auto pb-2 -mx-2 px-2">
-          <div className="min-w-[820px] relative pt-2">
+        <div className="overflow-x-auto lg:overflow-visible pb-3 -mx-2 px-2">
+          <div className="min-w-[820px] lg:min-w-0 relative pt-2">
             {/* Continuous horizontal axis rail */}
             <div
               aria-hidden="true"
@@ -893,28 +952,55 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
             <ol className="grid grid-cols-6 gap-3 relative">
               {ATTESTATION_TIMELINE_2025_2030.map((milestone, idx) => {
                 const isSelected = idx === timelineIndex;
-                const isPassed = idx < timelineIndex;
+                const statusMeta = getMilestoneStatusMeta(milestone.phase);
+                const StatusIcon = statusMeta.Icon;
+                const tooltipVisible =
+                  hoveredMilestoneId === milestone.id || focusedMilestoneId === milestone.id;
+                const tooltipAlignmentClass =
+                  idx === 0
+                    ? 'left-0 translate-x-0'
+                    : idx === ATTESTATION_TIMELINE_2025_2030.length - 1
+                    ? 'right-0 translate-x-0'
+                    : 'left-1/2 -translate-x-1/2';
+
                 return (
-                  <li key={milestone.id}>
+                  <li
+                    key={milestone.id}
+                    className="relative"
+                    onMouseEnter={() => setHoveredMilestoneId(milestone.id)}
+                    onMouseLeave={() =>
+                      setHoveredMilestoneId((cur) => (cur === milestone.id ? null : cur))
+                    }
+                  >
                     <button
                       type="button"
                       onClick={() => handleSelectTimeline(idx)}
+                      onFocus={() => setFocusedMilestoneId(milestone.id)}
+                      onBlur={() =>
+                        setFocusedMilestoneId((cur) => (cur === milestone.id ? null : cur))
+                      }
                       aria-current={isSelected ? 'step' : undefined}
-                      className="w-full text-center flex flex-col items-center gap-2.5 px-2 py-1 rounded-lg group cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+                      aria-describedby={`timeline-tooltip-${milestone.id}`}
+                      title={`${milestone.period} · ${statusMeta.statusLabel}: ${milestone.checkpointMetric}`}
+                      className="w-full text-center flex flex-col items-center gap-2 px-2 py-1.5 rounded-lg group cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
                     >
-                      <span
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-mono font-bold tabular-nums border-2 transition-colors ${
-                          isSelected
-                            ? 'bg-teal-700 border-teal-700 text-white'
-                            : isPassed
-                            ? 'bg-slate-900 border-slate-900 text-white'
-                            : 'bg-white border-slate-300 text-slate-600 group-hover:border-teal-700 group-hover:text-teal-800'
-                        }`}
-                      >
-                        0{idx + 1}
+                      <span className="relative inline-flex items-center justify-center">
+                        <span
+                          className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-mono font-bold tabular-nums border-2 transition-colors ${
+                            isSelected ? statusMeta.nodeSelectedClass : statusMeta.nodeIdleClass
+                          }`}
+                        >
+                          0{idx + 1}
+                        </span>
+                        <span
+                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-2xs`}
+                          aria-hidden="true"
+                        >
+                          <StatusIcon className={`w-2.5 h-2.5 ${statusMeta.iconClass}`} />
+                        </span>
                       </span>
 
-                      <div className="space-y-0.5">
+                      <div className="space-y-1 flex flex-col items-center">
                         <p
                           className={`text-xs font-mono font-semibold tabular-nums whitespace-nowrap ${
                             isSelected ? 'text-teal-800' : 'text-slate-900'
@@ -922,11 +1008,45 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                         >
                           {milestone.period}
                         </p>
-                        <p className="text-[11px] text-slate-500 leading-snug">
-                          {milestone.phase}
-                        </p>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-semibold leading-none whitespace-nowrap ${statusMeta.badgeClass}`}
+                        >
+                          <StatusIcon className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
+                          <span>{statusMeta.statusLabel}</span>
+                        </span>
                       </div>
                     </button>
+
+                    {/* Hover & Keyboard-Focus Tooltip */}
+                    <div
+                      id={`timeline-tooltip-${milestone.id}`}
+                      role="tooltip"
+                      aria-hidden={!tooltipVisible}
+                      className={`pointer-events-none absolute top-full mt-2 z-30 w-64 bg-slate-900 text-white rounded-lg p-3 shadow-xl border border-slate-700 text-left transition-all duration-150 ${tooltipAlignmentClass} ${
+                        tooltipVisible
+                          ? 'opacity-100 translate-y-0 visible'
+                          : 'opacity-0 translate-y-1 invisible'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 pb-1.5 mb-1.5 border-b border-slate-700/80">
+                        <span className="text-[11px] font-mono font-semibold text-teal-300 tabular-nums">
+                          {milestone.period}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-100">
+                          <StatusIcon className="w-3 h-3 text-teal-300" aria-hidden="true" />
+                          <span>{statusMeta.statusLabel}</span>
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold leading-snug text-white">
+                        {milestone.title}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-300 leading-relaxed">
+                        {statusMeta.description}
+                      </p>
+                      <p className="mt-1.5 pt-1.5 border-t border-slate-800 text-[11px] font-mono text-teal-200">
+                        Индикатор: {milestone.checkpointMetric}
+                      </p>
+                    </div>
                   </li>
                 );
               })}
@@ -935,45 +1055,58 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
 
         {/* Selected Milestone Detail Band */}
-        <div className="pt-6 border-t border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-7 space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="font-mono font-semibold text-teal-800 tabular-nums">
-                {activeMilestone.period}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>{activeMilestone.phase}</span>
-              <span aria-hidden="true">·</span>
-              <span className="font-mono tabular-nums text-slate-700">
-                {activeMilestone.checkpointMetric}
-              </span>
-            </div>
-
-            <h3 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
-              {activeMilestone.title}
-            </h3>
-
-            <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-              {activeMilestone.summary}
-            </p>
-          </div>
-
-          <div className="lg:col-span-5 bg-slate-50 rounded-lg p-5 space-y-3">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-              Контрольные точки этапа
-            </p>
-            <ul className="space-y-2.5 text-xs text-slate-700 leading-relaxed">
-              {activeMilestone.keyTasks.map((task, tIdx) => (
-                <li key={task} className="flex items-start gap-2.5">
-                  <span className="font-mono font-semibold text-teal-700 tabular-nums shrink-0">
-                    0{tIdx + 1}.
+        {(() => {
+          const activeStatusMeta = getMilestoneStatusMeta(activeMilestone.phase);
+          const ActiveStatusIcon = activeStatusMeta.Icon;
+          return (
+            <div className="pt-6 border-t border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              <div className="lg:col-span-7 space-y-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span className="font-mono font-semibold text-teal-800 tabular-nums">
+                    {activeMilestone.period}
                   </span>
-                  <span>{task}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+                  <span aria-hidden="true">·</span>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-semibold ${activeStatusMeta.badgeClass}`}
+                  >
+                    <ActiveStatusIcon className="w-3 h-3 shrink-0" aria-hidden="true" />
+                    <span>{activeStatusMeta.statusLabel}</span>
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>{activeMilestone.phase}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="font-mono tabular-nums text-slate-700">
+                    {activeMilestone.checkpointMetric}
+                  </span>
+                </div>
+
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
+                  {activeMilestone.title}
+                </h3>
+
+                <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
+                  {activeMilestone.summary}
+                </p>
+              </div>
+
+              <div className="lg:col-span-5 bg-slate-50 rounded-lg p-5 space-y-3">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Контрольные точки этапа
+                </p>
+                <ul className="space-y-2.5 text-xs text-slate-700 leading-relaxed">
+                  {activeMilestone.keyTasks.map((task, tIdx) => (
+                    <li key={task} className="flex items-start gap-2.5">
+                      <span className="font-mono font-semibold text-teal-700 tabular-nums shrink-0">
+                        0{tIdx + 1}.
+                      </span>
+                      <span>{task}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          );
+        })()}
       </section>
 
       {/* Full Empirical Table */}

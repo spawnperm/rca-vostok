@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, Layers, LineChart as LineChartIcon } from 'lucide-react';
 import {
   Area,
@@ -27,6 +27,7 @@ import { tracker } from '../utils/tracker';
 
 interface DemandDynamics2030ChartProps {
   modelInput: DemandModelInput;
+  externalScenario?: { id: TourismScenarioId; nonce: number } | null;
 }
 
 interface TooltipPayloadItem {
@@ -118,12 +119,22 @@ const ScenarioLineTooltip: React.FC<{
 
 export const DemandDynamics2030Chart: React.FC<DemandDynamics2030ChartProps> = ({
   modelInput,
+  externalScenario,
 }) => {
   const [chartMode, setChartMode] = useState<ScenarioChartMode>('overlay_two');
   const [activeScenario, setActiveScenario] = useState<TourismScenarioId>('baseline');
   const [secondaryScenario, setSecondaryScenario] = useState<TourismScenarioId>('accelerated');
   const [activeOverlaySlot, setActiveOverlaySlot] = useState<'A' | 'B'>('B');
   const [showRegistryLine, setShowRegistryLine] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (!externalScenario?.nonce) return;
+    const targetId = externalScenario.id;
+    setActiveScenario(targetId);
+    if (targetId === secondaryScenario) {
+      setSecondaryScenario(targetId === 'baseline' ? 'accelerated' : 'baseline');
+    }
+  }, [externalScenario, secondaryScenario]);
 
   const scenarioForecast = useMemo(
     () => DemandForecastService.forecastTourismScenarios2030(modelInput),
@@ -572,6 +583,7 @@ export const DemandDynamics2030Chart: React.FC<DemandDynamics2030ChartProps> = (
                 tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
               />
               <Tooltip
+                cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
                 content={
                   <ScenarioLineTooltip
                     overlayPair={

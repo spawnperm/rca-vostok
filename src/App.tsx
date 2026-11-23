@@ -1,8 +1,11 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Bell, ChevronLeft, ChevronRight, GitBranch, Menu, UserRound, X } from 'lucide-react';
+import { ApiStatusIndicator } from './components/ApiStatusIndicator';
+import { Breadcrumbs } from './components/Breadcrumbs';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GitSyncModal } from './components/GitSyncModal';
 import { NotificationsModal } from './components/NotificationsModal';
+import { RcaAssistantChatWidget } from './components/RcaAssistantChatWidget';
 import {
   LandingHero,
   LearningSection,
@@ -308,6 +311,8 @@ export default function App() {
               <span className="hidden sm:inline">Кабинет</span>
             </button>
 
+            <ApiStatusIndicator />
+
             {/* Sidebar toggle doubles as the platform menu on small screens. */}
             <button
               type="button"
@@ -345,8 +350,10 @@ export default function App() {
         </div>
       </header>
 
+      <Breadcrumbs activeTab={activeTab} onNavigate={navigateTo} />
+
       {/* Body: content + right-hand platform sidebar */}
-      <div className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 py-8 flex gap-6">
+      <div className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 pt-6 pb-8 flex gap-6">
         <main className="flex-1 min-w-0">
           <ErrorBoundary onReset={() => navigateTo('home')}>
             {activeTab === 'home' && (
@@ -570,6 +577,8 @@ export default function App() {
         bearerToken={gitBearerToken}
         onTokenChange={setGitBearerToken}
       />
+
+      <RcaAssistantChatWidget activeTab={activeTab} />
     </div>
   );
 }

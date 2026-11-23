@@ -137,10 +137,10 @@ const ComparisonLineTooltip: React.FC<{
   return (
     <div className="bg-slate-900 text-white border border-slate-700 rounded-lg p-3.5 shadow-lg max-w-xs text-xs space-y-2">
       <div className="flex items-baseline justify-between gap-4 border-b border-slate-700 pb-1.5">
-        <span className="font-mono font-bold text-teal-300 tabular-nums">{label} г.</span>
+        <span className="font-mono font-bold text-teal-300 tabular-nums">Срез: {label} г.</span>
         {point && (
           <span className="font-mono text-[11px] text-slate-300 tabular-nums">
-            Разница: {Math.abs(point.regionA - point.regionB).toLocaleString('ru-RU')} чел.
+            Разрыв: {Math.abs(point.regionA - point.regionB).toLocaleString('ru-RU')} инстр.
           </span>
         )}
       </div>
@@ -156,7 +156,7 @@ const ComparisonLineTooltip: React.FC<{
               <span className="truncate">{entry.name}</span>
             </span>
             <span className="font-mono font-semibold tabular-nums text-white shrink-0">
-              {typeof entry.value === 'number' ? entry.value.toLocaleString('ru-RU') : entry.value} чел.
+              {typeof entry.value === 'number' ? entry.value.toLocaleString('ru-RU') : entry.value} инструкторов
             </span>
           </div>
         ))}
@@ -725,7 +725,10 @@ export const DfoRegionComparisonChart: React.FC = () => {
                     barMetricMode === 'rates' ? `${v}%` : v.toLocaleString('ru-RU')
                   }
                 />
-                <Tooltip content={<ComparisonBarTooltip />} />
+                <Tooltip
+                  cursor={{ fill: 'rgba(15, 118, 110, 0.08)' }}
+                  content={<ComparisonBarTooltip />}
+                />
                 <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
                 <Bar
                   dataKey="regionA"
@@ -755,7 +758,7 @@ export const DfoRegionComparisonChart: React.FC = () => {
                 <h3>Динамика потребности 2025–2030 гг.</h3>
               </div>
               <p className="text-[11px] text-slate-500">
-                Сравнение прогнозного спроса на аттестованных гидов с учётом новых курортов
+                Наведите на точку линии, чтобы увидеть точное количество инструкторов по годам
               </p>
             </div>
 
@@ -810,7 +813,12 @@ export const DfoRegionComparisonChart: React.FC = () => {
                   tickLine={false}
                   tickFormatter={(v: number) => v.toLocaleString('ru-RU')}
                 />
-                <Tooltip content={<ComparisonLineTooltip />} />
+                <Tooltip
+                  trigger="hover"
+                  cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                  allowEscapeViewBox={{ x: true, y: true }}
+                  content={<ComparisonLineTooltip />}
+                />
                 <Legend
                   wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
                   iconType="plainline"
@@ -821,8 +829,32 @@ export const DfoRegionComparisonChart: React.FC = () => {
                   name={`${snapA.region.shortName} (прогноз)`}
                   stroke={REGION_A_COLOR}
                   strokeWidth={2.75}
-                  dot={{ r: 4, strokeWidth: 2, fill: '#FFFFFF' }}
-                  activeDot={{ r: 6 }}
+                  dot={(dotProps) => {
+                    const { cx, cy, payload, value } = dotProps as {
+                      cx?: number;
+                      cy?: number;
+                      value?: number;
+                      payload?: LineComparisonDatum;
+                    };
+                    if (typeof cx !== 'number' || typeof cy !== 'number') {
+                      return <g key={`empty-a-${payload?.year ?? 'x'}`} />;
+                    }
+                    return (
+                      <g key={`dot-a-${payload?.year}`}>
+                        <title>{`${payload?.year} г. (${snapA.region.shortName}): ${typeof value === 'number' ? value.toLocaleString('ru-RU') : value} инструкторов`}</title>
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={4.5}
+                          fill="#FFFFFF"
+                          stroke={REGION_A_COLOR}
+                          strokeWidth={2}
+                          className="cursor-pointer"
+                        />
+                      </g>
+                    );
+                  }}
+                  activeDot={{ r: 7, fill: REGION_A_COLOR, stroke: '#FFFFFF', strokeWidth: 2 }}
                 />
                 <Line
                   type="monotone"
@@ -830,8 +862,32 @@ export const DfoRegionComparisonChart: React.FC = () => {
                   name={`${snapB.region.shortName} (прогноз)`}
                   stroke={REGION_B_COLOR}
                   strokeWidth={2.75}
-                  dot={{ r: 4, strokeWidth: 2, fill: '#FFFFFF' }}
-                  activeDot={{ r: 6 }}
+                  dot={(dotProps) => {
+                    const { cx, cy, payload, value } = dotProps as {
+                      cx?: number;
+                      cy?: number;
+                      value?: number;
+                      payload?: LineComparisonDatum;
+                    };
+                    if (typeof cx !== 'number' || typeof cy !== 'number') {
+                      return <g key={`empty-b-${payload?.year ?? 'x'}`} />;
+                    }
+                    return (
+                      <g key={`dot-b-${payload?.year}`}>
+                        <title>{`${payload?.year} г. (${snapB.region.shortName}): ${typeof value === 'number' ? value.toLocaleString('ru-RU') : value} инструкторов`}</title>
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={4.5}
+                          fill="#FFFFFF"
+                          stroke={REGION_B_COLOR}
+                          strokeWidth={2}
+                          className="cursor-pointer"
+                        />
+                      </g>
+                    );
+                  }}
+                  activeDot={{ r: 7, fill: REGION_B_COLOR, stroke: '#FFFFFF', strokeWidth: 2 }}
                 />
               </LineChart>
             </ResponsiveContainer>

@@ -13,6 +13,15 @@ import {
   Trash2,
 } from 'lucide-react';
 import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
   exportDfoAnalyticsCsv,
   exportDfoAnalyticsPdf,
 } from '../utils/dfoReportExport';
@@ -24,6 +33,7 @@ import {
 } from '../utils/seo';
 import { DFO_REGIONS_DISTRIBUTION } from '../data/researchData';
 import { tracker, type ClientBehaviorEvent } from '../utils/tracker';
+import { CertifiedGuidesRegistryTable } from './CertifiedGuidesRegistryTable';
 import { DfoDemandForecastChart, type DfoRegionFilterId } from './DfoDemandForecastChart';
 import { DfoHubsInteractiveMap } from './DfoHubsInteractiveMap';
 import { DfoRegionsComparisonTable } from './DfoRegionsComparisonTable';
@@ -114,6 +124,49 @@ function formatTimeStamp(iso: string): string {
     return iso;
   }
 }
+
+interface ActivityTimelinePoint {
+  label: string;
+  visits: number;
+  events: number;
+}
+
+const ActivityTimelineTooltip: React.FC<{
+  active?: boolean;
+  payload?: { payload?: ActivityTimelinePoint }[];
+  label?: string;
+}> = ({ active, payload, label }) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const pt = payload[0]?.payload;
+  if (!pt) return null;
+  const eventsPerVisit =
+    pt.visits > 0 ? (pt.events / pt.visits).toFixed(1) : String(pt.events);
+
+  return (
+    <div className="bg-slate-900 text-white border border-slate-700 rounded-lg p-3.5 shadow-lg text-xs space-y-1.5 min-w-[210px]">
+      <div className="flex items-baseline justify-between gap-4 border-b border-slate-700 pb-1.5">
+        <span className="font-mono font-bold text-teal-300 tabular-nums">{label}</span>
+        <span className="text-[11px] text-slate-300">Интервал активности</span>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-slate-300">Записано событий:</span>
+        <span className="font-mono font-bold tabular-nums text-white">
+          {pt.events.toLocaleString('ru-RU')}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-slate-300">Уникальных визитов:</span>
+        <span className="font-mono font-semibold tabular-nums text-teal-300">
+          {pt.visits.toLocaleString('ru-RU')}
+        </span>
+      </div>
+      <div className="pt-1 border-t border-slate-800 flex items-center justify-between gap-4 text-[11px] text-slate-400">
+        <span>Интенсивность:</span>
+        <span className="font-mono tabular-nums text-slate-200">{eventsPerVisit} соб./визит</span>
+      </div>
+    </div>
+  );
+};
 
 export const AnalyticsSection: React.FC = () => {
   const [subTab, setSubTab] = useState<'visits' | 'behavior' | 'seo'>('visits');
@@ -310,15 +363,7 @@ export const AnalyticsSection: React.FC = () => {
   const activeReplayEvent =
     replayIndex >= 0 && replayIndex < sessionEvents.length ? sessionEvents[replayIndex] : null;
 
-  // Timeline SVG geometry
   const timeline = summary?.timeline ?? [];
-  const chartW = 520;
-  const chartH = 180;
-  const padL = 36;
-  const padR = 16;
-  const padT = 16;
-  const padB = 28;
-  const maxEvents = Math.max(...timeline.map((t) => t.events), 10);
 
   return (
     <div className="space-y-8">
@@ -566,56 +611,49 @@ export const AnalyticsSection: React.FC = () => {
                   </div>
 
                   {timeline.length === 0 ? (
-                    <div className="h-44 flex items-center justify-center text-xs text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                    <div className="h-48 flex items-center justify-center text-xs text-slate-500 border border-dashed border-slate-200 rounded-lg">
                       Пока недостаточно интервалов для графика — переходите между разделами сайта
                     </div>
                   ) : (
-                    <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full h-auto">
-                      {[0.25, 0.5, 0.75, 1].map((r) => {
-                        const y = chartH - padB - r * (chartH - padT - padB);
-                        return (
-                          <g key={r}>
-                            <line x1={padL} y1={y} x2={chartW - padR} y2={y} stroke="#E2E8F0" strokeWidth={1} />
-                            <text x={padL - 6} y={y + 4} textAnchor="end" className="fill-slate-400 text-[10px] font-mono">
-                              {Math.round(maxEvents * r)}
-                            </text>
-                          </g>
-                        );
-                      })}
-                      <line x1={padL} y1={padT} x2={padL} y2={chartH - padB} stroke="#94A3B8" strokeWidth={1.5} />
-                      <line x1={padL} y1={chartH - padB} x2={chartW - padR} y2={chartH - padB} stroke="#94A3B8" strokeWidth={1.5} />
-
-                      {timeline.length > 1 && (
-                        <polyline
-                          fill="none"
-                          stroke="#0F766E"
-                          strokeWidth={2.5}
-                          points={timeline
-                            .map((pt, idx) => {
-                              const x = padL + (idx / (timeline.length - 1)) * (chartW - padL - padR);
-                              const y = chartH - padB - (pt.events / maxEvents) * (chartH - padT - padB);
-                              return `${x.toFixed(1)},${y.toFixed(1)}`;
-                            })
-                            .join(' ')}
-                        />
-                      )}
-
-                      {timeline.map((pt, idx) => {
-                        const x =
-                          timeline.length === 1
-                            ? (padL + chartW - padR) / 2
-                            : padL + (idx / (timeline.length - 1)) * (chartW - padL - padR);
-                        const y = chartH - padB - (pt.events / maxEvents) * (chartH - padT - padB);
-                        return (
-                          <g key={pt.label + idx}>
-                            <circle cx={x} cy={y} r={4} fill="#0F172A" />
-                            <text x={x} y={chartH - 10} textAnchor="middle" className="fill-slate-500 text-[10px] font-mono">
-                              {pt.label}
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
+                    <div className="w-full h-[210px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart
+                          data={timeline}
+                          margin={{ top: 10, right: 12, left: -14, bottom: 4 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                          <XAxis
+                            dataKey="label"
+                            tick={{ fontSize: 10.5, fill: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}
+                            axisLine={{ stroke: '#CBD5E1' }}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            allowDecimals={false}
+                            tick={{ fontSize: 10.5, fill: '#64748B', fontFamily: 'JetBrains Mono, monospace' }}
+                            axisLine={{ stroke: '#CBD5E1' }}
+                            tickLine={false}
+                          />
+                          <Tooltip
+                            trigger="hover"
+                            cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                            allowEscapeViewBox={{ x: true, y: true }}
+                            content={<ActivityTimelineTooltip />}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="events"
+                            name="События"
+                            stroke="#0F766E"
+                            fill="#0F766E"
+                            fillOpacity={0.14}
+                            strokeWidth={2.5}
+                            dot={{ r: 4, fill: '#0F172A', stroke: '#FFFFFF', strokeWidth: 1.5 }}
+                            activeDot={{ r: 6.5, fill: '#0F766E', stroke: '#FFFFFF', strokeWidth: 2 }}
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </div>
 
@@ -778,6 +816,15 @@ export const AnalyticsSection: React.FC = () => {
                 onExportPdf={() => {
                   void handleExportDfoPdf();
                 }}
+              />
+
+              {/* Interactive Active Certified Guides Registry Table */}
+              <CertifiedGuidesRegistryTable
+                initialRegionFilter={
+                  dfoRegionFilter === 'all'
+                    ? 'all'
+                    : DFO_REGIONS_DISTRIBUTION.find((r) => r.id === dfoRegionFilter)?.name ?? 'all'
+                }
               />
 
               {/* Top Clicked Elements + Devices/Referrers */}

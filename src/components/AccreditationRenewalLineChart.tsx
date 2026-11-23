@@ -233,7 +233,12 @@ export const AccreditationRenewalLineChart: React.FC = () => {
               axisLine={{ stroke: '#CBD5E1' }}
               tickLine={false}
             />
-            <Tooltip content={<AccreditationDynamicsTooltip />} />
+            <Tooltip
+              trigger="hover"
+              cursor={{ stroke: '#0F766E', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+              allowEscapeViewBox={{ x: true, y: true }}
+              content={<AccreditationDynamicsTooltip />}
+            />
             <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} iconType="plainline" />
 
             {chartData.some((pt) => pt.year === '2026') && (

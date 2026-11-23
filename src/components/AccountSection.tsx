@@ -43,7 +43,10 @@ import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
 import { QualificationSelfCheckWidget } from './QualificationSelfCheckWidget';
 import { AttestationSelfDiagnosticsWidget } from './AttestationSelfDiagnosticsWidget';
 import { InstructorPassportCard } from './InstructorPassportCard';
-import { RcaAssistantChatWidget } from './RcaAssistantChatWidget';
+import {
+  dispatchOpenRcaAssistant,
+  dispatchRcaUserContext,
+} from './RcaAssistantChatWidget';
 import { DfoGuidesLeaderboardWidget } from './DfoGuidesLeaderboardWidget';
 import { InstructorReviewsSection } from './InstructorReviewsSection';
 import { ReviewStatsWidget } from './ReviewStatsWidget';
@@ -112,10 +115,6 @@ export function AccountSection({
     query: string;
     nonce: number;
   } | null>(null);
-  const [assistantRequest, setAssistantRequest] = useState<{
-    prompt?: string;
-    nonce: number;
-  } | null>(null);
   const [analyticsSubView, setAnalyticsSubView] = useState<
     'all' | 'leaderboard' | 'reviews'
   >('all');
@@ -150,11 +149,17 @@ export function AccountSection({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [finalCertPreviewOpen]);
 
+  useEffect(() => {
+    if (!user) {
+      dispatchRcaUserContext({ user: null, progressSummary: null });
+      return;
+    }
+    const summary = liveProgressSummary ?? computeUserAttestationSummary(user, inquiries);
+    dispatchRcaUserContext({ user, progressSummary: summary });
+  }, [user, liveProgressSummary, inquiries]);
+
   const openAiAssistant = useCallback((prompt?: string) => {
-    setAssistantRequest((prev) => ({
-      prompt,
-      nonce: (prev?.nonce ?? 0) + 1,
-    }));
+    dispatchOpenRcaAssistant({ prompt, mode: 'rag' });
   }, []);
 
   // A reset link lands on ?tab=account&reset=<token>, so the cabinet opens
@@ -373,11 +378,6 @@ export function AccountSection({
           </div>
           <DfoGuidesLeaderboardWidget />
         </section>
-        <RcaAssistantChatWidget
-          user={null}
-          progressSummary={null}
-          externalOpenRequest={assistantRequest}
-        />
       </div>
     );
   }
@@ -700,13 +700,6 @@ export function AccountSection({
         userId={user.id}
         currentUserId={user.id}
         permissions={user.permissions}
-      />
-
-      {/* Floating AI Support Widget */}
-      <RcaAssistantChatWidget
-        user={user}
-        progressSummary={effectiveProgressSummary}
-        externalOpenRequest={assistantRequest}
       />
 
       {finalCertPreviewOpen && finalCertResult && (

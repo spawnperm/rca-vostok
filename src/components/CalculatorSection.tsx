@@ -2,6 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
 import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
+import {
+  CALCULATOR_FORECAST_SCENARIOS,
+  computeCalculatorScenarioProjection,
+  type CalculatorForecastScenario,
+} from '../utils/calculatorScenario2030';
+import { tracker } from '../utils/tracker';
 import { DemandDynamics2030Chart } from './DemandDynamics2030Chart';
 import { DfoRegionalForecastModule } from './DfoRegionalForecastModule';
 import { TrainingAndAttestationCostEstimator } from './TrainingAndAttestationCostEstimator';
@@ -13,6 +19,9 @@ import { ExpertRatingCalculatorWidget } from './ExpertRatingCalculatorWidget';
 
 export const CalculatorSection: React.FC = () => {
   const [activePresetId, setActivePresetId] = useState<string>(DEMAND_PRESETS[0].id);
+  const [forecastScenario2030, setForecastScenario2030] =
+    useState<CalculatorForecastScenario>('baseline');
+  const [scenarioSyncNonce, setScenarioSyncNonce] = useState<number>(0);
   const [tAct, setTAct] = useState<number>(DEMAND_PRESETS[0].tAct);
   const [pOrg, setPOrg] = useState<number>(DEMAND_PRESETS[0].pOrg);
   const [gSize, setGSize] = useState<number>(DEMAND_PRESETS[0].gSize);
@@ -77,6 +86,17 @@ export const CalculatorSection: React.FC = () => {
     () => DemandForecastService.calculate(modelInput),
     [modelInput]
   );
+
+  const scenarioProjection = useMemo(
+    () => computeCalculatorScenarioProjection(modelInput, forecastScenario2030),
+    [modelInput, forecastScenario2030]
+  );
+
+  const handleSelectScenario2030 = (next: CalculatorForecastScenario) => {
+    setForecastScenario2030(next);
+    setScenarioSyncNonce((n) => n + 1);
+    tracker.trackCustomInteraction('Калькулятор · сценарий к 2030 г.', next);
+  };
 
   // SVG Sensitivity chart geometry
   const chartW = 540;
@@ -159,6 +179,44 @@ export const CalculatorSection: React.FC = () => {
               </button>
             );
           })}
+        </div>
+
+        {/* 2030 Forecast Scenario Switcher */}
+        <div className="pt-5 border-t border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-900">
+              Сценарий моделирования потребности до 2030 года
+            </p>
+            <p className="text-xs text-slate-500">
+              {scenarioProjection.option.assumptionsNote}
+            </p>
+          </div>
+
+          <div
+            role="radiogroup"
+            aria-label="Сценарий прогноза потребности до 2030 года"
+            className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start lg:self-auto"
+          >
+            {CALCULATOR_FORECAST_SCENARIOS.map((opt) => {
+              const active = forecastScenario2030 === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => handleSelectScenario2030(opt.id)}
+                  className={`px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    active
+                      ? 'bg-white text-teal-800 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -486,21 +544,52 @@ export const CalculatorSection: React.FC = () => {
             </div>
           </div>
 
-          {/* Cohort Closure Simulator */}
+          {/* Cohort Closure Simulator with Active 2030 Scenario */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
                 <h3 className="text-base font-bold text-slate-900">
-                  Прогноз закрытия дефицита через набор ВВГУ (2026–2030 гг.)
+                  Моделирование численности к 2030 г. и набор ВВГУ ({scenarioProjection.option.label})
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  С учётом ежегодной текучести ({((kTurnover - 1) * 100).toFixed(0)}%) и конверсии выпускников в реестр
+                <p className="text-xs text-slate-500">
+                  {scenarioProjection.option.summary} Текучесть {((kTurnover - 1) * 100).toFixed(0)}%/год.
                 </p>
               </div>
-              <span className="font-mono text-xs font-semibold text-teal-700 tabular-nums">
+              <span className="font-mono text-xs font-semibold text-teal-700 tabular-nums shrink-0">
                 +{results.annualNewCertified} аттест. / год
               </span>
             </div>
+
+            {/* Scenario 2030 Modeled KPI Strip */}
+            <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3 border-y border-slate-200">
+              <div>
+                <dt className="text-[11px] text-slate-500">Потребность к 2030 г.</dt>
+                <dd className="text-lg font-bold font-mono text-teal-800 tabular-nums mt-0.5">
+                  {scenarioProjection.demand2030.toLocaleString('ru-RU')} чел.
+                </dd>
+                <p className="text-[11px] font-mono text-slate-500 tabular-nums">
+                  +{scenarioProjection.growthPct}% к базе 2025 г.
+                </p>
+              </div>
+              <div>
+                <dt className="text-[11px] text-slate-500">Прогноз реестра ВВГУ (2030)</dt>
+                <dd className="text-lg font-bold font-mono text-slate-900 tabular-nums mt-0.5">
+                  {scenarioProjection.projectedRegistry2030.toLocaleString('ru-RU')} чел.
+                </dd>
+                <p className="text-[11px] font-mono text-slate-500 tabular-nums">
+                  Покрытие спроса: {scenarioProjection.coverage2030Pct}%
+                </p>
+              </div>
+              <div>
+                <dt className="text-[11px] text-slate-500">Остаточный дефицит 2030</dt>
+                <dd className="text-lg font-bold font-mono text-red-700 tabular-nums mt-0.5">
+                  {scenarioProjection.residualDeficit2030.toLocaleString('ru-RU')} чел.
+                </dd>
+                <p className="text-[11px] font-mono text-slate-500 tabular-nums">
+                  P_org {scenarioProjection.pOrg2030}% · K_season {scenarioProjection.kSeason2030.toFixed(2)}
+                </p>
+              </div>
+            </dl>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
               <div>
@@ -555,27 +644,35 @@ export const CalculatorSection: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-5 gap-3 pt-2">
-              {results.fiveYearProjection.map((yr) => {
-                const coveragePct = Math.min(Math.round((yr.certified / Math.max(results.totalDemand, 1)) * 100), 100);
-                return (
-                  <div key={yr.year} className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center space-y-1">
-                    <p className="text-xs font-mono font-semibold text-slate-500">{yr.year}</p>
-                    <p className="text-base font-bold text-slate-900 font-mono tabular-nums">{yr.certified}</p>
-                    <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                      <div className="h-full bg-teal-700" style={{ width: `${coveragePct}%` }} />
-                    </div>
-                    <p className="text-[11px] font-mono text-slate-600 tabular-nums">{coveragePct}% цели</p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
+              {scenarioProjection.yearly2026To2030.map((yr) => (
+                <div key={yr.year} className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center space-y-1">
+                  <p className="text-xs font-mono font-semibold text-slate-500">{yr.year}</p>
+                  <p className="text-base font-bold text-slate-900 font-mono tabular-nums">
+                    {yr.projectedRegistry}
+                  </p>
+                  <p className="text-[10px] font-mono text-slate-500 tabular-nums">
+                    цель {yr.targetDemand.toLocaleString('ru-RU')}
+                  </p>
+                  <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-teal-700 transition-all duration-200" style={{ width: `${yr.coveragePct}%` }} />
                   </div>
-                );
-              })}
+                  <p className="text-[11px] font-mono text-teal-800 font-semibold tabular-nums">{yr.coveragePct}% цели</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
       {/* Recharts LineChart: Instructor Demand Dynamics through 2030 by Tourism Scenarios */}
-      <DemandDynamics2030Chart modelInput={modelInput} />
+      <DemandDynamics2030Chart
+        modelInput={modelInput}
+        externalScenario={{
+          id: scenarioProjection.option.tourismScenarioId,
+          nonce: scenarioSyncNonce,
+        }}
+      />
 
       {/* Regional DFO 2030 Forecast Module with Tourist Flow */}
       <DfoRegionalForecastModule onApplyRegionToCalculator={applyRegionToMainCalculator} />
