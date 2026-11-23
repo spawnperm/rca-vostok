@@ -613,3 +613,231 @@ export function computeComplexityTierDistribution(
   };
 }
 
+export const COMPLEXITY_BY_RANK: readonly ExpeditionComplexity[] = [
+  'н/к',
+  '1 КС',
+  '2 КС',
+  '3 КС',
+  '4 КС',
+  '5 КС',
+];
+
+export function complexityRankToLabel(rank: number): ExpeditionComplexity {
+  const clamped = Math.max(0, Math.min(5, Math.round(rank)));
+  return COMPLEXITY_BY_RANK[clamped] ?? '1 КС';
+}
+
+export type TrendDirection = 'up' | 'stable' | 'down';
+
+export interface RouteComplexityForecastPoint {
+  stepLabel: string;
+  routeTitle: string;
+  regionName: string;
+  actualRank: number | null;
+  actualLabel: string | null;
+  trendRank: number;
+  forecastRank: number | null;
+  isForecast: boolean;
+}
+
+export interface RouteComplexityForecastResult {
+  sampleSize: number;
+  recommendedComplexity: ExpeditionComplexity;
+  recommendedRank: number;
+  recommendedDescription: string;
+  predictedNumericRank: number;
+  slopePerTrip: number;
+  trendDirection: TrendDirection;
+  trendLabel: string;
+  overallMeanRank: number;
+  recentMeanRank: number;
+  maxObservedComplexity: ExpeditionComplexity | '—';
+  lastComplexity: ExpeditionComplexity | '—';
+  stepProgressionLabel: string;
+  confidencePercent: number;
+  confidenceLabel: string;
+  rationale: string;
+  points: RouteComplexityForecastPoint[];
+}
+
+/**
+ * Predicts the next route complexity level from chronological journal entries
+ * using Ordinary Least Squares (OLS) linear trend combined with a recent 3-trip moving average
+ * and FSTR +1 KC safety progression guardrail.
+ */
+export function forecastNextRouteComplexity(
+  entries: readonly ExperienceLogEntry[]
+): RouteComplexityForecastResult {
+  if (entries.length === 0) {
+    const baseMeta = EXPERIENCE_COMPLEXITIES[1];
+    return {
+      sampleSize: 0,
+      recommendedComplexity: '1 КС',
+      recommendedRank: 1,
+      recommendedDescription: baseMeta.label,
+      predictedNumericRank: 1,
+      slopePerTrip: 0,
+      trendDirection: 'stable',
+      trendLabel: 'Недостаточно данных (стартовый уровень)',
+      overallMeanRank: 0,
+      recentMeanRank: 0,
+      maxObservedComplexity: '—',
+      lastComplexity: '—',
+      stepProgressionLabel: 'Стартовый допуск',
+      confidencePercent: 25,
+      confidenceLabel: 'Низкая (0 записей)',
+      rationale:
+        'В журнале пока нет проведённых маршрутов. Рекомендуется начать с базовых маршрутов 1 КС и фиксировать каждый выход.',
+      points: [],
+    };
+  }
+
+  const ordered = [...entries].sort((a, b) => {
+    const dateDiff = a.date.localeCompare(b.date);
+    if (dateDiff !== 0) return dateDiff;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
+
+  const n = ordered.length;
+  const ranks = ordered.map((e) => COMPLEXITY_RANK[e.complexity] ?? 1);
+  const maxObservedRank = Math.max(...ranks);
+  const lastRank = ranks[n - 1];
+  const lastComplexity = complexityRankToLabel(lastRank);
+  const maxObservedComplexity = complexityRankToLabel(maxObservedRank);
+
+  const overallMeanRank =
+    Math.round((ranks.reduce((acc, r) => acc + r, 0) / n) * 100) / 100;
+  const recentWindow = ranks.slice(-Math.min(3, n));
+  const recentMeanRank =
+    Math.round(
+      (recentWindow.reduce((acc, r) => acc + r, 0) / recentWindow.length) * 100
+    ) / 100;
+
+  // OLS slope & intercept over step index t = 0..n-1
+  let slope = 0;
+  let intercept = overallMeanRank;
+  if (n >= 2) {
+    const meanT = (n - 1) / 2;
+    let num = 0;
+    let den = 0;
+    for (let i = 0; i < n; i += 1) {
+      const dt = i - meanT;
+      num += dt * (ranks[i] - overallMeanRank);
+      den += dt * dt;
+    }
+    slope = den > 0 ? num / den : 0;
+    intercept = overallMeanRank - slope * meanT;
+  }
+
+  const linearNext = intercept + slope * n;
+  const blendedRaw = n === 1 ? ranks[0] : 0.75 * linearNext + 0.25 * recentMeanRank;
+
+  // Safety progression cap: do not recommend jumping more than +1 grade above max logged level
+  const upperSafetyCap = Math.min(5, maxObservedRank + 1);
+  const clampedNumeric = Math.max(0, Math.min(upperSafetyCap, blendedRaw));
+  const predictedNumericRank = Math.round(clampedNumeric * 100) / 100;
+  const recommendedRank = Math.max(0, Math.min(upperSafetyCap, Math.round(clampedNumeric)));
+  const recommendedComplexity = complexityRankToLabel(recommendedRank);
+  const recommendedMeta =
+    EXPERIENCE_COMPLEXITIES.find((c) => c.value === recommendedComplexity) ??
+    EXPERIENCE_COMPLEXITIES[1];
+
+  const roundedSlope = Math.round(slope * 100) / 100;
+  let trendDirection: TrendDirection = 'stable';
+  let trendLabel = 'Стабильный профиль сложности';
+  if (roundedSlope >= 0.12) {
+    trendDirection = 'up';
+    trendLabel = `Восходящий тренд (+${roundedSlope.toFixed(2)} КС / поход)`;
+  } else if (roundedSlope <= -0.12) {
+    trendDirection = 'down';
+    trendLabel = `Снижение нагрузки (${roundedSlope.toFixed(2)} КС / поход)`;
+  }
+
+  let stepProgressionLabel = `Закрепление уровня ${recommendedComplexity}`;
+  if (recommendedRank > lastRank) {
+    stepProgressionLabel = `Повышение категории (+${recommendedRank - lastRank} КС)`;
+  } else if (recommendedRank < lastRank) {
+    stepProgressionLabel = `Стабилизация на уровне ${recommendedComplexity}`;
+  }
+
+  // Residual fit & sample size based confidence (40%..92%)
+  let confidencePercent = 45;
+  if (n >= 2) {
+    let ssRes = 0;
+    for (let i = 0; i < n; i += 1) {
+      const fitted = intercept + slope * i;
+      ssRes += (ranks[i] - fitted) ** 2;
+    }
+    const rmse = Math.sqrt(ssRes / n);
+    const sizeBonus = Math.min(34, n * 5);
+    const stabilityBonus = Math.max(0, Math.round((1.5 - Math.min(1.5, rmse)) * 10));
+    confidencePercent = Math.max(42, Math.min(92, 42 + sizeBonus + stabilityBonus));
+  }
+
+  const confidenceLabel =
+    confidencePercent >= 75
+      ? `Высокая (${confidencePercent}%)`
+      : confidencePercent >= 55
+      ? `Средняя (${confidencePercent}%)`
+      : `Начальная (${confidencePercent}%)`;
+
+  let rationale = '';
+  if (n === 1) {
+    rationale = `По единственной записи (${lastComplexity}) статистический прогноз рекомендует провести ещё 1–2 маршрута уровня ${recommendedComplexity} для формирования тренда и подтверждения опыта.`;
+  } else if (trendDirection === 'up' && recommendedRank > lastRank) {
+    rationale = `Линейный тренд МНК (+${roundedSlope.toFixed(2)} КС за выход) и недавняя практика (среднее ${recentMeanRank.toFixed(1)} КС) указывают на готовность к переходу на уровень ${recommendedComplexity}.`;
+  } else if (trendDirection === 'up') {
+    rationale = `Тренд восходящий (+${roundedSlope.toFixed(2)} КС за выход), при этом взвешенная оценка (${predictedNumericRank.toFixed(2)} КС) рекомендует закрепить уровень ${recommendedComplexity} перед следующим повышением.`;
+  } else if (trendDirection === 'down') {
+    rationale = `Последние походы показывают плавное снижение средней категории до ${recentMeanRank.toFixed(1)} КС. Следующий оптимальный шаг для поддержания формы — маршрут ${recommendedComplexity}.`;
+  } else {
+    rationale = `Ваш профиль сложности стабилен вокруг ${overallMeanRank.toFixed(1)} КС. Для планового расширения допуска РЦА рекомендуется маршрут уровня ${recommendedComplexity}.`;
+  }
+
+  const points: RouteComplexityForecastPoint[] = ordered.map((entry, idx) => {
+    const fitted = Math.max(0, Math.min(5, Math.round((intercept + slope * idx) * 100) / 100));
+    return {
+      stepLabel: `${formatRussianJournalDate(entry.date).slice(0, 5)}`,
+      routeTitle: entry.routeTitle,
+      regionName: entry.regionName,
+      actualRank: ranks[idx],
+      actualLabel: entry.complexity,
+      trendRank: fitted,
+      forecastRank: idx === n - 1 ? ranks[idx] : null,
+      isForecast: false,
+    };
+  });
+
+  points.push({
+    stepLabel: 'Прогноз',
+    routeTitle: `Прогноз: маршрут ${recommendedComplexity}`,
+    regionName: 'Рекомендация модели',
+    actualRank: null,
+    actualLabel: null,
+    trendRank: Math.max(0, Math.min(5, Math.round(linearNext * 100) / 100)),
+    forecastRank: recommendedRank,
+    isForecast: true,
+  });
+
+  return {
+    sampleSize: n,
+    recommendedComplexity,
+    recommendedRank,
+    recommendedDescription: recommendedMeta.label,
+    predictedNumericRank,
+    slopePerTrip: roundedSlope,
+    trendDirection,
+    trendLabel,
+    overallMeanRank,
+    recentMeanRank,
+    maxObservedComplexity,
+    lastComplexity,
+    stepProgressionLabel,
+    confidencePercent,
+    confidenceLabel,
+    rationale,
+    points,
+  };
+}
+
+

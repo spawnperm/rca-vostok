@@ -51,6 +51,7 @@ import { AttestationSelfDiagnosticsWidget } from './AttestationSelfDiagnosticsWi
 import { InstructorPassportCard } from './InstructorPassportCard';
 import { InstructorResumeGeneratorCard } from './InstructorResumeGeneratorCard';
 import { ProfessionalExperienceLogCard } from './ProfessionalExperienceLogCard';
+import { RouteComplexityForecastCard } from './RouteComplexityForecastCard';
 import { RouteComplexityPieWidget } from './RouteComplexityPieWidget';
 import { ProfileAttestationCertificateCard } from './ProfileAttestationCertificateCard';
 import { PreparationChecklistPdfCard } from './PreparationChecklistPdfCard';
@@ -376,6 +377,10 @@ export function AccountSection({
           user={null}
           onJumpToJournal={() => scrollToElementById('professional-experience-log')}
         />
+        <RouteComplexityForecastCard
+          user={null}
+          onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+        />
         <AttestationSessionsCalendarWidget
           user={null}
           inquiries={[]}
@@ -645,6 +650,10 @@ export function AccountSection({
       />
       <ProfessionalExperienceLogCard user={user} />
       <RouteComplexityPieWidget
+        user={user}
+        onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+      />
+      <RouteComplexityForecastCard
         user={user}
         onJumpToJournal={() => scrollToElementById('professional-experience-log')}
       />

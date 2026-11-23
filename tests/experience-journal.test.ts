@@ -4,6 +4,7 @@ import {
   classifyComplexityTier,
   computeComplexityTierDistribution,
   computeJournalMetrics,
+  forecastNextRouteComplexity,
   formatJournalMonthLabel,
   formatRussianJournalDate,
   getDefaultJournalEntries,
@@ -166,4 +167,60 @@ test('computeComplexityTierDistribution groups trips into easy, medium, and hard
   assert.equal(emptyDist.totalTrips, 0);
   assert.equal(emptyDist.nonZeroSlices.length, 0);
   assert.equal(emptyDist.dominantTier, null);
+});
+
+test('forecastNextRouteComplexity predicts upward, stable, downward, and empty baselines accurately', () => {
+  const emptyForecast = forecastNextRouteComplexity([]);
+  assert.equal(emptyForecast.sampleSize, 0);
+  assert.equal(emptyForecast.recommendedComplexity, '1 КС');
+  assert.equal(emptyForecast.points.length, 0);
+
+  const makeEntry = (
+    id: string,
+    date: string,
+    complexity: ExperienceLogEntry['complexity']
+  ): ExperienceLogEntry => ({
+    id,
+    date,
+    routeTitle: `Маршрут ${id}`,
+    regionId: 'primorye',
+    regionName: 'Приморский край',
+    complexity,
+    participantsCount: 10,
+    notes: '',
+    createdAt: `${date}T00:00:00Z`,
+  });
+
+  // Upward progression: 1 КС -> 2 КС -> 3 КС predicts 4 КС (+1 КС step)
+  const rising = forecastNextRouteComplexity([
+    makeEntry('a', '2026-06-01', '1 КС'),
+    makeEntry('b', '2026-07-01', '2 КС'),
+    makeEntry('c', '2026-08-01', '3 КС'),
+  ]);
+  assert.equal(rising.trendDirection, 'up');
+  assert.equal(rising.slopePerTrip, 1);
+  assert.equal(rising.recommendedComplexity, '4 КС');
+  assert.equal(rising.points.length, 4);
+  assert.equal(rising.points[3].isForecast, true);
+
+  // Stable progression: 2 КС -> 2 КС -> 2 КС stays at 2 КС
+  const stable = forecastNextRouteComplexity([
+    makeEntry('s1', '2026-05-01', '2 КС'),
+    makeEntry('s2', '2026-06-01', '2 КС'),
+    makeEntry('s3', '2026-07-01', '2 КС'),
+  ]);
+  assert.equal(stable.trendDirection, 'stable');
+  assert.equal(stable.slopePerTrip, 0);
+  assert.equal(stable.recommendedComplexity, '2 КС');
+
+  // Downward trend: 4 КС -> 3 КС -> 2 КС -> 2 КС
+  const falling = forecastNextRouteComplexity([
+    makeEntry('d1', '2026-04-01', '4 КС'),
+    makeEntry('d2', '2026-05-01', '3 КС'),
+    makeEntry('d3', '2026-06-01', '2 КС'),
+    makeEntry('d4', '2026-07-01', '2 КС'),
+  ]);
+  assert.equal(falling.trendDirection, 'down');
+  assert.ok(falling.slopePerTrip < 0);
+  assert.equal(falling.recommendedComplexity, '1 КС');
 });
