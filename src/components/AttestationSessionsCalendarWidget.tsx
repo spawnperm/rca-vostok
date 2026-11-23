@@ -9,15 +9,20 @@ import {
   Clock,
   LogIn,
   MapPin,
+  ShieldCheck,
+  UserPlus,
+  Users,
 } from 'lucide-react';
 import type { SessionUser } from '../utils/identityApi';
 import {
   buildMonthCalendarGrid,
-  getDefaultCalendarMonth,
-  getSessionMonths,
-  getUpcomingAttestationSessions,
+  filterExamSchedule,
   formatMonthTitleRu,
+  getDefaultCalendarMonth,
+  getInPersonExamSchedule,
+  getSessionMonths,
   WEEKDAYS_SHORT_RU,
+  type ExamDisciplineFilter,
   type UpcomingSessionView,
 } from '../utils/attestationCalendarBooking';
 import {
@@ -34,7 +39,7 @@ interface AttestationSessionsCalendarWidgetProps {
   onSessionBooked?: (sessionDateIso: string) => void;
   onSelectExamDate?: (sessionDateIso: string) => void;
   onJumpToInquiries?: () => void;
-  onFocusAuth?: () => void;
+  onFocusAuth?: (mode?: 'login' | 'register') => void;
 }
 
 const DISCIPLINE_TO_TRACK: Record<string, string> = {
@@ -55,6 +60,14 @@ const INQUIRY_STATUS_RU: Record<InquiryRecord['status'], string> = {
   rejected: 'Отклонено',
 };
 
+const DISCIPLINE_FILTERS: readonly { id: ExamDisciplineFilter; label: string }[] = [
+  { id: 'all', label: 'Все направления' },
+  { id: 'пешеходный', label: 'Пешеходный' },
+  { id: 'водный', label: 'Водный' },
+  { id: 'горный', label: 'Горный' },
+  { id: 'спелеологический', label: 'Спелео' },
+];
+
 export const AttestationSessionsCalendarWidget: React.FC<
   AttestationSessionsCalendarWidgetProps
 > = ({
@@ -66,23 +79,30 @@ export const AttestationSessionsCalendarWidget: React.FC<
   onJumpToInquiries,
   onFocusAuth,
 }) => {
-  const sessions = useMemo(() => getUpcomingAttestationSessions(), []);
+  const allSessions = useMemo(() => getInPersonExamSchedule(), []);
+  const [disciplineFilter, setDisciplineFilter] = useState<ExamDisciplineFilter>('all');
+
+  const sessions = useMemo(
+    () => filterExamSchedule(allSessions, disciplineFilter),
+    [allSessions, disciplineFilter]
+  );
+
   const sessionMonths = useMemo(() => getSessionMonths(sessions), [sessions]);
 
   const initialSession = useMemo<UpcomingSessionView | undefined>(() => {
     if (selectedExamDate) {
-      const matched = sessions.find((s) => s.start === selectedExamDate);
+      const matched = allSessions.find((s) => s.start === selectedExamDate);
       if (matched) return matched;
     }
-    return sessions[0];
-  }, [sessions, selectedExamDate]);
+    return allSessions[0];
+  }, [allSessions, selectedExamDate]);
 
   const [selectedSessionStart, setSelectedSessionStart] = useState<string>(
-    initialSession?.start ?? sessions[0]?.start ?? '2027-04-16'
+    initialSession?.start ?? allSessions[0]?.start ?? '2026-12-14'
   );
 
   const [viewMonth, setViewMonth] = useState<{ year: number; month: number }>(() =>
-    getDefaultCalendarMonth(sessions, selectedExamDate)
+    getDefaultCalendarMonth(allSessions, selectedExamDate)
   );
 
   const [discipline, setDiscipline] = useState<string>(
@@ -98,12 +118,34 @@ export const AttestationSessionsCalendarWidget: React.FC<
 
   useEffect(() => {
     if (!selectedExamDate) return;
-    const matched = sessions.find((s) => s.start === selectedExamDate);
+    const matched = allSessions.find((s) => s.start === selectedExamDate);
     if (matched) {
       setSelectedSessionStart(matched.start);
       setViewMonth({ year: matched.year, month: matched.month });
     }
-  }, [selectedExamDate, sessions]);
+  }, [selectedExamDate, allSessions]);
+
+  // Keep selectedSessionStart aligned if a discipline filter hides the current selection
+  useEffect(() => {
+    if (sessions.length === 0) return;
+    const exists = sessions.some((s) => s.start === selectedSessionStart);
+    if (!exists) {
+      const next = sessions[0];
+      setSelectedSessionStart(next.start);
+      setViewMonth({ year: next.year, month: next.month });
+    }
+  }, [sessions, selectedSessionStart]);
+
+  const selectedSession =
+    sessions.find((s) => s.start === selectedSessionStart) ?? sessions[0] ?? allSessions[0];
+
+  // Ensure chosen booking discipline belongs to the selected session's exam disciplines
+  useEffect(() => {
+    if (!selectedSession) return;
+    if (!selectedSession.disciplines.includes(discipline)) {
+      setDiscipline(selectedSession.disciplines[0] ?? 'пешеходный');
+    }
+  }, [selectedSession, discipline]);
 
   const bookedSessionDates = useMemo(() => {
     const dates = new Set<string>();
@@ -114,9 +156,6 @@ export const AttestationSessionsCalendarWidget: React.FC<
     }
     return dates;
   }, [inquiries]);
-
-  const selectedSession =
-    sessions.find((s) => s.start === selectedSessionStart) ?? sessions[0];
 
   const existingBooking = useMemo(
     () =>
@@ -145,7 +184,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
     setIcsNotice(null);
     onSelectExamDate?.(session.start);
     tracker.trackCustomInteraction(
-      'Календарь сессий · Выбор даты',
+      'Календарь аттестаций · Выбор экзамена',
       session.rangeLabel
     );
   };
@@ -167,10 +206,10 @@ export const AttestationSessionsCalendarWidget: React.FC<
     });
     const fileName = downloadCalendarIcs(ev, 1440);
     setIcsNotice(
-      `Файл ${fileName} скачан — добавьте сессию ${selectedSession.rangeLabel} в Google или Яндекс Календарь.`
+      `Файл ${fileName} скачан — добавьте очный экзамен ${selectedSession.rangeLabel} в Google или Яндекс Календарь.`
     );
     tracker.trackCustomInteraction(
-      'Календарь сессий · Экспорт .ics',
+      'Календарь аттестаций · Экспорт .ics',
       selectedSession.start
     );
   };
@@ -183,7 +222,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
     setJustBookedDate(null);
 
     if (!consentAccepted) {
-      setSubmitError('Подтвердите согласие на обработку заявки и получение уведомлений.');
+      setSubmitError('Подтвердите согласие на передачу регистрационной заявки в комиссию РЦА.');
       return;
     }
 
@@ -192,8 +231,8 @@ export const AttestationSessionsCalendarWidget: React.FC<
       const trackLabel =
         DISCIPLINE_TO_TRACK[discipline] ?? `Инструктор-проводник (${discipline})`;
       const noteText = experienceNote.trim()
-        ? `Запись на сессию ${selectedSession.rangeLabel}. ${experienceNote.trim()}`
-        : `Запись через календарь личного кабинета на аттестационную сессию ${selectedSession.rangeLabel} (${selectedSession.category}).`;
+        ? `Регистрация на очный экзамен ${selectedSession.rangeLabel}. ${experienceNote.trim()}`
+        : `Регистрация через «Календарь аттестаций» на очный экзамен ${selectedSession.rangeLabel} (${selectedSession.category}).`;
 
       const res = await fetch('/api/inquiries', {
         method: 'POST',
@@ -213,7 +252,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
 
       const payload = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setSubmitError(payload.error || 'Не удалось оформить запись на выбранную дату.');
+        setSubmitError(payload.error || 'Не удалось оформить регистрацию на выбранный экзамен.');
         return;
       }
 
@@ -221,11 +260,11 @@ export const AttestationSessionsCalendarWidget: React.FC<
       setExperienceNote('');
       onSessionBooked?.(selectedSession.start);
       tracker.trackCustomInteraction(
-        'Календарь сессий · Запись на аттестацию',
+        'Календарь аттестаций · Регистрация на экзамен',
         `${selectedSession.start} · ${trackLabel}`
       );
     } catch {
-      setSubmitError('Ошибка сети при отправке записи. Попробуйте ещё раз.');
+      setSubmitError('Ошибка сети при отправке регистрации. Попробуйте ещё раз.');
     } finally {
       setSubmitting(false);
     }
@@ -238,29 +277,75 @@ export const AttestationSessionsCalendarWidget: React.FC<
       className="bg-white border border-slate-200 rounded-xl p-6 space-y-5 scroll-mt-24"
     >
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
         <div className="space-y-1.5 max-w-2xl">
-          <p className="text-xs font-medium text-teal-700 inline-flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-teal-700">
             <CalendarDays className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-            <span>Официальный график сессий 1–4 КС · РЦА «Русский Восток»</span>
-          </p>
+            <span>Очные экзамены 1–4 КС · РЦА «Русский Восток» (ВВГУ и ФСТР)</span>
+            {user && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="font-mono tabular-nums text-slate-700">
+                  Ваших регистраций: {bookedSessionDates.size}
+                </span>
+              </>
+            )}
+          </div>
           <h3
             id="attestation-calendar-heading"
             className="text-lg sm:text-xl font-bold text-slate-900"
           >
-            Календарь ближайших аттестаций и запись
+            Календарь аттестаций
           </h3>
           <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Выберите дату аттестационной сессии прямо в календаре или списке ближайших потоков,
-            чтобы зафиксировать участие и отслеживать статус заявки в кабинете.
+            Расписание ближайших очных теоретических и полевых экзаменов. Выберите подходящий поток
+            в календаре или списке сессий, чтобы ознакомиться с программой и зарегистрироваться.
           </p>
         </div>
 
-        {/* Quick Month Tabs with Official Sessions */}
+        {/* Discipline Filter Controls */}
+        <div
+          role="tablist"
+          aria-label="Фильтр экзаменов по виду туризма"
+          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start shrink-0"
+        >
+          {DISCIPLINE_FILTERS.map((f) => {
+            const active = disciplineFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setDisciplineFilter(f.id);
+                  tracker.trackCustomInteraction(
+                    `Календарь аттестаций · фильтр: ${f.label}`,
+                    'account'
+                  );
+                }}
+                className={`px-2.5 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                  active
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Quick Month Tabs with Official Sessions */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+        <span className="text-xs font-medium text-slate-500">
+          Месяцы проведения ближайших экзаменов ({sessions.length}):
+        </span>
         <div
           role="group"
           aria-label="Месяцы проведения аттестаций"
-          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start shrink-0"
+          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
         >
           {sessionMonths.map((tab) => {
             const active = viewMonth.year === tab.year && viewMonth.month === tab.month;
@@ -274,11 +359,10 @@ export const AttestationSessionsCalendarWidget: React.FC<
                     (s) => s.year === tab.year && s.month === tab.month
                   );
                   if (firstInMonth) {
-                    setSelectedSessionStart(firstInMonth.start);
-                    onSelectExamDate?.(firstInMonth.start);
+                    handleSelectSession(firstInMonth);
                   }
                 }}
-                className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   active
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -291,9 +375,9 @@ export const AttestationSessionsCalendarWidget: React.FC<
         </div>
       </div>
 
-      {/* Main Split: Calendar Month Grid + Session Booking / Upcoming List */}
+      {/* Main Split: Calendar Month Grid + Session Schedule vs Registration Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left: Month Matrix Calendar */}
+        {/* Left: Month Matrix Calendar + Upcoming Exams List (6 cols) */}
         <div className="lg:col-span-6 border border-slate-200 rounded-xl p-4 bg-slate-50/40 space-y-4">
           <div className="flex items-center justify-between gap-2">
             <h4 className="text-sm font-bold text-slate-900">
@@ -322,10 +406,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
           {/* Weekday Headings */}
           <div className="grid grid-cols-7 gap-1 text-center">
             {WEEKDAYS_SHORT_RU.map((dayName) => (
-              <div
-                key={dayName}
-                className="text-[11px] font-semibold text-slate-500 py-1"
-              >
+              <div key={dayName} className="text-[11px] font-semibold text-slate-500 py-1">
                 {dayName}
               </div>
             ))}
@@ -344,7 +425,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
                     key={cell.isoDate}
                     type="button"
                     onClick={() => handleSelectSession(cell.session!)}
-                    title={`${cell.session.rangeLabel} · Сессия ${cell.session.category}`}
+                    title={`${cell.session.rangeLabel} · ${cell.session.title ?? cell.session.category}`}
                     aria-pressed={Boolean(isSelectedSession)}
                     className={`relative h-10 rounded-lg font-mono text-xs font-bold tabular-nums flex flex-col items-center justify-center border transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
                       cell.isBooked
@@ -352,8 +433,8 @@ export const AttestationSessionsCalendarWidget: React.FC<
                           ? 'bg-emerald-700 border-emerald-700 text-white ring-2 ring-emerald-200'
                           : 'bg-emerald-50 border-emerald-400 text-emerald-900 hover:bg-emerald-100'
                         : isSelectedSession
-                        ? 'bg-teal-700 border-teal-700 text-white ring-2 ring-teal-200'
-                        : 'bg-teal-50 border-teal-300 text-teal-900 hover:bg-teal-100'
+                          ? 'bg-teal-700 border-teal-700 text-white ring-2 ring-teal-200'
+                          : 'bg-teal-50 border-teal-300 text-teal-900 hover:bg-teal-100'
                     }`}
                   >
                     <span>{cell.dayOfMonth}</span>
@@ -363,8 +444,8 @@ export const AttestationSessionsCalendarWidget: React.FC<
                         isSelectedSession
                           ? 'bg-white'
                           : cell.isBooked
-                          ? 'bg-emerald-600'
-                          : 'bg-teal-600'
+                            ? 'bg-emerald-600'
+                            : 'bg-teal-600'
                       }`}
                     />
                   </button>
@@ -378,10 +459,10 @@ export const AttestationSessionsCalendarWidget: React.FC<
                     !cell.inCurrentMonth
                       ? 'text-slate-300'
                       : cell.isToday
-                      ? 'bg-slate-900 text-white font-bold'
-                      : cell.isWeekend
-                      ? 'text-slate-500 bg-white/60'
-                      : 'text-slate-700 bg-white/80'
+                        ? 'bg-slate-900 text-white font-bold'
+                        : cell.isWeekend
+                          ? 'text-slate-500 bg-white/60'
+                          : 'text-slate-700 bg-white/80'
                   }`}
                 >
                   {cell.dayOfMonth}
@@ -394,30 +475,30 @@ export const AttestationSessionsCalendarWidget: React.FC<
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-2 border-t border-slate-200 text-[11px] text-slate-600">
             <span className="inline-flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-xs bg-teal-700" aria-hidden="true" />
-              Выбранная сессия
+              Выбранный экзамен
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span
                 className="w-2.5 h-2.5 rounded-xs bg-teal-50 border border-teal-300"
                 aria-hidden="true"
               />
-              Даты аттестации РЦА
+              Очные экзамены РЦА
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span
                 className="w-2.5 h-2.5 rounded-xs bg-emerald-50 border border-emerald-400"
                 aria-hidden="true"
               />
-              Есть ваша запись
+              Вы зарегистрированы
             </span>
           </div>
 
-          {/* Compact Upcoming Sessions List */}
+          {/* Full Upcoming In-Person Exams List */}
           <div className="space-y-2 pt-1">
             <p className="text-xs font-semibold text-slate-800">
-              Ближайшие даты аттестационных сессий
+              Расписание ближайших очных экзаменов ({sessions.length})
             </p>
-            <ul className="space-y-1.5">
+            <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-0.5">
               {sessions.map((slot) => {
                 const active = slot.start === selectedSession?.start;
                 const isBooked = bookedSessionDates.has(slot.start);
@@ -426,20 +507,35 @@ export const AttestationSessionsCalendarWidget: React.FC<
                     <button
                       type="button"
                       onClick={() => handleSelectSession(slot)}
-                      className={`w-full text-left px-3 py-2 rounded-lg border text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                      className={`w-full text-left px-3 py-2.5 rounded-lg border text-xs flex items-start justify-between gap-3 transition-colors cursor-pointer ${
                         active
-                          ? 'bg-white border-teal-600 text-slate-900 shadow-xs'
-                          : 'bg-white/70 border-slate-200 text-slate-700 hover:bg-white'
+                          ? 'bg-white border-teal-700 text-slate-900 shadow-xs ring-1 ring-teal-700'
+                          : 'bg-white/80 border-slate-200 text-slate-700 hover:bg-white'
                       }`}
                     >
-                      <span className="font-semibold truncate">{slot.rangeLabel}</span>
-                      <span className="inline-flex items-center gap-2 shrink-0 font-mono text-[11px] tabular-nums">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="font-bold text-slate-900 truncate">
+                          {slot.rangeLabel} · {slot.category}
+                        </p>
+                        <p className="text-[11px] text-slate-600 truncate">
+                          {slot.title ?? slot.venue}
+                        </p>
+                      </div>
+
+                      <div className="text-right shrink-0 space-y-0.5 font-mono text-[11px] tabular-nums">
                         {isBooked ? (
-                          <span className="text-emerald-700 font-semibold">Записаны</span>
+                          <span className="text-emerald-700 font-bold block">Записаны</span>
                         ) : (
-                          <span className="text-slate-500">{slot.availabilityLabel}</span>
+                          <span className="text-teal-800 font-semibold block">
+                            {slot.availabilityLabel}
+                          </span>
                         )}
-                      </span>
+                        {slot.seatsAvailable !== undefined && (
+                          <span className="text-slate-500 block">
+                            мест: {slot.seatsAvailable}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   </li>
                 );
@@ -448,22 +544,30 @@ export const AttestationSessionsCalendarWidget: React.FC<
           </div>
         </div>
 
-        {/* Right: Selected Session Details + Direct Booking Form */}
+        {/* Right: Selected In-Person Exam Details + Registration Form (6 cols) */}
         <div className="lg:col-span-6 border border-slate-200 rounded-xl p-5 bg-white space-y-4">
           {selectedSession && (
             <>
+              {/* Exam Header */}
               <div className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-slate-200">
-                <div className="space-y-1">
-                  <p className="text-xs font-medium text-teal-700 font-mono tabular-nums">
-                    Сессия {selectedSession.category} · {selectedSession.availabilityLabel}
-                  </p>
-                  <h4 className="text-base sm:text-lg font-bold text-slate-900">
+                <div className="space-y-1 max-w-md">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-teal-700 font-mono tabular-nums">
+                    <span>{selectedSession.category}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{selectedSession.availabilityLabel}</span>
+                    {selectedSession.startTimeVld && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span>Старт в {selectedSession.startTimeVld}</span>
+                      </>
+                    )}
+                  </div>
+                  <h4 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
                     {selectedSession.rangeLabel}
                   </h4>
-                  <p className="text-xs text-slate-600 inline-flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
-                    <span>{selectedSession.venue}</span>
-                  </p>
+                  {selectedSession.title && (
+                    <p className="text-xs font-semibold text-slate-800">{selectedSession.title}</p>
+                  )}
                 </div>
 
                 <button
@@ -476,6 +580,64 @@ export const AttestationSessionsCalendarWidget: React.FC<
                 </button>
               </div>
 
+              {/* Venue, Commission & Seats Metadata Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg p-3.5">
+                <div className="space-y-0.5">
+                  <p className="text-[11px] text-slate-500 inline-flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-teal-700 shrink-0" aria-hidden="true" />
+                    <span>Площадка проведения</span>
+                  </p>
+                  <p className="font-semibold text-slate-900 leading-snug">
+                    {selectedSession.venue}
+                  </p>
+                </div>
+
+                <div className="space-y-0.5">
+                  <p className="text-[11px] text-slate-500 inline-flex items-center gap-1">
+                    <Users className="w-3 h-3 text-teal-700 shrink-0" aria-hidden="true" />
+                    <span>Квота и срок подачи</span>
+                  </p>
+                  <p className="font-semibold text-slate-900 font-mono tabular-nums">
+                    {selectedSession.seatsAvailable ?? 12} из {selectedSession.seatsTotal ?? 30}{' '}
+                    мест свободно
+                  </p>
+                  {selectedSession.registrationDeadlineLabel && (
+                    <p className="text-[11px] text-slate-600">
+                      Приём заявок {selectedSession.registrationDeadlineLabel}
+                    </p>
+                  )}
+                </div>
+
+                {selectedSession.commissionInfo && (
+                  <div className="sm:col-span-2 pt-2 border-t border-slate-200 space-y-0.5">
+                    <p className="text-[11px] text-slate-500 inline-flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-teal-700 shrink-0" aria-hidden="true" />
+                      <span>Экзаменационная комиссия</span>
+                    </p>
+                    <p className="font-medium text-slate-800">{selectedSession.commissionInfo}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* In-Person Exam Program by Day */}
+              {selectedSession.dayPlan && selectedSession.dayPlan.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-slate-800">
+                    Программа очного экзамена:
+                  </p>
+                  <ul className="space-y-1 text-xs text-slate-700">
+                    {selectedSession.dayPlan.map((step, idx) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="font-mono font-bold text-teal-700 shrink-0">
+                          {idx + 1}.
+                        </span>
+                        <span className="leading-snug">{step}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {icsNotice && (
                 <p className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
                   {icsNotice}
@@ -485,11 +647,16 @@ export const AttestationSessionsCalendarWidget: React.FC<
               {justBookedDate && (
                 <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-950 space-y-2">
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" aria-hidden="true" />
+                    <CheckCircle2
+                      className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5"
+                      aria-hidden="true"
+                    />
                     <div>
-                      <p className="font-bold">Запись на сессию {justBookedDate} оформлена</p>
+                      <p className="font-bold">
+                        Регистрация на очный экзамен {justBookedDate} подтверждена
+                      </p>
                       <p className="text-emerald-800 mt-0.5">
-                        Заявка сохранена в системе РЦА и добавлена в таблицу статусов ниже.
+                        Заявка сохранена в системе РЦА и добавлена в таблицу статусов кабинета.
                       </p>
                     </div>
                   </div>
@@ -508,27 +675,38 @@ export const AttestationSessionsCalendarWidget: React.FC<
               {!user ? (
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                   <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
-                    Для записи на дату <span className="font-semibold">{selectedSession.rangeLabel}</span>{' '}
-                    войдите или зарегистрируйтесь в личном кабинете — после этого выбранная сессия
-                    закрепится за вашим профилем и попадёт в таблицу статусов.
+                    Чтобы зарегистрироваться на очный экзамен{' '}
+                    <span className="font-semibold">{selectedSession.rangeLabel}</span>, войдите в
+                    личный кабинет или создайте учётную запись соискателя — после входа сессия
+                    закрепится за вашим профилем.
                   </p>
                   {onFocusAuth && (
-                    <button
-                      type="button"
-                      onClick={onFocusAuth}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-                    >
-                      <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Войти для записи на дату</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onFocusAuth('login')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Войти и записаться</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onFocusAuth('register')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        <UserPlus className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                        <span>Регистрация соискателя</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : existingBooking ? (
                 <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-900">
                       <CalendarCheck2 className="w-4 h-4 text-emerald-700" aria-hidden="true" />
-                      Вы уже записаны на эту дату
+                      Вы зарегистрированы на этот экзамен
                     </span>
                     <span className="text-xs font-semibold text-emerald-800">
                       Статус: {INQUIRY_STATUS_RU[existingBooking.status]}
@@ -550,13 +728,17 @@ export const AttestationSessionsCalendarWidget: React.FC<
                   )}
                 </div>
               ) : (
-                <form onSubmit={handleBookSession} className="space-y-3.5">
+                <form onSubmit={handleBookSession} className="space-y-3.5 pt-1 border-t border-slate-200">
+                  <p className="text-xs font-bold text-slate-900 pt-2">
+                    Онлайн-регистрация на очный экзамен ({selectedSession.rangeLabel})
+                  </p>
+
                   <div className="space-y-1.5">
                     <label
                       htmlFor="calendar-booking-discipline"
                       className="block text-xs font-medium text-slate-700"
                     >
-                      Направление аттестации на сессию {selectedSession.rangeLabel}
+                      Направление аттестации
                     </label>
                     <select
                       id="calendar-booking-discipline"
@@ -577,7 +759,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
                       htmlFor="calendar-booking-contact"
                       className="block text-xs font-medium text-slate-700"
                     >
-                      Телефон или Telegram для связи
+                      Телефон или Telegram для связи комиссии
                     </label>
                     <input
                       id="calendar-booking-contact"
@@ -594,7 +776,7 @@ export const AttestationSessionsCalendarWidget: React.FC<
                       htmlFor="calendar-booking-note"
                       className="block text-xs font-medium text-slate-700"
                     >
-                      Категория маршрутов / комментарий к опыту
+                      Категория сложности и комментарий к стажу
                     </label>
                     <textarea
                       id="calendar-booking-note"
@@ -636,8 +818,8 @@ export const AttestationSessionsCalendarWidget: React.FC<
                     <CalendarCheck2 className="w-4 h-4" aria-hidden="true" />
                     <span>
                       {submitting
-                        ? 'Оформляем запись…'
-                        : `Записаться на ${selectedSession.rangeLabel}`}
+                        ? 'Оформляем регистрацию…'
+                        : `Зарегистрироваться на экзамен (${selectedSession.rangeLabel})`}
                     </span>
                   </button>
                 </form>

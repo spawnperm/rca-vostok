@@ -252,7 +252,8 @@ export function AccountSection({
         <AttestationSessionsCalendarWidget
           user={null}
           inquiries={[]}
-          onFocusAuth={() => {
+          onFocusAuth={(mode) => {
+            if (mode) setAuthMode(mode);
             scrollToElementById('account-auth-panel');
           }}
         />
@@ -809,7 +810,7 @@ function CabinetHeader({
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
             <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Календарь и заявки</span>
+            <span>Календарь аттестаций</span>
           </button>
 
           <button

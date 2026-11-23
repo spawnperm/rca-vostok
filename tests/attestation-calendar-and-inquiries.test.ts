@@ -5,7 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   buildMonthCalendarGrid,
+  filterExamSchedule,
   getDefaultCalendarMonth,
+  getInPersonExamSchedule,
   getSessionMonths,
   getUpcomingAttestationSessions,
 } from '../src/utils/attestationCalendarBooking.ts';
@@ -49,6 +51,33 @@ describe('Attestation Sessions Calendar & Inquiry Status Lifecycle', () => {
     assert.ok(regularCell);
     assert.equal(regularCell.session, null);
     assert.equal(regularCell.isBooked, false);
+  });
+
+  it('builds nearest in-person exam schedule with metadata and supports discipline filtering', () => {
+    const exams = getInPersonExamSchedule('2026-11-23');
+    assert.equal(exams.length, 8);
+    assert.equal(exams[0].start, '2026-12-14');
+
+    for (const exam of exams) {
+      assert.ok(exam.venue && exam.venue.length > 0);
+      assert.ok(exam.dayPlan && exam.dayPlan.length >= 2);
+      assert.ok(typeof exam.seatsAvailable === 'number' && exam.seatsAvailable > 0);
+      assert.ok(exam.registrationDeadlineLabel && exam.registrationDeadlineLabel.length > 0);
+    }
+
+    assert.equal(filterExamSchedule(exams, 'all').length, 8);
+
+    const mountainExams = filterExamSchedule(exams, 'горный');
+    assert.ok(mountainExams.length >= 2);
+    assert.ok(
+      mountainExams.every((e) => e.disciplines.some((d) => d.includes('горн')))
+    );
+
+    const waterExams = filterExamSchedule(exams, 'водный');
+    assert.ok(waterExams.length >= 2);
+    assert.ok(
+      waterExams.every((e) => e.disciplines.some((d) => d.includes('водн')))
+    );
   });
 
   it('validates sessionDate on CertificationInquiry and persists needs_documents + statusComment', async () => {
