@@ -107,6 +107,7 @@ const STORAGE_PREFIX = 'rca_instructor_passport_extras_v1:';
 const INQUIRY_STATUS_LABELS: Record<InquiryRecord['status'], string> = {
   new: 'Новая',
   in_review: 'На рассмотрении',
+  needs_documents: 'Требуются документы',
   approved: 'Одобрена',
   rejected: 'Отклонена',
 };

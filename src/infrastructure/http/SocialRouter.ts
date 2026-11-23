@@ -235,6 +235,7 @@ export function createSocialRouter(deps: SocialRouterDeps): express.Router {
           await deps.updateInquiryStatus.execute(req.authUser!, {
             inquiryId: req.params.inquiryId,
             status: body.status,
+            statusComment: body.statusComment,
           })
         );
       } catch (err) {

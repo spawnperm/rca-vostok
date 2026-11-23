@@ -15,6 +15,8 @@ interface InquiryRow {
   track: string;
   experience_note: string;
   consent_accepted: boolean;
+  session_date: string | null;
+  status_comment: string;
   user_id: string | null;
   status: string;
   created_at: Date;
@@ -30,6 +32,8 @@ function toDTO(row: InquiryRow): InquiryRecordDTO {
     track: row.track,
     experienceNote: row.experience_note,
     consentAccepted: row.consent_accepted,
+    sessionDate: row.session_date ?? null,
+    statusComment: row.status_comment ?? '',
     userId: row.user_id,
     status: row.status as InquiryStatus,
     createdAt: row.created_at.toISOString(),
@@ -46,6 +50,8 @@ function toAggregate(row: InquiryRow): CertificationInquiry {
     track: row.track,
     experienceNote: row.experience_note,
     consentAccepted: row.consent_accepted,
+    sessionDate: row.session_date ?? null,
+    statusComment: row.status_comment ?? '',
     userId: row.user_id,
     status: row.status as InquiryStatus,
     createdAt: row.created_at.toISOString(),
@@ -80,9 +86,10 @@ export class PostgresInquiryRepository implements InquiryRepository {
     const dto = inquiry.toDTO();
     await this.pool.query(
       `UPDATE certification_inquiries
-          SET status = $2
+          SET status = $2,
+              status_comment = $3
         WHERE id = $1`,
-      [dto.id, dto.status]
+      [dto.id, dto.status, dto.statusComment]
     );
   }
 
@@ -117,8 +124,8 @@ export class PostgresInquiryRepository implements InquiryRepository {
     await this.pool.query(
       `INSERT INTO certification_inquiries (
          id, full_name, email, contact_channel, region, track,
-         experience_note, consent_accepted, user_id, status, created_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         experience_note, consent_accepted, session_date, status_comment, user_id, status, created_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        ON CONFLICT (id) DO NOTHING`,
       [
         dto.id,
@@ -129,6 +136,8 @@ export class PostgresInquiryRepository implements InquiryRepository {
         dto.track,
         dto.experienceNote,
         dto.consentAccepted,
+        dto.sessionDate,
+        dto.statusComment,
         dto.userId,
         dto.status,
         dto.createdAt,

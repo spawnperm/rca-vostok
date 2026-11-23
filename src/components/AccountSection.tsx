@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   BarChart3,
+  CalendarDays,
   CheckCircle2,
   FileBadge2,
   GitBranch,
@@ -26,6 +27,7 @@ import {
   type UserAttestationSummary,
 } from './AttestationProgressWidget';
 import { AttestationPathWidget } from './AttestationPathWidget';
+import { AttestationSessionsCalendarWidget } from './AttestationSessionsCalendarWidget';
 import { PersonalRoadmapWidget } from './PersonalRoadmapWidget';
 import { NotificationCenterWidget } from './NotificationCenterWidget';
 import { AccountKnowledgeBaseWidget } from './AccountKnowledgeBaseWidget';
@@ -226,6 +228,14 @@ export function AccountSection({
             el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }}
         />
+        <AttestationSessionsCalendarWidget
+          user={null}
+          inquiries={[]}
+          onFocusAuth={() => {
+            const el = document.getElementById('account-auth-panel');
+            el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+        />
         <AccountKnowledgeBaseWidget
           user={null}
           externalSearch={kbExternalSearch}
@@ -276,6 +286,7 @@ export function AccountSection({
       <CabinetHeader
         user={user}
         onLogout={handleLogout}
+        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
         onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
         onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
@@ -293,9 +304,31 @@ export function AccountSection({
           }));
           scrollToElementById('attestation-progress-details');
         }}
-        onOpenApplication={onNavigate ? () => onNavigate('overview') : undefined}
+        onOpenApplication={() => scrollToElementById('attestation-sessions-calendar')}
         onJumpToRoadmap={() => scrollToElementById('personal-roadmap-widget')}
         onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
+      />
+      <AttestationSessionsCalendarWidget
+        user={user}
+        inquiries={inquiries}
+        selectedExamDate={selectedExamDate}
+        onSelectExamDate={setSelectedExamDate}
+        onSessionBooked={(sessionDateIso) => {
+          setSelectedExamDate(sessionDateIso);
+          if (hasPermission(user, 'inquiries:view_own')) {
+            void loadInquiries();
+          }
+        }}
+        onJumpToInquiries={() => scrollToElementById('my-inquiries-status-table')}
+      />
+      <MyInquiriesSection
+        canView={hasPermission(user, 'inquiries:view_own')}
+        inquiries={inquiries}
+        loading={inquiriesLoading}
+        error={inquiriesError}
+        onRefresh={() => void loadInquiries()}
+        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
+        onJumpToChecklist={() => scrollToElementById('attestation-progress-widget')}
       />
       <AttestationProgressWidget
         user={user}
@@ -417,13 +450,6 @@ export function AccountSection({
             onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
           />
           <ProfileCard user={user} onUpdated={handleAuthenticated} />
-          <MyInquiriesSection
-            canView={hasPermission(user, 'inquiries:view_own')}
-            inquiries={inquiries}
-            loading={inquiriesLoading}
-            error={inquiriesError}
-            onRefresh={() => void loadInquiries()}
-          />
           <CenterReviewForm
             user={user}
             onSubmitted={() => setReviewsRefreshKey((k) => k + 1)}
@@ -715,12 +741,14 @@ function Field({
 function CabinetHeader({
   user,
   onLogout,
+  onJumpToCalendar,
   onJumpToAnalytics,
   onJumpToPassport,
   onJumpToFaq,
 }: {
   user: SessionUser;
   onLogout: () => void;
+  onJumpToCalendar: () => void;
   onJumpToAnalytics: () => void;
   onJumpToPassport: () => void;
   onJumpToFaq: () => void;
@@ -747,6 +775,15 @@ function CabinetHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onJumpToCalendar}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+          >
+            <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Календарь и заявки</span>
+          </button>
+
           <button
             type="button"
             onClick={onJumpToPassport}

@@ -32,6 +32,7 @@ export class SubmitInquiryUseCase {
   ): Promise<{
     ok: true;
     id: string;
+    sessionDate: string | null;
     createdAt: string;
     totalSubscriptions: number;
   }> {
@@ -56,9 +57,10 @@ export class SubmitInquiryUseCase {
       },
     });
 
-    return {
+  return {
       ok: true,
       id: inquiry.id,
+      sessionDate: inquiry.sessionDate,
       createdAt: inquiry.createdAt,
       totalSubscriptions: allRecords.length,
     };
@@ -71,6 +73,7 @@ export interface InquiryStatsDTO {
   byStatus: {
     new: number;
     in_review: number;
+    needs_documents: number;
     approved: number;
     rejected: number;
   };
@@ -92,6 +95,7 @@ export class GetInquiryStatsUseCase {
     const byStatus = {
       new: 0,
       in_review: 0,
+      needs_documents: 0,
       approved: 0,
       rejected: 0,
     };
@@ -129,7 +133,7 @@ export class GetInquiryStatsUseCase {
 
     return {
       totalSubscriptions: records.length,
-      activeCount: byStatus.new + byStatus.in_review,
+      activeCount: byStatus.new + byStatus.in_review + byStatus.needs_documents,
       byStatus,
       byRegion,
       byTrack,
@@ -179,7 +183,7 @@ export class UpdateInquiryStatusUseCase {
 
   async execute(
     actor: User,
-    input: { inquiryId: unknown; status: unknown }
+    input: { inquiryId: unknown; status: unknown; statusComment?: unknown }
   ): Promise<InquiryRecordDTO> {
     actor.assertCan(PERMISSIONS.VIEW_ALL_INQUIRIES);
 
@@ -188,7 +192,13 @@ export class UpdateInquiryStatusUseCase {
       throw new ValidationError('Не указана заявка.');
     }
 
-    const allowed: InquiryStatus[] = ['new', 'in_review', 'approved', 'rejected'];
+    const allowed: InquiryStatus[] = [
+      'new',
+      'in_review',
+      'needs_documents',
+      'approved',
+      'rejected',
+    ];
     const status = input.status;
     if (typeof status !== 'string' || !allowed.includes(status as InquiryStatus)) {
       throw new ValidationError('Недопустимый статус заявки.');
@@ -199,7 +209,9 @@ export class UpdateInquiryStatusUseCase {
       throw new NotFoundError('Заявка не найдена.');
     }
 
-    const updated = inquiry.withStatus(status as InquiryStatus);
+    const statusComment =
+      typeof input.statusComment === 'string' ? input.statusComment : undefined;
+    const updated = inquiry.withStatus(status as InquiryStatus, statusComment);
     await this.inquiryRepo.saveOne(updated);
 
     this.eventBus.publish({

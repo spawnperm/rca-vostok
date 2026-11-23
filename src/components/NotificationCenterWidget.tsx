@@ -39,6 +39,7 @@ const TODAY_ISO = '2026-11-22';
 const INQUIRY_STATUS_LABELS: Record<InquiryRecord['status'], string> = {
   new: 'Новая',
   in_review: 'На рассмотрении',
+  needs_documents: 'Требуются документы',
   approved: 'Одобрена',
   rejected: 'Отклонена',
 };
@@ -221,6 +222,12 @@ export const NotificationCenterWidget: React.FC<NotificationCenterWidgetProps> =
         message = statusChanged
           ? `Статус переведён с «${INQUIRY_STATUS_LABELS[prevStatus!]}» на «На рассмотрении». Подготовьте медсправку и паспорт маршрута (ПП № 760).`
           : 'Приёмная комиссия проверяет подтверждение походного стажа и медицинский допуск к аттестационной сессии.';
+      } else if (inq.status === 'needs_documents') {
+        tone = 'warning';
+        title = `Требуются документы по заявке «${inq.track}»`;
+        message =
+          inq.statusComment?.trim() ||
+          'Комиссия запросила дополнительные сведения: приложите подтверждение походного стажа, медсправку или паспорт маршрута (ПП № 760).';
       } else if (inq.status === 'approved') {
         tone = 'success';
         title = statusChanged

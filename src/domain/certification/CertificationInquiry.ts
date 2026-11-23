@@ -10,6 +10,10 @@ export interface InquiryRecordDTO {
   track: string;
   experienceNote: string;
   consentAccepted: boolean;
+  /** Target exam session date chosen in the calendar (`YYYY-MM-DD`), if any. */
+  sessionDate: string | null;
+  /** Optional curator note explaining required documents or review details. */
+  statusComment: string;
   /** Owning account, when the request came from an authenticated cabinet session. */
   userId: string | null;
   status: InquiryStatus;
@@ -17,7 +21,13 @@ export interface InquiryRecordDTO {
 }
 
 /** Lifecycle of a request, as shown in the personal cabinet. */
-export const INQUIRY_STATUSES = ['new', 'in_review', 'approved', 'rejected'] as const;
+export const INQUIRY_STATUSES = [
+  'new',
+  'in_review',
+  'needs_documents',
+  'approved',
+  'rejected',
+] as const;
 export type InquiryStatus = (typeof INQUIRY_STATUSES)[number];
 
 export interface CreateInquiryInput {
@@ -29,7 +39,25 @@ export interface CreateInquiryInput {
   region?: unknown;
   track?: unknown;
   experienceNote?: unknown;
+  sessionDate?: unknown;
   consentAccepted?: unknown;
+}
+
+function normalizeSessionDate(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (typeof raw !== 'string') {
+    throw new ValidationError('Некорректный формат даты сессии.');
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new ValidationError('Дата сессии должна быть в формате ГГГГ-ММ-ДД.');
+  }
+  const parsed = new Date(`${trimmed}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== trimmed) {
+    throw new ValidationError('Указана несуществующая дата сессии.');
+  }
+  return trimmed;
 }
 
 export class CertificationInquiry {
@@ -41,6 +69,8 @@ export class CertificationInquiry {
   readonly track: string;
   readonly experienceNote: SanitizedText;
   readonly consentAccepted: true;
+  readonly sessionDate: string | null;
+  readonly statusComment: string;
   readonly userId: string | null;
   readonly status: InquiryStatus;
   readonly createdAt: string;
@@ -54,6 +84,8 @@ export class CertificationInquiry {
     track: string;
     experienceNote: SanitizedText;
     consentAccepted: true;
+    sessionDate: string | null;
+    statusComment: string;
     userId: string | null;
     status: InquiryStatus;
     createdAt: string;
@@ -66,6 +98,8 @@ export class CertificationInquiry {
     this.track = props.track;
     this.experienceNote = props.experienceNote;
     this.consentAccepted = props.consentAccepted;
+    this.sessionDate = props.sessionDate;
+    this.statusComment = props.statusComment;
     this.userId = props.userId;
     this.status = props.status;
     this.createdAt = props.createdAt;
@@ -95,6 +129,7 @@ export class CertificationInquiry {
     });
     const region = SanitizedText.sanitizeRaw(input.region, 80) || 'Приморский край';
     const track = SanitizedText.sanitizeRaw(input.track, 100) || 'Пешеходный туризм';
+    const sessionDate = normalizeSessionDate(input.sessionDate);
 
     return new CertificationInquiry({
       id: `inq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -105,12 +140,13 @@ export class CertificationInquiry {
       track,
       experienceNote,
       consentAccepted: true,
+      sessionDate,
+      statusComment: '',
       userId: SanitizedText.sanitizeRaw(input.userId, 64) || null,
       status: 'new',
       createdAt: new Date().toISOString(),
     });
   }
-
 
   /** Rebuilds an aggregate from persistence without re-running field rules. */
   static rehydrate(props: {
@@ -122,6 +158,8 @@ export class CertificationInquiry {
     track: string;
     experienceNote: string;
     consentAccepted: boolean;
+    sessionDate?: string | null;
+    statusComment?: string;
     userId: string | null;
     status: InquiryStatus;
     createdAt: string;
@@ -135,6 +173,8 @@ export class CertificationInquiry {
       track: props.track,
       experienceNote: SanitizedText.rehydrate(props.experienceNote),
       consentAccepted: true,
+      sessionDate: props.sessionDate ?? null,
+      statusComment: props.statusComment ?? '',
       userId: props.userId,
       status: props.status,
       createdAt: props.createdAt,
@@ -142,7 +182,12 @@ export class CertificationInquiry {
   }
 
   /** Changes the review status. Only a moderator reaches this path. */
-  withStatus(status: InquiryStatus): CertificationInquiry {
+  withStatus(status: InquiryStatus, statusComment?: string): CertificationInquiry {
+    const cleanComment =
+      statusComment !== undefined
+        ? SanitizedText.sanitizeRaw(statusComment, 300)
+        : this.statusComment;
+
     return new CertificationInquiry({
       id: this.id,
       fullName: this.fullName,
@@ -152,6 +197,8 @@ export class CertificationInquiry {
       track: this.track,
       experienceNote: this.experienceNote,
       consentAccepted: this.consentAccepted,
+      sessionDate: this.sessionDate,
+      statusComment: cleanComment,
       userId: this.userId,
       status,
       createdAt: this.createdAt,
@@ -168,6 +215,8 @@ export class CertificationInquiry {
       track: this.track,
       experienceNote: this.experienceNote.value,
       consentAccepted: this.consentAccepted,
+      sessionDate: this.sessionDate,
+      statusComment: this.statusComment,
       userId: this.userId,
       status: this.status,
       createdAt: this.createdAt,

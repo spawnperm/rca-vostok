@@ -52,7 +52,7 @@ export interface AttestationSummaryInput {
 export interface AttestationInquiryInput {
   id: string;
   track: string;
-  status: 'new' | 'in_review' | 'approved' | 'rejected';
+  status: 'new' | 'in_review' | 'needs_documents' | 'approved' | 'rejected';
   createdAt: string;
 }
 
@@ -258,6 +258,7 @@ export const ATTESTATION_PATH_STAGES: PathStageMeta[] = [
 const INQUIRY_STATUS_LABELS: Record<AttestationInquiryInput['status'], string> = {
   new: 'Новая заявка',
   in_review: 'На рассмотрении',
+  needs_documents: 'Требуются документы',
   approved: 'Одобрена',
   rejected: 'Отклонена',
 };

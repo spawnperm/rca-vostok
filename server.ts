@@ -838,6 +838,7 @@ async function startServer() {
           region: body.region,
           track: body.track,
           experienceNote: body.experienceNote,
+          sessionDate: body.sessionDate,
           consentAccepted: body.consentAccepted,
         },
         // Ownership comes from the session, never from the request body.

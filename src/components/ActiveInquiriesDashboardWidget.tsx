@@ -14,6 +14,7 @@ export interface InquiryStatsSnapshot {
   byStatus: {
     new: number;
     in_review: number;
+    needs_documents?: number;
     approved: number;
     rejected: number;
   };
@@ -137,12 +138,21 @@ export const ActiveInquiriesDashboardWidget: React.FC<
 
   const total = stats?.totalSubscriptions ?? 0;
   const activeCount = stats?.activeCount ?? 0;
-  const byStatus = stats?.byStatus ?? { new: 0, in_review: 0, approved: 0, rejected: 0 };
+  const byStatus = stats?.byStatus ?? {
+    new: 0,
+    in_review: 0,
+    needs_documents: 0,
+    approved: 0,
+    rejected: 0,
+  };
+  const needsDocs = byStatus.needs_documents ?? 0;
 
   const newPct = total > 0 ? Math.round((byStatus.new / total) * 100) : 0;
   const reviewPct = total > 0 ? Math.round((byStatus.in_review / total) * 100) : 0;
+  const needsDocsPct = total > 0 ? Math.round((needsDocs / total) * 100) : 0;
   const approvedPct = total > 0 ? Math.round((byStatus.approved / total) * 100) : 0;
-  const rejectedPct = total > 0 ? Math.max(0, 100 - newPct - reviewPct - approvedPct) : 0;
+  const rejectedPct =
+    total > 0 ? Math.max(0, 100 - newPct - reviewPct - needsDocsPct - approvedPct) : 0;
 
   const topRegions = stats?.byRegion.slice(0, 4) ?? [];
   const topTracks = stats?.byTrack.slice(0, 4) ?? [];
@@ -274,6 +284,13 @@ export const ActiveInquiriesDashboardWidget: React.FC<
                   title={`На проверке: ${byStatus.in_review}`}
                 />
               )}
+              {needsDocs > 0 && (
+                <div
+                  className="h-full bg-orange-400 transition-all duration-300"
+                  style={{ width: `${needsDocsPct}%` }}
+                  title={`Требуются документы: ${needsDocs}`}
+                />
+              )}
               {byStatus.approved > 0 && (
                 <div
                   className="h-full bg-teal-500 transition-all duration-300"
@@ -303,6 +320,12 @@ export const ActiveInquiriesDashboardWidget: React.FC<
             <span className="w-2.5 h-2.5 rounded-xs bg-sky-400" aria-hidden="true" />
             На проверке ({byStatus.in_review})
           </span>
+          {needsDocs > 0 && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-xs bg-orange-400" aria-hidden="true" />
+              Требуются документы ({needsDocs})
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-xs bg-teal-500" aria-hidden="true" />
             Одобрено ({byStatus.approved})

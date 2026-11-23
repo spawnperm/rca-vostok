@@ -18,6 +18,7 @@ export interface DocumentStatusNotification {
 const INQUIRY_TITLE_BY_STATUS: Record<InquiryRecord['status'], string> = {
   new: 'Заявка принята',
   in_review: 'Документы на проверке комиссии',
+  needs_documents: 'Требуются дополнительные документы',
   approved: 'Комплект документов одобрен',
   rejected: 'Требуется доработка документов',
 };
@@ -26,6 +27,8 @@ const INQUIRY_DESC_BY_STATUS: Record<InquiryRecord['status'], string> = {
   new: 'Анкета и заявка зарегистрированы в очереди РЦА «Русский Восток». Ожидается первичная сверка стажа.',
   in_review:
     'Секретарь комиссии проверяет медицинский допуск и подтверждение опыта прохождения маршрутов.',
+  needs_documents:
+    'Комиссия запросила недостающие документы (медсправка, подтверждение стажа или паспорт маршрута ПП № 760).',
   approved:
     'Допуск к аттестационной сессии подтверждён. Можно выбирать дату экзамена в личном кабинете.',
   rejected:
@@ -35,6 +38,7 @@ const INQUIRY_DESC_BY_STATUS: Record<InquiryRecord['status'], string> = {
 const INQUIRY_TONE_BY_STATUS: Record<InquiryRecord['status'], DocumentStatusTone> = {
   new: 'info',
   in_review: 'warning',
+  needs_documents: 'warning',
   approved: 'success',
   rejected: 'danger',
 };

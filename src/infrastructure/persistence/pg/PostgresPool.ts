@@ -343,23 +343,35 @@ async function migrateIdentity(pool: pg.Pool): Promise<void> {
     ALTER TABLE certification_inquiries ADD COLUMN IF NOT EXISTS user_id TEXT;
   `);
 
-  // Review lifecycle, surfaced in the cabinet. Existing rows start as 'new'.
+  // Review lifecycle and calendar session booking fields.
   await pool.query(`
     ALTER TABLE certification_inquiries
       ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'new';
   `);
 
   await pool.query(`
+    ALTER TABLE certification_inquiries
+      ADD COLUMN IF NOT EXISTS session_date TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE certification_inquiries
+      ADD COLUMN IF NOT EXISTS status_comment TEXT NOT NULL DEFAULT '';
+  `);
+
+  await pool.query(`
     DO $$
     BEGIN
-      IF NOT EXISTS (
+      IF EXISTS (
         SELECT 1 FROM pg_constraint
          WHERE conname = 'certification_inquiries_status_check'
       ) THEN
         ALTER TABLE certification_inquiries
-          ADD CONSTRAINT certification_inquiries_status_check
-          CHECK (status IN ('new', 'in_review', 'approved', 'rejected'));
+          DROP CONSTRAINT certification_inquiries_status_check;
       END IF;
+      ALTER TABLE certification_inquiries
+        ADD CONSTRAINT certification_inquiries_status_check
+        CHECK (status IN ('new', 'in_review', 'needs_documents', 'approved', 'rejected'));
     END $$;
   `);
 
