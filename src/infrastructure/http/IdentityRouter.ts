@@ -82,6 +82,7 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
         organisation: body.organisation,
         phone: body.phone,
         telegram: body.telegram,
+        avatarUrl: body.avatarUrl,
         attestationExpiresAt: body.attestationExpiresAt,
       });
 
@@ -215,6 +216,7 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
           organisation: body.organisation,
           phone: body.phone,
           telegram: body.telegram,
+          avatarUrl: body.avatarUrl,
           attestationExpiresAt: body.attestationExpiresAt,
         })
       );

@@ -23,6 +23,7 @@ export interface UserDTO {
   organisation: string;
   phone: string;
   telegram: string;
+  avatarUrl: string;
   role: Role;
   permissions: Permission[];
   isActive: boolean;
@@ -39,6 +40,7 @@ export interface CreateUserInput {
   organisation?: unknown;
   phone?: unknown;
   telegram?: unknown;
+  avatarUrl?: unknown;
   role?: unknown;
   attestationExpiresAt?: unknown;
 }
@@ -49,6 +51,7 @@ export interface UpdateProfileInput {
   organisation?: unknown;
   phone?: unknown;
   telegram?: unknown;
+  avatarUrl?: unknown;
   attestationExpiresAt?: unknown;
 }
 
@@ -64,6 +67,7 @@ export class User {
   readonly organisation: string;
   readonly phone: string;
   readonly telegram: string;
+  readonly avatarUrl: string;
   readonly role: Role;
   readonly passwordHash: string;
   readonly passwordSalt: string;
@@ -80,6 +84,7 @@ export class User {
     organisation: string;
     phone: string;
     telegram: string;
+    avatarUrl: string;
     role: Role;
     passwordHash: string;
     passwordSalt: string;
@@ -95,6 +100,7 @@ export class User {
     this.organisation = props.organisation;
     this.phone = props.phone;
     this.telegram = props.telegram;
+    this.avatarUrl = props.avatarUrl;
     this.role = props.role;
     this.passwordHash = props.passwordHash;
     this.passwordSalt = props.passwordSalt;
@@ -172,6 +178,30 @@ export class User {
     return normalized;
   }
 
+  static parseAvatarUrl(input: unknown): string {
+    if (input === null || input === undefined) return '';
+    if (typeof input !== 'string') {
+      throw new ValidationError('Некорректный формат изображения аватара.');
+    }
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+    if (trimmed.length > 180_000) {
+      throw new ValidationError(
+        'Размер изображения аватара превышает допустимый лимит (до 180 КБ).'
+      );
+    }
+    // Allow built-in generated guide portraits or compact raster data URLs (no SVG/scripts).
+    if (/^\/src\/assets\/images\/[a-zA-Z0-9._-]+\.(jpg|jpeg|png|webp)$/i.test(trimmed)) {
+      return trimmed;
+    }
+    if (/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
+      return trimmed;
+    }
+    throw new ValidationError(
+      'Допустимы только встроенные фото-портреты РЦА или изображения JPEG/PNG/WebP.'
+    );
+  }
+
   /**
    * Validates registration input. The password itself is *not* stored here:
    * hashing is an infrastructure concern, so callers pass the derived material
@@ -190,6 +220,7 @@ export class User {
     const organisation = SanitizedText.sanitizeRaw(input.organisation, 160);
     const phone = User.parsePhone(input.phone);
     const telegram = User.parseTelegram(input.telegram);
+    const avatarUrl = User.parseAvatarUrl(input.avatarUrl);
     const role = parseRole(input.role, ROLES.CANDIDATE);
     const attestationExpiresAt =
       input.attestationExpiresAt === undefined
@@ -204,6 +235,7 @@ export class User {
       organisation,
       phone,
       telegram,
+      avatarUrl,
       role,
       // Placeholders: replaced by withPassword() before persistence.
       passwordHash: '',
@@ -254,6 +286,7 @@ export class User {
       organisation: this.organisation,
       phone: this.phone,
       telegram: this.telegram,
+      avatarUrl: this.avatarUrl,
       role: this.role,
       passwordHash: material.passwordHash,
       passwordSalt: material.passwordSalt,
@@ -273,6 +306,7 @@ export class User {
     organisation: string;
     phone?: string;
     telegram?: string;
+    avatarUrl?: string;
     role: unknown;
     passwordHash: string;
     passwordSalt: string;
@@ -289,6 +323,7 @@ export class User {
       organisation: props.organisation,
       phone: props.phone ?? '',
       telegram: props.telegram ?? '',
+      avatarUrl: props.avatarUrl ?? '',
       role: parseRole(props.role),
       passwordHash: props.passwordHash,
       passwordSalt: props.passwordSalt,
@@ -320,6 +355,8 @@ export class User {
       input.phone === undefined ? this.phone : User.parsePhone(input.phone);
     const telegram =
       input.telegram === undefined ? this.telegram : User.parseTelegram(input.telegram);
+    const avatarUrl =
+      input.avatarUrl === undefined ? this.avatarUrl : User.parseAvatarUrl(input.avatarUrl);
     const attestationExpiresAt =
       input.attestationExpiresAt === undefined
         ? this.attestationExpiresAt
@@ -333,6 +370,7 @@ export class User {
       organisation,
       phone,
       telegram,
+      avatarUrl,
       role: this.role,
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
@@ -356,6 +394,7 @@ export class User {
       organisation: this.organisation,
       phone: this.phone,
       telegram: this.telegram,
+      avatarUrl: this.avatarUrl,
       role,
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
@@ -375,6 +414,7 @@ export class User {
       organisation: this.organisation,
       phone: this.phone,
       telegram: this.telegram,
+      avatarUrl: this.avatarUrl,
       role: this.role,
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
@@ -395,6 +435,7 @@ export class User {
       organisation: this.organisation,
       phone: this.phone,
       telegram: this.telegram,
+      avatarUrl: this.avatarUrl,
       role: this.role,
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
@@ -426,6 +467,7 @@ export class User {
       organisation: this.organisation,
       phone: this.phone,
       telegram: this.telegram,
+      avatarUrl: this.avatarUrl,
       role: this.role,
       permissions: [...rolePermissions(this.role)],
       isActive: this.isActive,

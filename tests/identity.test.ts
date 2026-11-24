@@ -460,3 +460,60 @@ test('Profile: updateProfile validates and persists phone and telegram contact d
   );
 });
 
+test('Profile: updateProfile validates and persists avatarUrl presets, raster data URLs, and rejects unsafe URLs', async () => {
+  const ctx = makeIdentity();
+  const { user } = await registerAndAuthenticate(ctx);
+
+  const presetUrl = '/src/assets/images/guide_portrait_taiga_1795488166052.jpg';
+  const withPreset = await ctx.updateProfile.execute(user, { avatarUrl: presetUrl });
+  assert.equal(withPreset.avatarUrl, presetUrl);
+
+  const storedPreset = await ctx.users.findById(user.id);
+  assert.equal(storedPreset?.avatarUrl, presetUrl);
+
+  const sampleJpegDataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/';
+  const withDataUrl = await ctx.updateProfile.execute(storedPreset!, {
+    avatarUrl: sampleJpegDataUrl,
+  });
+  assert.equal(withDataUrl.avatarUrl, sampleJpegDataUrl);
+
+  const reset = await ctx.updateProfile.execute(
+    (await ctx.users.findById(user.id))!,
+    { avatarUrl: '' }
+  );
+  assert.equal(reset.avatarUrl, '');
+
+  for (const unsafe of [
+    'javascript:alert(1)',
+    'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=',
+    'https://evil.example/avatar.jpg',
+    'data:image/jpeg;base64,' + 'A'.repeat(180_005),
+  ]) {
+    await assert.rejects(
+      () =>
+        ctx.updateProfile.execute(
+          User.rehydrate({
+            id: user.id,
+            email: user.email.value,
+            fullName: user.fullName.value,
+            region: user.region,
+            organisation: user.organisation,
+            phone: user.phone,
+            telegram: user.telegram,
+            avatarUrl: '',
+            role: user.role,
+            passwordHash: user.passwordHash,
+            passwordSalt: user.passwordSalt,
+            isActive: user.isActive,
+            attestationExpiresAt: user.attestationExpiresAt,
+            createdAt: user.createdAt,
+            lastLoginAt: user.lastLoginAt,
+          }),
+          { avatarUrl: unsafe }
+        ),
+      ValidationError
+    );
+  }
+});
+
+

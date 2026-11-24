@@ -16,6 +16,7 @@ export interface SessionUser {
   organisation: string;
   phone?: string;
   telegram?: string;
+  avatarUrl?: string;
   role: Role;
   permissions: string[];
   isActive: boolean;
@@ -89,6 +90,7 @@ export const identityApi = {
     organisation?: string;
     phone?: string;
     telegram?: string;
+    avatarUrl?: string;
     attestationExpiresAt?: string | null;
   }): Promise<{ user: SessionUser }> {
     return request('/api/auth/register', {
@@ -107,6 +109,7 @@ export const identityApi = {
     organisation?: string;
     phone?: string;
     telegram?: string;
+    avatarUrl?: string;
     attestationExpiresAt?: string | null;
   }): Promise<SessionUser> {
     return request('/api/account/profile', {

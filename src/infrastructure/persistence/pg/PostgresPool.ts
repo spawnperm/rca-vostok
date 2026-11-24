@@ -70,6 +70,7 @@ const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> 
   { version: '007_linked_accounts', run: (p) => migrateLinkedAccounts(p) },
   { version: '008_user_attestation_expiry', run: (p) => migrateUserAttestationExpiry(p) },
   { version: '009_user_contact_details', run: (p) => migrateUserContactDetails(p) },
+  { version: '010_user_avatar_url', run: (p) => migrateUserAvatarUrl(p) },
 ];
 
 /**
@@ -786,3 +787,12 @@ async function migrateUserContactDetails(pool: pg.Pool): Promise<void> {
       ADD COLUMN IF NOT EXISTS telegram TEXT NOT NULL DEFAULT '';
   `);
 }
+
+/** User profile avatar URL/data-URL column. */
+async function migrateUserAvatarUrl(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT '';
+  `);
+}
+

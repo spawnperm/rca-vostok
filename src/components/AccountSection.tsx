@@ -1414,9 +1414,18 @@ function CabinetHeader({
     <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0">
-            <UserRound className="w-7 h-7 text-teal-700" aria-hidden="true" />
-          </div>
+          {user.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={`Аватар ${user.fullName}`}
+              referrerPolicy="no-referrer"
+              className="w-14 h-14 rounded-full object-cover border border-teal-200 bg-slate-100 shrink-0"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0">
+              <UserRound className="w-7 h-7 text-teal-700" aria-hidden="true" />
+            </div>
+          )}
           <div className="space-y-1">
             <h1 className="text-xl font-bold text-slate-900">{user.fullName}</h1>
             <p className="text-sm text-slate-600">{user.email}</p>

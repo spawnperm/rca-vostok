@@ -46,6 +46,7 @@ export class RegisterUserUseCase {
     organisation?: unknown;
     phone?: unknown;
     telegram?: unknown;
+    avatarUrl?: unknown;
     attestationExpiresAt?: unknown;
   }): Promise<UserDTO> {
     // Build the aggregate from an explicit whitelist. TypeScript types are
@@ -60,6 +61,7 @@ export class RegisterUserUseCase {
       organisation: input.organisation,
       phone: input.phone,
       telegram: input.telegram,
+      avatarUrl: input.avatarUrl,
       attestationExpiresAt: input.attestationExpiresAt,
       role: ROLES.CANDIDATE,
     });
