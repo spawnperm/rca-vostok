@@ -42,7 +42,10 @@ import type { MediaRepository } from './src/domain/media/MediaRepository.ts';
 import { PostgresSocialRepository } from './src/infrastructure/persistence/pg/PostgresSocialRepository.ts';
 import { PostgresChatRepository } from './src/infrastructure/persistence/pg/PostgresChatRepository.ts';
 import { PostgresMediaRepository } from './src/infrastructure/persistence/pg/PostgresMediaRepository.ts';
-import { createObjectStorageFromEnv } from './src/infrastructure/storage/GarageObjectStorage.ts';
+import {
+  LocalObjectStorage,
+  createObjectStorageFromEnv,
+} from './src/infrastructure/storage/GarageObjectStorage.ts';
 import {
   AddCommentUseCase,
   CreatePostUseCase,
@@ -86,6 +89,9 @@ import { JsonFileInquiryRepository } from './src/infrastructure/persistence/Json
 import { JsonFileGuideLeaderboardRepository } from './src/infrastructure/persistence/JsonFileGuideLeaderboardRepository.ts';
 import { JsonFileReadinessSurveyRepository } from './src/infrastructure/persistence/JsonFileReadinessSurveyRepository.ts';
 import { JsonFileSatisfactionSurveyRepository } from './src/infrastructure/persistence/JsonFileSatisfactionSurveyRepository.ts';
+import { JsonFileSocialRepository } from './src/infrastructure/persistence/JsonFileSocialRepository.ts';
+import { JsonFileChatRepository } from './src/infrastructure/persistence/JsonFileChatRepository.ts';
+import { JsonFileMediaRepository } from './src/infrastructure/persistence/JsonFileMediaRepository.ts';
 import {
   MIGRATION_STEP_COUNT,
   createPool,
@@ -131,9 +137,7 @@ import type { LinkedAccountsRepository } from './src/domain/identity/LinkedAccou
 import {
   createAuthMiddleware,
   requireAuth,
-  requirePermission,
 } from './src/infrastructure/http/AuthMiddleware.ts';
-import { PERMISSIONS } from './src/domain/identity/Rbac.ts';
 import {
   DEFAULT_LOGIN_RULES,
   RateLimiter,
@@ -507,181 +511,69 @@ async function startServer() {
   );
 
   // ── Social, chat and media bounded contexts ───────────────────────────────
-  // These require PostgreSQL (they rely on relational joins and arrays). When
-  // no database is configured the routers are not mounted, so local dev of the
-  // cabinet still works without them.
-  let activeSocialRepo: SocialRepository | null = null;
-  if (pool) {
-    const socialRepo: SocialRepository = new PostgresSocialRepository(pool);
-    activeSocialRepo = socialRepo;
-    const chatRepo: ChatRepository = new PostgresChatRepository(pool);
-    const mediaRepo: MediaRepository = new PostgresMediaRepository(pool);
-    const objectStorage = createObjectStorageFromEnv();
-    appLogger.child('storage').info('Media object storage configured', {
-      provider: objectStorage ? 'S3/Garage' : 'disabled',
-    });
+  // Uses PostgreSQL + S3/Garage when configured, and transparently falls back
+  // to atomic JSON-file repositories + local disk object storage otherwise.
+  const socialRepo: SocialRepository = pool
+    ? new PostgresSocialRepository(pool)
+    : new JsonFileSocialRepository(DATA_DIR);
+  const activeSocialRepo: SocialRepository = socialRepo;
+  const chatRepo: ChatRepository = pool
+    ? new PostgresChatRepository(pool)
+    : new JsonFileChatRepository(DATA_DIR);
+  const mediaRepo: MediaRepository = pool
+    ? new PostgresMediaRepository(pool)
+    : new JsonFileMediaRepository(DATA_DIR);
+  const s3Storage = createObjectStorageFromEnv();
+  const objectStorage = s3Storage ?? new LocalObjectStorage(path.join(DATA_DIR, 'media-objects'));
+  appLogger.child('storage').info('Media object storage configured', {
+    provider: s3Storage ? 'S3/Garage' : 'local-disk',
+  });
 
-    app.use(
-      createSocialRouter({
-        getProfile: new GetSocialProfileUseCase(socialRepo, userRepo),
-        updateProfile: new UpdateSocialProfileUseCase(socialRepo, userRepo, eventBus),
-        createPost: new CreatePostUseCase(socialRepo, eventBus),
-        updatePost: new UpdatePostUseCase(socialRepo),
-        deletePost: new DeletePostUseCase(socialRepo),
-        listFeed: new ListFeedUseCase(socialRepo),
-        getPost: new GetPostUseCase(socialRepo),
-        addComment: new AddCommentUseCase(socialRepo, eventBus),
-        toggleLike: new ToggleLikeUseCase(socialRepo, eventBus),
-        followUser: new FollowUserUseCase(socialRepo),
-        listActivity: new ListActivityUseCase(socialRepo),
-        listMyInquiries: new ListMyInquiriesUseCase(inquiryRepo),
-        listAllInquiries: new ListAllInquiriesUseCase(inquiryRepo),
-        updateInquiryStatus: new UpdateInquiryStatusUseCase(inquiryRepo, eventBus),
-      })
-    );
+  app.use(
+    createSocialRouter({
+      getProfile: new GetSocialProfileUseCase(socialRepo, userRepo),
+      updateProfile: new UpdateSocialProfileUseCase(socialRepo, userRepo, eventBus),
+      createPost: new CreatePostUseCase(socialRepo, eventBus),
+      updatePost: new UpdatePostUseCase(socialRepo),
+      deletePost: new DeletePostUseCase(socialRepo),
+      listFeed: new ListFeedUseCase(socialRepo),
+      getPost: new GetPostUseCase(socialRepo),
+      addComment: new AddCommentUseCase(socialRepo, eventBus),
+      toggleLike: new ToggleLikeUseCase(socialRepo, eventBus),
+      followUser: new FollowUserUseCase(socialRepo),
+      listActivity: new ListActivityUseCase(socialRepo),
+      listMyInquiries: new ListMyInquiriesUseCase(inquiryRepo),
+      listAllInquiries: new ListAllInquiriesUseCase(inquiryRepo),
+      updateInquiryStatus: new UpdateInquiryStatusUseCase(inquiryRepo, eventBus),
+    })
+  );
 
-    app.use(
-      createChatRouter({
-        createChannel: new CreateChannelUseCase(chatRepo),
-        listChannels: new ListChannelsUseCase(chatRepo),
-        joinChannel: new JoinChannelUseCase(chatRepo),
-        listMessages: new ListMessagesUseCase(chatRepo),
-        sendMessage: new SendMessageUseCase(chatRepo, eventBus),
-        editMessage: new EditMessageUseCase(chatRepo),
-        deleteMessage: new DeleteMessageUseCase(chatRepo),
-        toggleReaction: new ToggleReactionUseCase(chatRepo),
-      })
-    );
+  app.use(
+    createChatRouter({
+      createChannel: new CreateChannelUseCase(chatRepo),
+      listChannels: new ListChannelsUseCase(chatRepo),
+      joinChannel: new JoinChannelUseCase(chatRepo),
+      listMessages: new ListMessagesUseCase(chatRepo),
+      sendMessage: new SendMessageUseCase(chatRepo, eventBus),
+      editMessage: new EditMessageUseCase(chatRepo),
+      deleteMessage: new DeleteMessageUseCase(chatRepo),
+      toggleReaction: new ToggleReactionUseCase(chatRepo),
+    })
+  );
 
-    app.use(
-      createMediaRouter({
-        createAlbum: new CreateAlbumUseCase(mediaRepo, eventBus),
-        listAlbums: new ListAlbumsUseCase(mediaRepo),
-        listAssets: new ListAssetsUseCase(mediaRepo),
-        registerAsset: new RegisterAssetUseCase(mediaRepo, objectStorage, eventBus),
-        deleteAsset: new DeleteAssetUseCase(mediaRepo, objectStorage),
-        deleteAlbum: new DeleteAlbumUseCase(mediaRepo),
-        findAsset: new FindAssetUseCase(mediaRepo),
-        findAlbum: new FindAlbumAccessUseCase(mediaRepo),
-        storage: objectStorage,
-      })
-    );
-  } else {
-    // Fallback mode without PostgreSQL: inquiry cabinet endpoints remain fully
-    // functional via JsonFileInquiryRepository, and public/cabinet social,
-    // chat, and media reads return clean empty JSON payloads instead of 404s.
-    const listMyInquiries = new ListMyInquiriesUseCase(inquiryRepo);
-    const listAllInquiries = new ListAllInquiriesUseCase(inquiryRepo);
-    const updateInquiryStatus = new UpdateInquiryStatusUseCase(inquiryRepo, eventBus);
-
-    app.get(
-      '/api/account/inquiries',
-      requireAuth(),
-      requirePermission(PERMISSIONS.VIEW_OWN_INQUIRIES),
-      async (req, res) => {
-        try {
-          res.json({ inquiries: await listMyInquiries.execute(req.authUser!) });
-        } catch (err) {
-          handleDomainError(err, res);
-        }
-      }
-    );
-
-    app.get(
-      '/api/admin/inquiries',
-      requireAuth(),
-      requirePermission(PERMISSIONS.VIEW_ALL_INQUIRIES),
-      async (req, res) => {
-        try {
-          res.json({ inquiries: await listAllInquiries.execute(req.authUser!) });
-        } catch (err) {
-          handleDomainError(err, res);
-        }
-      }
-    );
-
-    app.patch(
-      '/api/admin/inquiries/:inquiryId',
-      requireAuth(),
-      requirePermission(PERMISSIONS.VIEW_ALL_INQUIRIES),
-      async (req, res) => {
-        try {
-          const body = (req.body || {}) as Record<string, unknown>;
-          res.json(
-            await updateInquiryStatus.execute(req.authUser!, {
-              inquiryId: req.params.inquiryId,
-              status: body.status,
-            })
-          );
-        } catch (err) {
-          handleDomainError(err, res);
-        }
-      }
-    );
-
-    app.get('/api/social/feed', (_req, res) => {
-      res.json({ posts: [], total: 0 });
-    });
-
-    app.get('/api/social/profiles/:userId', async (req, res) => {
-      try {
-        const target = await userRepo.findById(req.params.userId);
-        if (!target) {
-          res.status(404).json({ error: 'Профиль пользователя не найден.', code: 'NOT_FOUND' });
-          return;
-        }
-        res.json({
-          userId: target.id,
-          displayName: target.fullName,
-          headline: '',
-          bio: '',
-          region: target.region,
-          organisation: target.organisation,
-          role: target.role,
-          websiteUrl: '',
-          coverAssetId: null,
-          avatarAssetId: null,
-          skills: [],
-          followerCount: 0,
-          followingCount: 0,
-          postCount: 0,
-          albumCount: 0,
-          isFollowedByMe: false,
-          createdAt: target.createdAt,
-          updatedAt: target.createdAt,
-        });
-      } catch (err) {
-        handleDomainError(err, res);
-      }
-    });
-
-    app.get('/api/social/activity', requireAuth(), (_req, res) => {
-      res.json({ activity: [] });
-    });
-
-    app.get('/api/chat/channels', (_req, res) => {
-      res.json({ channels: [] });
-    });
-
-    app.get('/api/chat/reactions', (_req, res) => {
-      res.json({ emoji: ['👍', '❤️', '🔥', '👏', '⛰️'] });
-    });
-
-    app.get('/api/media/albums', (_req, res) => {
-      res.json({ albums: [], total: 0 });
-    });
-
-    app.get('/api/media/assets', (_req, res) => {
-      res.json({ assets: [], total: 0 });
-    });
-
-    app.use(['/api/social', '/api/chat', '/api/media'], (_req, res) => {
-      res.status(503).json({
-        error: 'Модули публикаций, чата и медиатеки требуют подключения PostgreSQL.',
-        code: 'DB_REQUIRED',
-      });
-    });
-  }
+  app.use(
+    createMediaRouter({
+      createAlbum: new CreateAlbumUseCase(mediaRepo, eventBus),
+      listAlbums: new ListAlbumsUseCase(mediaRepo),
+      listAssets: new ListAssetsUseCase(mediaRepo),
+      registerAsset: new RegisterAssetUseCase(mediaRepo, objectStorage, eventBus),
+      deleteAsset: new DeleteAssetUseCase(mediaRepo, objectStorage),
+      deleteAlbum: new DeleteAlbumUseCase(mediaRepo),
+      findAsset: new FindAssetUseCase(mediaRepo),
+      findAlbum: new FindAlbumAccessUseCase(mediaRepo),
+      storage: objectStorage,
+    })
+  );
 
   app.use(
     createLinkedAccountsRouter({

@@ -148,10 +148,16 @@ export class LocalObjectStorage implements ObjectStorage {
     this.publicPrefix = publicPrefix;
   }
 
+  private async resolveTarget(key: string): Promise<string> {
+    const { resolveConfinedPath } = await import('../persistence/PathConfinement.ts');
+    const sanitized = key.replace(/^\/+/, '');
+    return resolveConfinedPath(this.baseDir, sanitized);
+  }
+
   async put(key: string, body: Buffer, _contentType: string): Promise<{ url: string }> {
     const fs = await import('node:fs/promises');
     const path = await import('node:path');
-    const target = path.join(this.baseDir, key);
+    const target = await this.resolveTarget(key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, body);
     return { url: this.publicUrl(key) };
@@ -159,8 +165,8 @@ export class LocalObjectStorage implements ObjectStorage {
 
   async delete(key: string): Promise<void> {
     const fs = await import('node:fs/promises');
-    const path = await import('node:path');
-    await fs.rm(path.join(this.baseDir, key), { force: true });
+    const target = await this.resolveTarget(key);
+    await fs.rm(target, { force: true });
   }
 
   async get(key: string): Promise<{ body: Buffer; contentType: string } | null> {
@@ -182,13 +188,13 @@ export class LocalObjectStorage implements ObjectStorage {
       '.wav': 'audio/wav',
     };
     try {
-      const body = await fs.readFile(path.join(this.baseDir, key));
+      const target = await this.resolveTarget(key);
+      const body = await fs.readFile(target);
       return { body, contentType: types[ext] ?? 'application/octet-stream' };
     } catch {
       return null;
     }
   }
-
 
   async getStream(
     key: string
@@ -197,8 +203,8 @@ export class LocalObjectStorage implements ObjectStorage {
     const fsp = await import('node:fs/promises');
     const path = await import('node:path');
 
-    const target = path.join(this.baseDir, key);
     try {
+      const target = await this.resolveTarget(key);
       const stat = await fsp.stat(target);
       const types: Record<string, string> = {
         '.jpg': 'image/jpeg',

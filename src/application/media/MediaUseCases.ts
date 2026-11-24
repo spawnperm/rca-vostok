@@ -103,7 +103,7 @@ export class ListAssetsUseCase {
   }
 
   async execute(rawQuery: unknown): Promise<{
-    assets: ReturnType<MediaAsset['toDTO']>[];
+    assets: Array<ReturnType<MediaAsset['toDTO']> & { url: string }>;
     total: number;
   }> {
     const query = parseOrThrow(
@@ -118,7 +118,10 @@ export class ListAssetsUseCase {
     );
 
     const { assets, total } = await this.media.listAssets(query);
-    return { assets: assets.map((a) => a.toDTO()), total };
+    return {
+      assets: assets.map((a) => ({ ...a.toDTO(), url: `/media/${a.id}` })),
+      total,
+    };
   }
 }
 
