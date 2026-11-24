@@ -75,13 +75,38 @@ test('JsonFileSocialRepository: supports profile editing, posts, comments, likes
     const listActivity = new ListActivityUseCase(socialRepo);
 
     const updatedProfile = await updateProfile.execute(candidate, {
+      displayName: 'Алексей Воробьёв-ДВ',
+      region: 'Сахалинская область',
+      organisation: 'Сахалин Трек',
       headline: 'Инструктор водных маршрутов',
       bio: 'Опыт сплавов в Приморье и на Сахалине.',
+      phone: '+7 914 111-22-33',
+      telegram: '@vorobiev_dv',
+      publicEmail: 'alexey@vostok-guide.ru',
+      vkUrl: 'https://vk.com/vorobiev_dv',
       websiteUrl: 'https://vostok-guide.ru',
+      avatarUrl: '/src/assets/images/guide_portrait_water_1795488167929.jpg',
+      coverUrl: '/src/assets/images/river_rafting_taiga_1795333557039.jpg',
       skills: ['Водный туризм', 'Первая помощь'],
     });
+    assert.equal(updatedProfile.displayName, 'Алексей Воробьёв-ДВ');
+    assert.equal(updatedProfile.region, 'Сахалинская область');
+    assert.equal(updatedProfile.organisation, 'Сахалин Трек');
     assert.equal(updatedProfile.headline, 'Инструктор водных маршрутов');
+    assert.equal(updatedProfile.phone, '+7 914 111-22-33');
+    assert.equal(updatedProfile.telegram, '@vorobiev_dv');
+    assert.equal(updatedProfile.publicEmail, 'alexey@vostok-guide.ru');
+    assert.equal(updatedProfile.vkUrl, 'https://vk.com/vorobiev_dv');
+    assert.equal(updatedProfile.avatarUrl, '/src/assets/images/guide_portrait_water_1795488167929.jpg');
+    assert.equal(updatedProfile.coverUrl, '/src/assets/images/river_rafting_taiga_1795333557039.jpg');
     assert.deepEqual(updatedProfile.skills, ['Водный туризм', 'Первая помощь']);
+
+    const syncedIdentityUser = await userRepo.findById(candidate.id);
+    assert.equal(syncedIdentityUser?.fullName.value, 'Алексей Воробьёв-ДВ');
+    assert.equal(syncedIdentityUser?.region, 'Сахалинская область');
+    assert.equal(syncedIdentityUser?.phone, '+7 914 111-22-33');
+    assert.equal(syncedIdentityUser?.telegram, '@vorobiev_dv');
+    assert.equal(syncedIdentityUser?.avatarUrl, '/src/assets/images/guide_portrait_water_1795488167929.jpg');
 
     const post = await createPost.execute(candidate, {
       kind: 'article',

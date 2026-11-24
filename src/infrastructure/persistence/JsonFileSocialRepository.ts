@@ -16,7 +16,13 @@ interface StoredSocialProfile {
   region: string;
   organisation: string;
   role: string;
+  phone?: string;
+  telegram?: string;
+  publicEmail?: string;
+  vkUrl?: string;
   websiteUrl: string;
+  coverUrl?: string;
+  avatarUrl?: string;
   coverAssetId: string | null;
   avatarAssetId: string | null;
   skills: string[];
@@ -59,7 +65,13 @@ function toProfile(row: StoredSocialProfile): SocialProfile {
     region: row.region,
     organisation: row.organisation,
     role: parseRole(row.role),
+    phone: row.phone ?? '',
+    telegram: row.telegram ?? '',
+    publicEmail: row.publicEmail ?? '',
+    vkUrl: row.vkUrl ?? '',
     websiteUrl: row.websiteUrl,
+    coverUrl: row.coverUrl ?? '',
+    avatarUrl: row.avatarUrl ?? '',
     coverAssetId: row.coverAssetId,
     avatarAssetId: row.avatarAssetId,
     skills: Array.isArray(row.skills) ? row.skills : [],
@@ -160,7 +172,13 @@ export class JsonFileSocialRepository implements SocialRepository {
       region: profile.region,
       organisation: profile.organisation,
       role: profile.role,
+      phone: profile.phone,
+      telegram: profile.telegram,
+      publicEmail: profile.publicEmail,
+      vkUrl: profile.vkUrl,
       websiteUrl: profile.websiteUrl,
+      coverUrl: profile.coverUrl,
+      avatarUrl: profile.avatarUrl,
       coverAssetId: profile.coverAssetId,
       avatarAssetId: profile.avatarAssetId,
       skills: [...profile.skills],

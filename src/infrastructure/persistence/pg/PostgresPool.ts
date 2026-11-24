@@ -72,6 +72,7 @@ const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> 
   { version: '009_user_contact_details', run: (p) => migrateUserContactDetails(p) },
   { version: '010_user_avatar_url', run: (p) => migrateUserAvatarUrl(p) },
   { version: '011_lms_progress', run: (p) => migrateLmsProgress(p) },
+  { version: '012_social_profile_customization', run: (p) => migrateSocialProfileCustomization(p) },
 ];
 
 /**
@@ -805,6 +806,19 @@ async function migrateLmsProgress(pool: pg.Pool): Promise<void> {
       state_json JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+  `);
+}
+
+/** Social profile customization columns: cover, avatar, and public contacts. */
+async function migrateSocialProfileCustomization(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    ALTER TABLE social_profiles
+      ADD COLUMN IF NOT EXISTS phone        TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS telegram     TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS public_email TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS vk_url       TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS cover_url    TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS avatar_url   TEXT NOT NULL DEFAULT '';
   `);
 }
 

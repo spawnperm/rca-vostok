@@ -190,15 +190,18 @@ export class User {
         'Размер изображения аватара превышает допустимый лимит (до 180 КБ).'
       );
     }
-    // Allow built-in generated guide portraits or compact raster data URLs (no SVG/scripts).
+    // Allow built-in generated guide portraits, Media Library images, or compact raster data URLs (no SVG/scripts).
     if (/^\/src\/assets\/images\/[a-zA-Z0-9._-]+\.(jpg|jpeg|png|webp)$/i.test(trimmed)) {
+      return trimmed;
+    }
+    if (/^\/media\/[a-zA-Z0-9_-]+$/i.test(trimmed)) {
       return trimmed;
     }
     if (/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/i.test(trimmed)) {
       return trimmed;
     }
     throw new ValidationError(
-      'Допустимы только встроенные фото-портреты РЦА или изображения JPEG/PNG/WebP.'
+      'Допустимы только встроенные фото-портреты РЦА, файлы из Медиатеки или изображения JPEG/PNG/WebP.'
     );
   }
 

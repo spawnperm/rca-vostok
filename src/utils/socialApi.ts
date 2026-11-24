@@ -41,7 +41,13 @@ export interface SocialProfileData {
   region: string;
   organisation: string;
   role: string;
+  phone: string;
+  telegram: string;
+  publicEmail: string;
+  vkUrl: string;
   websiteUrl: string;
+  coverUrl: string;
+  avatarUrl: string;
   coverAssetId: string | null;
   avatarAssetId: string | null;
   skills: string[];

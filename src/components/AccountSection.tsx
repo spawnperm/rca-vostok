@@ -1212,7 +1212,23 @@ export function AccountSection({
             userId={user.id}
             currentUserId={user.id}
             userAvatarUrl={user.avatarUrl}
+            userEmail={user.email}
             permissions={user.permissions}
+            onProfileSynced={(updatedProfile) => {
+              setUser((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      fullName: updatedProfile.displayName || prev.fullName,
+                      region: updatedProfile.region || prev.region,
+                      organisation: updatedProfile.organisation ?? prev.organisation,
+                      phone: updatedProfile.phone ?? prev.phone,
+                      telegram: updatedProfile.telegram ?? prev.telegram,
+                      avatarUrl: updatedProfile.avatarUrl ?? prev.avatarUrl,
+                    }
+                  : prev
+              );
+            }}
           />
 
           <InstructorAchievementsWidget

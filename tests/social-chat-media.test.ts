@@ -147,6 +147,51 @@ test('SocialProfile: skills are deduplicated and capped', () => {
   assert.equal(updated.skills.filter((s) => s === 'Водный туризм').length, 1);
 });
 
+test('SocialProfile: validates avatarUrl, coverUrl, contacts and editable profile fields', () => {
+  const profile = SocialProfile.createDefault({
+    userId: 'u1',
+    displayName: 'Иван Петров',
+    region: 'Приморский край',
+    organisation: '',
+    role: ROLES.CANDIDATE,
+  });
+
+  const updated = profile.update({
+    displayName: 'Смирнов Александр Анатольевич',
+    region: 'Камчатский край',
+    organisation: 'Турклуб Восток',
+    phone: '+7 (914) 555-01-02',
+    telegram: 't.me/vostok_guide',
+    publicEmail: 'contact@vostok-guide.ru',
+    vkUrl: 'vk.com/vostok_guide',
+    avatarUrl: '/src/assets/images/guide_portrait_taiga_1795488166052.jpg',
+    coverUrl: '/media/asset-cover-1',
+  });
+
+  assert.equal(updated.displayName, 'Смирнов Александр Анатольевич');
+  assert.equal(updated.region, 'Камчатский край');
+  assert.equal(updated.organisation, 'Турклуб Восток');
+  assert.equal(updated.phone, '+7 (914) 555-01-02');
+  assert.equal(updated.telegram, '@vostok_guide');
+  assert.equal(updated.publicEmail, 'contact@vostok-guide.ru');
+  assert.equal(updated.vkUrl, 'https://vk.com/vostok_guide');
+  assert.equal(updated.avatarUrl, '/src/assets/images/guide_portrait_taiga_1795488166052.jpg');
+  assert.equal(updated.coverUrl, '/media/asset-cover-1');
+
+  assert.throws(
+    () => profile.update({ avatarUrl: 'javascript:alert(1)' }),
+    ValidationError
+  );
+  assert.throws(
+    () => profile.update({ coverUrl: 'data:image/svg+xml;base64,PHN2Zz4=' }),
+    ValidationError
+  );
+  assert.throws(
+    () => profile.update({ vkUrl: 'javascript:alert(1)' }),
+    ValidationError
+  );
+});
+
 // ── Chat ────────────────────────────────────────────────────────────────────
 
 test('Channel: slug is transliterated from the Russian name', () => {

@@ -16,7 +16,13 @@ interface ProfileRow {
   region: string;
   organisation: string;
   role: string;
+  phone?: string;
+  telegram?: string;
+  public_email?: string;
+  vk_url?: string;
   website_url: string;
+  cover_url?: string;
+  avatar_url?: string;
   cover_asset_id: string | null;
   avatar_asset_id: string | null;
   skills: string[];
@@ -61,7 +67,13 @@ function toProfile(row: ProfileRow): SocialProfile {
     region: row.region,
     organisation: row.organisation,
     role: parseRole(row.role),
+    phone: row.phone ?? '',
+    telegram: row.telegram ?? '',
+    publicEmail: row.public_email ?? '',
+    vkUrl: row.vk_url ?? '',
     websiteUrl: row.website_url,
+    coverUrl: row.cover_url ?? '',
+    avatarUrl: row.avatar_url ?? '',
     coverAssetId: row.cover_asset_id,
     avatarAssetId: row.avatar_asset_id,
     skills: row.skills ?? [],
@@ -122,8 +134,9 @@ export class PostgresSocialRepository implements SocialRepository {
     await this.pool.query(
       `INSERT INTO social_profiles (
          user_id, display_name, headline, bio, region, organisation, role,
-         website_url, cover_asset_id, avatar_asset_id, skills, created_at, updated_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         phone, telegram, public_email, vk_url,
+         website_url, cover_url, avatar_url, cover_asset_id, avatar_asset_id, skills, created_at, updated_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (user_id) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          headline = EXCLUDED.headline,
@@ -131,7 +144,13 @@ export class PostgresSocialRepository implements SocialRepository {
          region = EXCLUDED.region,
          organisation = EXCLUDED.organisation,
          role = EXCLUDED.role,
+         phone = EXCLUDED.phone,
+         telegram = EXCLUDED.telegram,
+         public_email = EXCLUDED.public_email,
+         vk_url = EXCLUDED.vk_url,
          website_url = EXCLUDED.website_url,
+         cover_url = EXCLUDED.cover_url,
+         avatar_url = EXCLUDED.avatar_url,
          cover_asset_id = EXCLUDED.cover_asset_id,
          avatar_asset_id = EXCLUDED.avatar_asset_id,
          skills = EXCLUDED.skills,
@@ -144,7 +163,13 @@ export class PostgresSocialRepository implements SocialRepository {
         profile.region,
         profile.organisation,
         profile.role,
+        profile.phone,
+        profile.telegram,
+        profile.publicEmail,
+        profile.vkUrl,
         profile.websiteUrl,
+        profile.coverUrl,
+        profile.avatarUrl,
         profile.coverAssetId,
         profile.avatarAssetId,
         profile.skills,

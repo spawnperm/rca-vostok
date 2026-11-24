@@ -44,9 +44,18 @@ export const feedQuerySchema = z.object({
 });
 
 export const socialProfileSchema = z.object({
+  displayName: z.string().max(120).optional(),
   headline: z.string().max(140).optional(),
   bio: z.string().max(1200).optional(),
+  region: z.string().max(80).optional(),
+  organisation: z.string().max(160).optional(),
+  phone: z.string().max(32).optional(),
+  telegram: z.string().max(64).optional(),
+  publicEmail: z.string().max(160).optional(),
+  vkUrl: z.string().max(200).optional(),
   websiteUrl: z.string().max(200).optional(),
+  coverUrl: z.string().max(320_000).optional(),
+  avatarUrl: z.string().max(180_000).optional(),
   coverAssetId: z.string().max(64).nullable().optional(),
   avatarAssetId: z.string().max(64).nullable().optional(),
   skills: z.array(z.string().max(40)).max(12).optional(),
@@ -77,9 +86,30 @@ async function ensureProfile(
     region: user.region,
     organisation: user.organisation,
     role: user.role,
+    phone: user.phone,
+    telegram: user.telegram,
+    avatarUrl: user.avatarUrl,
   });
   await social.saveProfile(created);
   return created;
+}
+
+/** Merges authoritative identity fields so profile views never go stale after account edits. */
+function withIdentityDefaults(
+  dto: ReturnType<SocialProfile['toDTO']>,
+  user: User
+): ReturnType<SocialProfile['toDTO']> {
+  return {
+    ...dto,
+    displayName: user.fullName.value || dto.displayName,
+    region: user.region || dto.region,
+    organisation: user.organisation ?? dto.organisation,
+    role: user.role,
+    phone: dto.phone || user.phone,
+    telegram: dto.telegram || user.telegram,
+    avatarUrl: dto.avatarUrl || user.avatarUrl || (dto.avatarAssetId ? `/media/${dto.avatarAssetId}` : ''),
+    coverUrl: dto.coverUrl || (dto.coverAssetId ? `/media/${dto.coverAssetId}` : ''),
+  };
 }
 
 export class GetSocialProfileUseCase {
@@ -116,13 +146,16 @@ export class GetSocialProfileUseCase {
       ? await this.social.isFollowing(actor.id, targetUserId)
       : false;
 
-    return profile.toDTO({
-      followerCount,
-      followingCount,
-      postCount,
-      albumCount,
-      isFollowedByMe,
-    });
+    return withIdentityDefaults(
+      profile.toDTO({
+        followerCount,
+        followingCount,
+        postCount,
+        albumCount,
+        isFollowedByMe,
+      }),
+      target
+    );
   }
 }
 
@@ -144,6 +177,29 @@ export class UpdateSocialProfileUseCase {
     const input = parseOrThrow(socialProfileSchema, rawInput ?? {});
     const current = await ensureProfile(this.social, actor);
     const updated = current.update(input);
+
+    // Sync overlapping identity/contact/avatar fields back to User so header & passport stay consistent.
+    const hasIdentityUpdates =
+      input.displayName !== undefined ||
+      input.region !== undefined ||
+      input.organisation !== undefined ||
+      input.phone !== undefined ||
+      input.telegram !== undefined ||
+      input.avatarUrl !== undefined;
+
+    let effectiveActor = actor;
+    if (hasIdentityUpdates) {
+      effectiveActor = actor.updateProfile({
+        fullName: input.displayName,
+        region: input.region,
+        organisation: input.organisation,
+        phone: input.phone,
+        telegram: input.telegram,
+        avatarUrl: input.avatarUrl,
+      });
+      await this.users.save(effectiveActor);
+    }
+
     await this.social.saveProfile(updated);
 
     this.eventBus.publish({
@@ -153,13 +209,16 @@ export class UpdateSocialProfileUseCase {
       payload: { userId: actor.id },
     });
 
-    return updated.toDTO({
-      followerCount: await this.social.countFollowers(actor.id),
-      followingCount: await this.social.countFollowing(actor.id),
-      postCount: await this.social.countPostsByAuthor(actor.id),
-      albumCount: 0,
-      isFollowedByMe: false,
-    });
+    return withIdentityDefaults(
+      updated.toDTO({
+        followerCount: await this.social.countFollowers(actor.id),
+        followingCount: await this.social.countFollowing(actor.id),
+        postCount: await this.social.countPostsByAuthor(actor.id),
+        albumCount: 0,
+        isFollowedByMe: false,
+      }),
+      effectiveActor
+    );
   }
 }
 
