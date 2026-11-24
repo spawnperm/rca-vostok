@@ -19,6 +19,8 @@ export interface GitRecentCommit {
 }
 
 export interface GitStatusResponse {
+  initialized?: boolean;
+  statusMessage?: string;
   repository: string;
   branch: string;
   targetBranch: string;

@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import {
   GitAuthError,
@@ -118,3 +121,26 @@ test('GitSyncService helpers: sanitize credentials, block sensitive paths, and v
     (err: unknown) => err instanceof GitSyncError && err.statusCode === 400
   );
 });
+
+test('GitSyncService: gracefully reports uninitialized status instead of 500 when .git directory is missing', async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-no-git-'));
+  try {
+    const service = new GitSyncService(tempRoot);
+    const status = await service.getStatus();
+    assert.equal(status.initialized, false);
+    assert.equal(status.branch, 'unavailable');
+    assert.equal(status.canPush, false);
+    assert.deepEqual(status.changedFiles, []);
+
+    await assert.rejects(
+      () => service.commitAndPush({ commitMessage: 'feat: test missing git dir' }),
+      (err: unknown) =>
+        err instanceof GitSyncError &&
+        err.statusCode === 409 &&
+        err.code === 'GIT_NOT_INITIALIZED'
+    );
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+

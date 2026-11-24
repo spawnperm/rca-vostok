@@ -68,6 +68,8 @@ export interface GitRecentCommit {
 }
 
 export interface GitStatusReport {
+  initialized?: boolean;
+  statusMessage?: string;
   repository: string;
   branch: string;
   targetBranch: string;
@@ -160,16 +162,20 @@ export class GitSyncService {
     extraEnv?: Record<string, string>
   ): Promise<{ stdout: string; stderr: string }> {
     try {
-      const result = await execFileAsync('git', args, {
-        cwd: this.repoRoot,
-        timeout: 30_000,
-        maxBuffer: 2 * 1024 * 1024,
-        env: {
-          ...process.env,
-          GIT_TERMINAL_PROMPT: '0',
-          ...(extraEnv ?? {}),
-        },
-      });
+      const result = await execFileAsync(
+        'git',
+        ['-c', `safe.directory=${this.repoRoot}`, ...args],
+        {
+          cwd: this.repoRoot,
+          timeout: 30_000,
+          maxBuffer: 2 * 1024 * 1024,
+          env: {
+            ...process.env,
+            GIT_TERMINAL_PROMPT: '0',
+            ...(extraEnv ?? {}),
+          },
+        }
+      );
       return {
         stdout: String(result.stdout ?? ''),
         stderr: String(result.stderr ?? ''),
@@ -217,8 +223,52 @@ export class GitSyncService {
   }
 
   async getStatus(): Promise<GitStatusReport> {
-    const [statusRes, remoteRes, logRes] = await Promise.all([
-      this.runGit(['status', '--porcelain=v1', '-b']),
+    const gitDirExists = fs.existsSync(path.join(this.repoRoot, '.git'));
+    if (!gitDirExists) {
+      return {
+        initialized: false,
+        statusMessage:
+          'Локальный Git-репозиторий (.git) отсутствует в текущем окружении. Синхронизация недоступна в production-сборке.',
+        repository: TARGET_REPOSITORY_SLUG,
+        branch: 'unavailable',
+        targetBranch: TARGET_BRANCH,
+        remoteUrl: '',
+        ahead: 0,
+        behind: 0,
+        changedFiles: [],
+        hasChangesToCommit: false,
+        canPush: false,
+        recentCommits: [],
+      };
+    }
+
+    let statusStdout = '';
+    try {
+      const statusRes = await this.runGit(['status', '--porcelain=v1', '-b']);
+      statusStdout = statusRes.stdout;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      gitLog.info('Failed to inspect git repository status', {
+        repoRoot: this.repoRoot,
+        reason: msg,
+      });
+      return {
+        initialized: false,
+        statusMessage: `Не удалось прочитать статус Git: ${sanitizeGitOutput(msg)}`,
+        repository: TARGET_REPOSITORY_SLUG,
+        branch: 'unavailable',
+        targetBranch: TARGET_BRANCH,
+        remoteUrl: '',
+        ahead: 0,
+        behind: 0,
+        changedFiles: [],
+        hasChangesToCommit: false,
+        canPush: false,
+        recentCommits: [],
+      };
+    }
+
+    const [remoteRes, logRes] = await Promise.all([
       this.runGit(['remote', 'get-url', 'origin']).catch(() => ({ stdout: '', stderr: '' })),
       this.runGit(['log', '-n', '5', '--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI']).catch(() => ({
         stdout: '',
@@ -226,7 +276,7 @@ export class GitSyncService {
       })),
     ]);
 
-    const lines = statusRes.stdout.split(/\r?\n/).filter((line) => line.length > 0);
+    const lines = statusStdout.split(/\r?\n/).filter((line) => line.length > 0);
     const header = lines[0]?.startsWith('##') ? parseBranchHeader(lines[0]) : { branch: 'unknown', ahead: 0, behind: 0 };
 
     const changedFiles: GitChangedFile[] = lines
@@ -247,6 +297,7 @@ export class GitSyncService {
       });
 
     return {
+      initialized: true,
       repository: TARGET_REPOSITORY_SLUG,
       branch: header.branch,
       targetBranch: TARGET_BRANCH,
@@ -268,6 +319,14 @@ export class GitSyncService {
     }
 
     const statusBefore = await this.getStatus();
+    if (statusBefore.initialized === false) {
+      throw new GitSyncError(
+        statusBefore.statusMessage || 'Локальный Git-репозиторий (.git) не инициализирован.',
+        409,
+        'GIT_NOT_INITIALIZED'
+      );
+    }
+
     if (statusBefore.branch !== TARGET_BRANCH) {
       throw new GitSyncError(
         `Текущая ветка «${statusBefore.branch}» отличается от целевой ветки «${TARGET_BRANCH}».`,

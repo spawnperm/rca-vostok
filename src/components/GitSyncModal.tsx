@@ -317,9 +317,12 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
               </div>
             ) : repoStatus ? (
               <div className="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-xs text-slate-600">
-                {repoStatus.ahead > 0
-                  ? `Рабочее дерево чистое, но есть локальные коммиты (${repoStatus.ahead}), готовые к отправке в main.`
-                  : 'Рабочее дерево чистое — все изменения уже зафиксированы и отправлены в main.'}
+                {repoStatus.initialized === false
+                  ? repoStatus.statusMessage ||
+                    'Локальный Git-репозиторий (.git) отсутствует в текущем окружении.'
+                  : repoStatus.ahead > 0
+                    ? `Рабочее дерево чистое, но есть локальные коммиты (${repoStatus.ahead}), готовые к отправке в main.`
+                    : 'Рабочее дерево чистое — все изменения уже зафиксированы и отправлены в main.'}
               </div>
             ) : null}
 
