@@ -169,6 +169,10 @@ import {
 } from './src/application/experience/ExperienceJournalUseCases.ts';
 import { JsonFileExperienceJournalRepository } from './src/infrastructure/persistence/JsonFileExperienceJournalRepository.ts';
 import { createExperienceJournalRouter } from './src/infrastructure/http/ExperienceJournalRouter.ts';
+import {
+  GetLiveInstructorMarketStatsUseCase,
+  LiveMarketEventBuffer,
+} from './src/application/market/LiveInstructorMarketStats.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -388,6 +392,20 @@ async function startServer() {
     experienceJournalRepo,
     eventBus
   );
+  const liveMarketEventBuffer = new LiveMarketEventBuffer(8);
+  const getLiveMarketStatsUseCase = new GetLiveInstructorMarketStatsUseCase(
+    inquiryRepo,
+    guideLeaderboardRepo,
+    readinessSurveyRepo,
+    liveMarketEventBuffer,
+    adapterName
+  );
+  const marketStreamListeners = new Set<() => void>();
+  liveMarketEventBuffer.attach(eventBus, () => {
+    for (const listener of marketStreamListeners) {
+      listener();
+    }
+  });
   const getSystemHealthUseCase = new GetSystemHealthUseCase(
     inquiryRepo,
     analyticsRepo,
@@ -994,6 +1012,15 @@ async function startServer() {
         maxComplexity: body.maxComplexity,
       });
       res.json({ ok: true, record });
+      eventBus.publish({
+        eventName: 'market.leaderboard_synced',
+        occurredAt: new Date().toISOString(),
+        boundedContext: 'certification',
+        payload: {
+          region: record.region,
+          track: record.track,
+        },
+      });
     } catch (err) {
       handleDomainError(err, res);
     }
@@ -1030,6 +1057,15 @@ async function startServer() {
     try {
       const body = (req.body || {}) as Record<string, unknown>;
       const { record, stats } = readinessSurveyRepo.submit(body);
+      eventBus.publish({
+        eventName: 'market.readiness_survey_submitted',
+        occurredAt: record.createdAt,
+        boundedContext: 'research',
+        payload: {
+          region: record.region,
+          readinessPct: record.readinessPct,
+        },
+      });
       res.status(201).json({
         ok: true,
         id: record.id,
@@ -1064,6 +1100,62 @@ async function startServer() {
     } catch (err) {
       handleDomainError(err, res);
     }
+  });
+
+  // Real-time DFO Instructor Market Dashboard API + SSE Stream
+  app.get('/api/market/live-stats', async (_req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(await getLiveMarketStatsUseCase.execute());
+    } catch (err) {
+      handleDomainError(err, res);
+    }
+  });
+
+  app.get('/api/market/live-stats/stream', async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    let closed = false;
+    const pushSnapshot = async () => {
+      if (closed) return;
+      try {
+        const snapshot = await getLiveMarketStatsUseCase.execute();
+        res.write(`data: ${JSON.stringify(snapshot)}\n\n`);
+      } catch {
+        // Ignore transient write error while socket is closing
+      }
+    };
+
+    await pushSnapshot();
+
+    const onEvent = () => {
+      void pushSnapshot();
+    };
+    marketStreamListeners.add(onEvent);
+
+    const periodicRefresh = setInterval(() => {
+      void pushSnapshot();
+    }, 15_000);
+
+    const keepAlive = setInterval(() => {
+      if (closed) return;
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        // Ignore on closed socket
+      }
+    }, 25_000);
+
+    req.on('close', () => {
+      closed = true;
+      marketStreamListeners.delete(onEvent);
+      clearInterval(periodicRefresh);
+      clearInterval(keepAlive);
+      res.end();
+    });
   });
 
   if (!IS_PROD) {

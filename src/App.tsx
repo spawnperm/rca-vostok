@@ -15,6 +15,7 @@ import {
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GitSyncModal } from './components/GitSyncModal';
+import { LiveInstructorMarketWidget } from './components/LiveInstructorMarketWidget';
 import { NotificationsModal } from './components/NotificationsModal';
 import { RcaAssistantChatWidget } from './components/RcaAssistantChatWidget';
 import {
@@ -411,6 +412,8 @@ export default function App() {
                     </p>
                   </button>
                 </section>
+
+                <LiveInstructorMarketWidget onNavigate={navigateTo} />
 
                 <ContactsSection />
               </div>
