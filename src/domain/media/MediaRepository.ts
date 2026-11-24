@@ -33,12 +33,23 @@ export interface MediaRepository {
  * The domain never sees file handles: it hands over a key and the adapter
  * (Garage S3 in production) owns transport concerns.
  */
+export interface ObjectStoragePutOptions {
+  cacheControl?: string;
+}
+
 export interface ObjectStorage {
   /** Uploads bytes and returns the public URL for the stored object. */
-  put(key: string, body: Buffer, contentType: string): Promise<{ url: string }>;
+  put(
+    key: string,
+    body: Buffer,
+    contentType: string,
+    options?: ObjectStoragePutOptions
+  ): Promise<{ url: string }>;
   delete(key: string): Promise<void>;
   /** Presigned or direct URL for reading an object. */
   publicUrl(key: string): string;
+  /** Checks connectivity/availability of the underlying bucket or storage root. */
+  checkHealth?(): Promise<boolean>;
   /**
    * Streams an object back through the app.
    *

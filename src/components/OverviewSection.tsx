@@ -18,6 +18,7 @@ import { CertifiedInstructorsReviewsCarousel } from './CertifiedInstructorsRevie
 import { CourseSatisfactionSurvey } from './CourseSatisfactionSurvey';
 import { DfoHubsWeatherWidget } from './DfoHubsWeatherWidget';
 import { ExpertProfileWidget } from './ExpertProfileWidget';
+import { GuideEmploymentReattestationSurvey } from './GuideEmploymentReattestationSurvey';
 import { InstructorReadinessSurvey } from './InstructorReadinessSurvey';
 import { OverviewAttestationStatusBar } from './OverviewAttestationStatusBar';
 import { PartnersAndCoOrganizersSection } from './PartnersAndCoOrganizersSection';
@@ -459,6 +460,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
 
       {activeSubTab === 'monitoring' && (
         <div className="space-y-8">
+          <GuideEmploymentReattestationSurvey
+            onApplyForSession={(regionName, trackName) =>
+              scrollToInquiryForm(regionName, trackName)
+            }
+          />
           <InstructorReadinessSurvey
             onApplyForSession={(regionName, trackName) =>
               scrollToInquiryForm(regionName, trackName)

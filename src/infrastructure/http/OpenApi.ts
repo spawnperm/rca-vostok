@@ -616,6 +616,46 @@ export const openApiDocument = {
         responses: { '200': { description: 'OK' } },
       },
     },
+    '/api/employment-survey': {
+      get: {
+        tags: ['Content'],
+        summary: 'Список анкет занятости и переаттестации + сводка (PostgreSQL / JSON)',
+        responses: { '200': { description: 'Сводка и список анкет' } },
+      },
+      post: {
+        tags: ['Content'],
+        summary: 'Сохранить анкету занятости и переаттестации (БД + архив Garage S3)',
+        responses: {
+          '201': { description: 'Сохранено в БД и архивировано в S3' },
+          '400': { description: 'Ошибка валидации' },
+          '429': { $ref: '#/components/responses/RateLimited' },
+        },
+      },
+    },
+    '/api/employment-survey/archive': {
+      get: {
+        tags: ['Content'],
+        summary: 'Скачать консолидированный JSON-снимок анкет из объектного хранилища (Garage S3)',
+        responses: {
+          '200': { description: 'JSON-архив из объектного хранилища' },
+          '404': { description: 'Снимок не найден' },
+        },
+      },
+    },
+    '/api/employment-survey/{id}': {
+      delete: {
+        tags: ['Content'],
+        summary: 'Удалить анкету занятости (автор или модератор) из БД и S3',
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: 'Удалено' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { description: 'Анкета не найдена' },
+        },
+      },
+    },
     '/api/market/live-stats': {
       get: {
         tags: ['Market'],

@@ -62,10 +62,15 @@ export interface LiveInstructorMarketSnapshot {
 }
 
 export interface ReadinessStatsReader {
-  getStats(): {
-    totalResponses: number;
-    averageReadinessPct: number;
-  };
+  getStats():
+    | Promise<{
+        totalResponses: number;
+        averageReadinessPct: number;
+      }>
+    | {
+        totalResponses: number;
+        averageReadinessPct: number;
+      };
 }
 
 const REGION_ALIASES: Record<string, readonly string[]> = {
@@ -253,7 +258,7 @@ export class GetLiveInstructorMarketStatsUseCase {
       this.leaderboard.list({ activeOnly: true }),
     ]);
 
-    const readinessStats = this.readinessSurvey.getStats();
+    const readinessStats = await Promise.resolve(this.readinessSurvey.getStats());
 
     // Aggregate inquiry counts by status and region
     let approvedInquiriesCount = 0;

@@ -99,6 +99,8 @@ import { JsonFileSatisfactionSurveyRepository } from './src/infrastructure/persi
 import { JsonFileSocialRepository } from './src/infrastructure/persistence/JsonFileSocialRepository.ts';
 import { JsonFileChatRepository } from './src/infrastructure/persistence/JsonFileChatRepository.ts';
 import { JsonFileMediaRepository } from './src/infrastructure/persistence/JsonFileMediaRepository.ts';
+import { JsonFileEmploymentSurveyRepository } from './src/infrastructure/persistence/JsonFileEmploymentSurveyRepository.ts';
+import type { EmploymentSurveyRepository } from './src/infrastructure/persistence/JsonFileEmploymentSurveyRepository.ts';
 import {
   MIGRATION_STEP_COUNT,
   createPool,
@@ -109,6 +111,10 @@ import { PostgresAnalyticsRepository } from './src/infrastructure/persistence/pg
 import { PostgresFeedbackRepository } from './src/infrastructure/persistence/pg/PostgresFeedbackRepository.ts';
 import { PostgresInquiryRepository } from './src/infrastructure/persistence/pg/PostgresInquiryRepository.ts';
 import { PostgresGuideLeaderboardRepository } from './src/infrastructure/persistence/pg/PostgresGuideLeaderboardRepository.ts';
+import { PostgresReadinessSurveyRepository } from './src/infrastructure/persistence/pg/PostgresReadinessSurveyRepository.ts';
+import { PostgresSatisfactionSurveyRepository } from './src/infrastructure/persistence/pg/PostgresSatisfactionSurveyRepository.ts';
+import { PostgresEmploymentSurveyRepository } from './src/infrastructure/persistence/pg/PostgresEmploymentSurveyRepository.ts';
+import { PostgresExperienceJournalRepository } from './src/infrastructure/persistence/pg/PostgresExperienceJournalRepository.ts';
 import { PostgresUserRepository } from './src/infrastructure/persistence/pg/PostgresUserRepository.ts';
 import { PostgresSessionRepository } from './src/infrastructure/persistence/pg/PostgresSessionRepository.ts';
 import {
@@ -316,9 +322,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
     persistenceLog.info('No database configured, using JSON file adapter', { dataDir });
   }
 
-  const readinessSurveyRepo = new JsonFileReadinessSurveyRepository(dataDir);
-  const satisfactionSurveyRepo = new JsonFileSatisfactionSurveyRepository(dataDir);
-  const experienceJournalRepo = new JsonFileExperienceJournalRepository(dataDir);
+  const readinessSurveyRepo = pool
+    ? new PostgresReadinessSurveyRepository(pool)
+    : new JsonFileReadinessSurveyRepository(dataDir);
+  const satisfactionSurveyRepo = pool
+    ? new PostgresSatisfactionSurveyRepository(pool)
+    : new JsonFileSatisfactionSurveyRepository(dataDir);
+  const employmentSurveyRepo: EmploymentSurveyRepository = pool
+    ? new PostgresEmploymentSurveyRepository(pool)
+    : new JsonFileEmploymentSurveyRepository(dataDir);
+  const experienceJournalRepo = pool
+    ? new PostgresExperienceJournalRepository(pool)
+    : new JsonFileExperienceJournalRepository(dataDir);
 
   const userRepo: UserRepository = pool
     ? new PostgresUserRepository(pool)
@@ -388,6 +403,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
     }
   });
 
+  const s3Storage = createObjectStorageFromEnv();
+  const objectStorage = s3Storage ?? new LocalObjectStorage(path.join(dataDir, 'media-objects'));
+  const storageProvider = s3Storage ? 'garage-s3' : 'local-disk';
+  appLogger.child('storage').info('Object storage configured', {
+    provider: storageProvider,
+  });
+
   const getSystemHealthUseCase = new GetSystemHealthUseCase(
     inquiryRepo,
     analyticsRepo,
@@ -409,7 +431,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
             return applied.length >= MIGRATION_STEP_COUNT;
           }
         : undefined,
-    }
+      checkStorage: async () =>
+        objectStorage.checkHealth ? objectStorage.checkHealth() : true,
+    },
+    storageProvider
   );
 
   // Identity bounded context (personal cabinet + RBAC)
@@ -488,11 +513,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
   const mediaRepo: MediaRepository = pool
     ? new PostgresMediaRepository(pool)
     : new JsonFileMediaRepository(dataDir);
-  const s3Storage = createObjectStorageFromEnv();
-  const objectStorage = s3Storage ?? new LocalObjectStorage(path.join(dataDir, 'media-objects'));
-  appLogger.child('storage').info('Media object storage configured', {
-    provider: s3Storage ? 'S3/Garage' : 'local-disk',
-  });
+  // objectStorage initialized earlier for both media and survey archiving
 
   app.use(
     createSocialRouter({
@@ -612,6 +633,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
       syncMyGuideLeaderboard: syncMyGuideLeaderboardUseCase,
       readinessSurveyRepo,
       satisfactionSurveyRepo,
+      employmentSurveyRepo,
+      objectStorage,
+      persistenceAdapter: adapterName,
+      storageProvider,
       eventBus,
       inquiryRateLimit,
       feedbackRateLimit,

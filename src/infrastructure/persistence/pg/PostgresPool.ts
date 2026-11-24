@@ -73,6 +73,7 @@ const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> 
   { version: '010_user_avatar_url', run: (p) => migrateUserAvatarUrl(p) },
   { version: '011_lms_progress', run: (p) => migrateLmsProgress(p) },
   { version: '012_social_profile_customization', run: (p) => migrateSocialProfileCustomization(p) },
+  { version: '013_surveys_and_experience', run: (p) => migrateSurveysAndExperience(p) },
 ];
 
 /**
@@ -821,5 +822,88 @@ async function migrateSocialProfileCustomization(pool: pg.Pool): Promise<void> {
       ADD COLUMN IF NOT EXISTS avatar_url   TEXT NOT NULL DEFAULT '';
   `);
 }
+
+/** Survey tables (readiness, satisfaction, employment/re-attestation) & experience journal. */
+async function migrateSurveysAndExperience(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS readiness_surveys (
+      id                TEXT PRIMARY KEY,
+      region            TEXT NOT NULL,
+      track             TEXT NOT NULL,
+      experience_range  TEXT NOT NULL,
+      preferred_format  TEXT NOT NULL,
+      planned_timeframe TEXT NOT NULL,
+      main_barrier      TEXT NOT NULL,
+      ready_docs        TEXT[] NOT NULL DEFAULT '{}',
+      readiness_pct     INTEGER NOT NULL,
+      respondent_name   TEXT NOT NULL DEFAULT '',
+      comment           TEXT NOT NULL DEFAULT '',
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS readiness_surveys_created_idx
+      ON readiness_surveys (created_at DESC);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS satisfaction_surveys (
+      id                     TEXT PRIMARY KEY,
+      course_program         TEXT NOT NULL,
+      complexity_category    TEXT NOT NULL,
+      preparation_quality    INTEGER NOT NULL,
+      materials_quality      INTEGER NOT NULL,
+      practice_utility       INTEGER NOT NULL,
+      overall_score          DOUBLE PRECISION NOT NULL,
+      materials_clarity      TEXT NOT NULL,
+      nps_recommend          INTEGER NOT NULL,
+      most_useful_module     TEXT NOT NULL,
+      respondent_name        TEXT NOT NULL DEFAULT '',
+      improvement_suggestion TEXT NOT NULL DEFAULT '',
+      created_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS satisfaction_surveys_created_idx
+      ON satisfaction_surveys (created_at DESC);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS employment_reattestation_surveys (
+      id                     TEXT PRIMARY KEY,
+      owner_user_id          TEXT REFERENCES users(id) ON DELETE SET NULL,
+      respondent_name        TEXT NOT NULL DEFAULT '',
+      region                 TEXT NOT NULL,
+      discipline             TEXT NOT NULL,
+      complexity_level       TEXT NOT NULL,
+      employment_status      TEXT NOT NULL,
+      workload_range         TEXT NOT NULL,
+      tour_days_per_season   INTEGER NOT NULL DEFAULT 0,
+      groups_per_month       INTEGER NOT NULL DEFAULT 0,
+      has_active_certificate BOOLEAN NOT NULL DEFAULT TRUE,
+      reattestation_urgency  TEXT NOT NULL,
+      preferred_format       TEXT NOT NULL,
+      needed_topics          TEXT[] NOT NULL DEFAULT '{}',
+      needs_employer_subsidy BOOLEAN NOT NULL DEFAULT FALSE,
+      priority_level         TEXT NOT NULL,
+      comment                TEXT NOT NULL DEFAULT '',
+      archive_object_key     TEXT NOT NULL DEFAULT '',
+      submitted_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS employment_reattestation_submitted_idx
+      ON employment_reattestation_surveys (submitted_at DESC);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS experience_journal_entries (
+      owner_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      entries_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+}
+
 
 

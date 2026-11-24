@@ -15,6 +15,8 @@ export interface HealthProbes {
   checkEventBus?: () => Promise<boolean>;
   /** Reports whether the migrations applied match what this build expects. */
   checkMigrations?: () => Promise<boolean>;
+  /** Checks connectivity/bucket health for Garage S3 or local object storage. */
+  checkStorage?: () => Promise<boolean>;
 }
 
 export interface DependencyStatus {
@@ -33,6 +35,7 @@ export interface SystemHealthDTO {
   };
   persistence: {
     adapter: string;
+    storageProvider?: string;
   };
   dependencies: Record<string, DependencyStatus>;
   metrics: {
@@ -57,34 +60,39 @@ export class GetSystemHealthUseCase {
   private readonly inquiryRepo: InquiryRepository;
   private readonly analyticsRepo: AnalyticsRepository;
   private readonly adapterName: string;
+  private readonly storageProvider: string;
   private readonly probes: HealthProbes;
 
   constructor(
     inquiryRepo: InquiryRepository,
     analyticsRepo: AnalyticsRepository,
     adapterName = 'unknown',
-    probes: HealthProbes = {}
+    probes: HealthProbes = {},
+    storageProvider = 'local-disk'
   ) {
     this.inquiryRepo = inquiryRepo;
     this.analyticsRepo = analyticsRepo;
     this.adapterName = adapterName;
     this.probes = probes;
+    this.storageProvider = storageProvider;
   }
 
   async execute(): Promise<SystemHealthDTO> {
-    const [database, eventBus, migrations] = await Promise.all([
+    const [database, eventBus, migrations, objectStorage] = await Promise.all([
       probe(this.probes.checkDatabase),
       probe(this.probes.checkEventBus),
       probe(this.probes.checkMigrations),
+      probe(this.probes.checkStorage),
     ]);
 
     const dependencies: Record<string, DependencyStatus> = {};
     if (database) dependencies.database = database;
     if (eventBus) dependencies.eventBus = eventBus;
     if (migrations) dependencies.migrations = migrations;
+    if (objectStorage) dependencies.objectStorage = objectStorage;
 
     // Database is the only hard dependency: without it nothing works. The bus
-    // degrades gracefully by design, so it only lowers the status to degraded.
+    // and optional storage probes lower status to degraded when unreachable.
     const databaseOk = dependencies.database?.ok !== false;
     const anyDegraded = Object.values(dependencies).some((d) => !d.ok);
 
@@ -127,7 +135,7 @@ export class GetSystemHealthUseCase {
           'media',
         ],
       },
-      persistence: { adapter: this.adapterName },
+      persistence: { adapter: this.adapterName, storageProvider: this.storageProvider },
       dependencies,
       metrics: { inquiriesCount, sessionsCount, eventsCount },
     };

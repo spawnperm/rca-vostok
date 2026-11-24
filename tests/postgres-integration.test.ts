@@ -10,6 +10,10 @@ import { PostgresInquiryRepository } from '../src/infrastructure/persistence/pg/
 import { PostgresSocialRepository } from '../src/infrastructure/persistence/pg/PostgresSocialRepository.ts';
 import { PostgresChatRepository } from '../src/infrastructure/persistence/pg/PostgresChatRepository.ts';
 import { PostgresMediaRepository } from '../src/infrastructure/persistence/pg/PostgresMediaRepository.ts';
+import { PostgresEmploymentSurveyRepository } from '../src/infrastructure/persistence/pg/PostgresEmploymentSurveyRepository.ts';
+import { PostgresReadinessSurveyRepository } from '../src/infrastructure/persistence/pg/PostgresReadinessSurveyRepository.ts';
+import { PostgresSatisfactionSurveyRepository } from '../src/infrastructure/persistence/pg/PostgresSatisfactionSurveyRepository.ts';
+import { PostgresExperienceJournalRepository } from '../src/infrastructure/persistence/pg/PostgresExperienceJournalRepository.ts';
 import { User } from '../src/domain/identity/User.ts';
 import { ROLES } from '../src/domain/identity/Rbac.ts';
 import { Post } from '../src/domain/social/Post.ts';
@@ -63,6 +67,10 @@ async function cleanup() {
   await pool.query('DELETE FROM social_activity');
   await pool.query('DELETE FROM social_follows');
   await pool.query('DELETE FROM social_profiles');
+  await pool.query('DELETE FROM experience_journal_entries');
+  await pool.query('DELETE FROM employment_reattestation_surveys');
+  await pool.query('DELETE FROM readiness_surveys');
+  await pool.query('DELETE FROM satisfaction_surveys');
   await pool.query('DELETE FROM user_linked_accounts');
   await pool.query('DELETE FROM password_reset_tokens');
   await pool.query('DELETE FROM user_sessions');
@@ -113,6 +121,10 @@ maybe('Postgres: migrations create every expected table', async () => {
     'media_assets',
     'certified_guides_registry',
     'user_linked_accounts',
+    'readiness_surveys',
+    'satisfaction_surveys',
+    'employment_reattestation_surveys',
+    'experience_journal_entries',
   ]) {
     assert.ok(names.includes(expected), `missing table: ${expected}`);
   }
@@ -570,3 +582,78 @@ maybe('Postgres media: album visibility and asset counters', async () => {
   await p.end();
   pool = null;
 });
+
+maybe('Postgres surveys & experience journal: round-trip persistence', async () => {
+  await cleanup();
+  const p = await ensureMigrated();
+  const { user } = await seedUser('surveys@example.ru');
+
+  const empRepo = new PostgresEmploymentSurveyRepository(p);
+  const submitted = await empRepo.submit(
+    {
+      respondentName: 'Тестовый Гид',
+      region: 'Приморский край',
+      discipline: 'Пешеходный туризм',
+      complexityLevel: '1–2 КС',
+      employmentStatus: 'Штатный инструктор туроператора',
+      workloadRange: '76–120 дней в сезон (полный сезон)',
+      tourDaysPerSeason: 90,
+      groupsPerMonth: 5,
+      hasActiveCertificate: true,
+      reattestationUrgency: 'Срочно (срок истекает менее чем через 3 мес. или истёк)',
+      preferredFormat: 'Выездная комиссия в своём субъекте ДФО',
+      neededTopics: ['npa_760', 'wfa_first_aid'],
+      needsEmployerSubsidy: true,
+      comment: 'Нужна весенняя сессия',
+    },
+    { ownerUserId: user.id }
+  );
+
+  assert.equal(submitted.record.priorityLevel, 'high');
+  assert.equal(submitted.summary.totalResponses, 1);
+  assert.equal(submitted.summary.urgentReattestationCount, 1);
+
+  await empRepo.updateArchiveKey(
+    submitted.record.id,
+    `surveys/employment-reattestation/entries/${submitted.record.id}.json`
+  );
+  const loaded = await empRepo.findById(submitted.record.id);
+  assert.equal(
+    loaded?.archiveObjectKey,
+    `surveys/employment-reattestation/entries/${submitted.record.id}.json`
+  );
+
+  const deleted = await empRepo.deleteById(submitted.record.id);
+  assert.equal(deleted, true);
+  assert.equal((await empRepo.getSummary()).totalResponses, 0);
+
+  const readinessRepo = new PostgresReadinessSurveyRepository(p);
+  const satRepo = new PostgresSatisfactionSurveyRepository(p);
+  assert.equal(typeof (await readinessRepo.getStats()).totalResponses, 'number');
+  assert.equal(typeof (await satRepo.getStats()).totalResponses, 'number');
+
+  const journalRepo = new PostgresExperienceJournalRepository(p);
+  await journalRepo.saveByOwner(user.id, [
+    {
+      id: 'exp-1',
+      date: '2026-06-01',
+      routeTitle: 'Сплав по реке Бикин',
+      regionId: 'primorye',
+      regionName: 'Приморский край',
+      complexity: '2 КС',
+      participantsCount: 8,
+      distanceKm: 75,
+      notes: 'Учебный маршрут',
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  const entries = await journalRepo.listByOwner(user.id);
+  assert.ok(entries);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].routeTitle, 'Сплав по реке Бикин');
+
+  await cleanup();
+  await p.end();
+  pool = null;
+});
+

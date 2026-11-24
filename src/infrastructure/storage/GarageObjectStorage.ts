@@ -1,5 +1,11 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import type { ObjectStorage } from '../../domain/media/MediaRepository.ts';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import type { ObjectStorage, ObjectStoragePutOptions } from '../../domain/media/MediaRepository.ts';
 
 export interface S3Config {
   endpoint: string;
@@ -36,18 +42,31 @@ export class GarageObjectStorage implements ObjectStorage {
     });
   }
 
-  async put(key: string, body: Buffer, contentType: string): Promise<{ url: string }> {
+  async put(
+    key: string,
+    body: Buffer,
+    contentType: string,
+    options?: ObjectStoragePutOptions
+  ): Promise<{ url: string }> {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
         Body: body,
         ContentType: contentType,
-        // Media is immutable once uploaded (content-addressed keys).
-        CacheControl: 'public, max-age=31536000, immutable',
+        CacheControl: options?.cacheControl ?? 'public, max-age=31536000, immutable',
       })
     );
     return { url: this.publicUrl(key) };
+  }
+
+  async checkHealth(): Promise<boolean> {
+    try {
+      await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async delete(key: string): Promise<void> {
@@ -154,13 +173,29 @@ export class LocalObjectStorage implements ObjectStorage {
     return resolveConfinedPath(this.baseDir, sanitized);
   }
 
-  async put(key: string, body: Buffer, _contentType: string): Promise<{ url: string }> {
+  async put(
+    key: string,
+    body: Buffer,
+    _contentType: string,
+    _options?: ObjectStoragePutOptions
+  ): Promise<{ url: string }> {
     const fs = await import('node:fs/promises');
     const path = await import('node:path');
     const target = await this.resolveTarget(key);
     await fs.mkdir(path.dirname(target), { recursive: true });
     await fs.writeFile(target, body);
     return { url: this.publicUrl(key) };
+  }
+
+  async checkHealth(): Promise<boolean> {
+    const fs = await import('node:fs/promises');
+    try {
+      await fs.mkdir(this.baseDir, { recursive: true });
+      await fs.access(this.baseDir);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async delete(key: string): Promise<void> {
