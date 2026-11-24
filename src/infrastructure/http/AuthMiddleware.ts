@@ -57,6 +57,16 @@ export function sessionCookieOptions(expiresAt: string): {
   };
 }
 
+export function clearSessionCookie(res: express.Response): void {
+  const isHttps = isHttpsDeployment();
+  res.clearCookie(SESSION_COOKIE, {
+    path: '/',
+    httpOnly: true,
+    sameSite: isHttps ? 'none' : 'lax',
+    secure: isHttps,
+  });
+}
+
 /** Attaches the authenticated principal to the request when a session exists. */
 export function createAuthMiddleware(resolveSession: ResolveSessionUseCase) {
   return async function attachUser(

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react';
 import {
-  PUBLIC_SITEMAP_ROUTES,
   SECTION_SEO_MAP,
   type LiveSeoAuditResult,
   type SiteTabId,
 } from '../../utils/seo';
+import { generateSitemap } from '../../utils/sitemapGenerator';
 import type { ServerSeoStatus } from './types';
 
 interface SeoAuditTabProps {
@@ -13,10 +13,14 @@ interface SeoAuditTabProps {
   serverSeo: ServerSeoStatus | null;
 }
 
+const LOCAL_SITEMAP_STATS = generateSitemap();
+
 export const SeoAuditTab: React.FC<SeoAuditTabProps> = ({ seoAudit, serverSeo }) => {
   const [previewSeoTab, setPreviewSeoTab] = useState<SiteTabId>('home');
   const previewSeo = SECTION_SEO_MAP[previewSeoTab];
-  const indexedCount = serverSeo?.indexedRoutes ?? PUBLIC_SITEMAP_ROUTES.length;
+  const indexedCount = serverSeo?.indexedRoutes ?? LOCAL_SITEMAP_STATS.entries.length;
+  const indexedSections = serverSeo?.indexedSections ?? LOCAL_SITEMAP_STATS.sectionCount;
+  const indexedSubSections = serverSeo?.indexedSubSections ?? LOCAL_SITEMAP_STATS.subSectionCount;
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -113,7 +117,7 @@ export const SeoAuditTab: React.FC<SeoAuditTabProps> = ({ seoAudit, serverSeo })
               <div>
                 <p className="font-semibold text-slate-900">sitemap.xml</p>
                 <p className="text-slate-500 font-mono tabular-nums">
-                  {indexedCount} индексируемых маршрутов
+                  {indexedCount} URL ({indexedSections} разд. + {indexedSubSections} подразд.)
                 </p>
               </div>
               <a

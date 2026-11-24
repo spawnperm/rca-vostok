@@ -1,7 +1,7 @@
 import express from 'express';
-import { DomainError, ValidationError } from '../../domain/shared/DomainError.ts';
 import { PERMISSIONS } from '../../domain/identity/Rbac.ts';
 import { appLogger } from '../logging/Logger.ts';
+import { sendDomainError } from './ErrorHandler.ts';
 import type {
   AssignRoleUseCase,
   ChangePasswordUseCase,
@@ -21,7 +21,7 @@ import type {
 } from '../../application/identity/PasswordResetUseCases.ts';
 import {
   SESSION_COOKIE,
-  isHttpsDeployment,
+  clearSessionCookie,
   readSessionCookie,
   requireAuth,
   requirePermission,
@@ -38,6 +38,8 @@ export interface IdentityRouterDeps {
   listUsers: ListUsersUseCase;
   assignRole: AssignRoleUseCase;
   setUserActive: SetUserActiveUseCase;
+  /** Guards /api/auth/register against automated bulk account creation. */
+  registerRateLimit?: express.RequestHandler;
   /** Guards /api/auth/login against credential stuffing. */
   loginRateLimit?: express.RequestHandler;
   /** Guards /api/auth/forgot-password against email flooding. */
@@ -51,18 +53,7 @@ export interface IdentityRouterDeps {
 const identityLog = appLogger.child('identity');
 
 function sendError(err: unknown, res: express.Response): void {
-  if (err instanceof ValidationError) {
-    const status = err.code === 'INVALID_CREDENTIALS' || err.code === 'ACCOUNT_DISABLED' ? 401 : 400;
-    res.status(status).json({ error: err.message, code: err.code });
-    return;
-  }
-  if (err instanceof DomainError) {
-    const status = err.code === 'FORBIDDEN' ? 403 : err.code === 'NOT_FOUND' ? 404 : 422;
-    res.status(status).json({ error: err.message, code: err.code });
-    return;
-  }
-  identityLog.error('Unexpected error in IdentityRouter', err);
-  res.status(500).json({ error: 'Внутренняя ошибка сервера.' });
+  sendDomainError(err, res, identityLog, 'Unexpected error in IdentityRouter');
 }
 
 /**
@@ -75,32 +66,36 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
   const router = express.Router();
 
   // ── Public: registration and sign-in ──────────────────────────────────────
-  router.post('/api/auth/register', async (req, res) => {
-    try {
-      const body = (req.body || {}) as Record<string, unknown>;
-      const user = await deps.registerUser.execute({
-        email: body.email,
-        password: body.password,
-        fullName: body.fullName,
-        region: body.region,
-        organisation: body.organisation,
-        phone: body.phone,
-        telegram: body.telegram,
-        avatarUrl: body.avatarUrl,
-        attestationExpiresAt: body.attestationExpiresAt,
-      });
+  router.post(
+    '/api/auth/register',
+    ...(deps.registerRateLimit ? [deps.registerRateLimit] : []),
+    async (req, res) => {
+      try {
+        const body = (req.body || {}) as Record<string, unknown>;
+        const user = await deps.registerUser.execute({
+          email: body.email,
+          password: body.password,
+          fullName: body.fullName,
+          region: body.region,
+          organisation: body.organisation,
+          phone: body.phone,
+          telegram: body.telegram,
+          avatarUrl: body.avatarUrl,
+          attestationExpiresAt: body.attestationExpiresAt,
+        });
 
-      // Registrations signed in immediately, so the cabinet is usable at once.
-      const auth = await deps.login.execute({
-        email: body.email,
-        password: body.password,
-      });
-      res.cookie(SESSION_COOKIE, auth.token, sessionCookieOptions(auth.expiresAt));
-      res.status(201).json({ ok: true, user: auth.user, permissions: user.permissions });
-    } catch (err) {
-      sendError(err, res);
+        // Registrations signed in immediately, so the cabinet is usable at once.
+        const auth = await deps.login.execute({
+          email: body.email,
+          password: body.password,
+        });
+        res.cookie(SESSION_COOKIE, auth.token, sessionCookieOptions(auth.expiresAt));
+        res.status(201).json({ ok: true, user: auth.user, permissions: user.permissions });
+      } catch (err) {
+        sendError(err, res);
+      }
     }
-  });
+  );
 
   router.post(
     '/api/auth/login',
@@ -123,13 +118,7 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
   router.post('/api/auth/logout', async (req, res) => {
     try {
       await deps.logout.execute(readSessionCookie(req));
-      const isHttps = isHttpsDeployment();
-      res.clearCookie(SESSION_COOKIE, {
-        path: '/',
-        httpOnly: true,
-        sameSite: isHttps ? 'none' : 'lax',
-        secure: isHttps,
-      });
+      clearSessionCookie(res);
       res.json({ ok: true });
     } catch (err) {
       sendError(err, res);
@@ -178,13 +167,7 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
           password: body.password,
         });
         // Every session was revoked, so the client must sign in again.
-        const isHttps = isHttpsDeployment();
-        res.clearCookie(SESSION_COOKIE, {
-          path: '/',
-          httpOnly: true,
-          sameSite: isHttps ? 'none' : 'lax',
-          secure: isHttps,
-        });
+        clearSessionCookie(res);
         res.json({ ...result, reauthenticate: true });
       } catch (err) {
         sendError(err, res);
@@ -237,7 +220,7 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
         newPassword: body.newPassword,
       });
       // Changing the password invalidates all sessions, including this one.
-      res.clearCookie(SESSION_COOKIE, { path: '/' });
+      clearSessionCookie(res);
       res.json({ ...result, reauthenticate: true });
     } catch (err) {
       sendError(err, res);

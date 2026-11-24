@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+/* Accessibility: honor user reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Prevent Tailwind preflight img max-width/height from distorting Leaflet tiles */
 .leaflet-container img.leaflet-tile,
 .leaflet-container img.leaflet-marker-icon,
@@ -7,4 +22,3 @@
   max-width: none !important;
   max-height: none !important;
 }
-

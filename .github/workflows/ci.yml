@@ -6,52 +6,55 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    name: Typecheck, Domain Tests & Build
+    name: Typecheck, Audit, Domain Tests & Build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # pnpm must be set up before setup-node so the latter can use it as the
-      # cache key and report the resolved version.
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'pnpm'
 
-      # --frozen-lockfile: CI must verify the committed lockfile, never
-      # silently re-resolve dependencies.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
 
-      # Fails the build on high/critical advisories only: low-severity findings
-      # in transitive dev dependencies are noisy and would block unrelated work.
       - name: Dependency vulnerability audit
-        run: pnpm audit --audit-level=high
+        run: |
+          if [ ! -f package-lock.json ]; then
+            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          fi
+          npm audit --audit-level=high
 
       - name: TypeScript static check
-        run: pnpm run lint
+        run: npm run lint
 
-      - name: Run DDD domain and application tests
-        run: pnpm test
+      - name: Run DDD, security, and API tests
+        run: npm test
 
       - name: Production bundle build
-        run: pnpm run build
+        run: npm run build
 
   integration:
     name: PostgreSQL Integration Tests
     runs-on: ubuntu-latest
 
-    # Real database, because the PostgreSQL adapters were previously only
-    # exercised through in-memory doubles and two production bugs (duplicate
-    # analytics events, a missing column) went unnoticed as a result.
     services:
       postgres:
         image: postgres:17-alpine
@@ -71,19 +74,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --no-audit --no-fund
+          else
+            npm install --no-audit --no-fund
+          fi
 
       - name: Run PostgreSQL integration suite
         env:
           TEST_DATABASE_URL: postgres://rca:integration-only-password@localhost:5432/rca_integration
         run: node --test tests/postgres-integration.test.ts
+
+  docker:
+    name: Container Image Smoke Build
+    needs: verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build production Docker image
+        run: docker build --file Dockerfile --tag rca-vostok:ci .

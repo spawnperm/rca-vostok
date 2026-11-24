@@ -36,6 +36,7 @@ export interface MetricsSnapshot {
 
 /** Keeps memory bounded no matter how many routes exist. */
 const MAX_TRACKED_ROUTES = 200;
+const MAX_GLOBAL_SAMPLES = 500;
 const MAX_SAMPLES_PER_ROUTE = 200;
 
 export class MetricsCollector {
@@ -44,6 +45,8 @@ export class MetricsCollector {
   private errors5xx = 0;
   private clientErrors4xx = 0;
   private rateLimited = 0;
+  private maxDurationMs = 0;
+  private durationCursor = 0;
   private readonly routes = new Map<string, RouteStat>();
   private readonly durations: number[] = [];
 
@@ -54,7 +57,13 @@ export class MetricsCollector {
     if (status === 429) this.rateLimited += 1;
     else if (status >= 400) this.clientErrors4xx += 1;
 
-    if (this.durations.length < 500) this.durations.push(durationMs);
+    if (durationMs > this.maxDurationMs) this.maxDurationMs = durationMs;
+    if (this.durations.length < MAX_GLOBAL_SAMPLES) {
+      this.durations.push(durationMs);
+    } else {
+      this.durations[this.durationCursor] = durationMs;
+      this.durationCursor = (this.durationCursor + 1) % MAX_GLOBAL_SAMPLES;
+    }
 
     // Route labels collapse path parameters so /api/posts/a and /api/posts/b
     // share a bucket instead of creating unbounded cardinality.
@@ -98,7 +107,7 @@ export class MetricsCollector {
       latency: {
         p50: percentile(this.durations, 0.5),
         p95: percentile(this.durations, 0.95),
-        max: this.durations.length > 0 ? Math.max(...this.durations) : 0,
+        max: Math.round(this.maxDurationMs),
       },
       byRoute,
       process: {
@@ -106,6 +115,54 @@ export class MetricsCollector {
         heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
       },
     };
+  }
+
+  /** Renders Prometheus text exposition format (0.0.4) without adding npm dependencies. */
+  toPrometheus(): string {
+    const snap = this.snapshot();
+    const mem = process.memoryUsage();
+    const lines: string[] = [
+      '# HELP rca_http_uptime_seconds Process uptime in seconds.',
+      '# TYPE rca_http_uptime_seconds gauge',
+      `rca_http_uptime_seconds ${snap.uptimeSec}`,
+      '# HELP rca_http_requests_total Total completed HTTP requests.',
+      '# TYPE rca_http_requests_total counter',
+      `rca_http_requests_total ${snap.requests.total}`,
+      '# HELP rca_http_errors_5xx_total Total HTTP 5xx responses.',
+      '# TYPE rca_http_errors_5xx_total counter',
+      `rca_http_errors_5xx_total ${snap.requests.errors5xx}`,
+      '# HELP rca_http_client_errors_4xx_total Total HTTP 4xx responses (excluding 429).',
+      '# TYPE rca_http_client_errors_4xx_total counter',
+      `rca_http_client_errors_4xx_total ${snap.requests.clientErrors4xx}`,
+      '# HELP rca_http_rate_limited_total Total HTTP 429 rate-limited responses.',
+      '# TYPE rca_http_rate_limited_total counter',
+      `rca_http_rate_limited_total ${snap.requests.rateLimited}`,
+      '# HELP rca_http_latency_ms Request latency summary in milliseconds.',
+      '# TYPE rca_http_latency_ms gauge',
+      `rca_http_latency_ms{quantile="0.5"} ${snap.latency.p50}`,
+      `rca_http_latency_ms{quantile="0.95"} ${snap.latency.p95}`,
+      `rca_http_latency_ms{quantile="max"} ${snap.latency.max}`,
+      '# HELP rca_process_resident_memory_bytes Resident set size in bytes.',
+      '# TYPE rca_process_resident_memory_bytes gauge',
+      `rca_process_resident_memory_bytes ${mem.rss}`,
+      '# HELP rca_process_heap_used_bytes V8 heap used in bytes.',
+      '# TYPE rca_process_heap_used_bytes gauge',
+      `rca_process_heap_used_bytes ${mem.heapUsed}`,
+      '# HELP rca_http_route_requests_total Requests by normalised route.',
+      '# TYPE rca_http_route_requests_total counter',
+    ];
+
+    for (const [routeKey, stat] of Object.entries(snap.byRoute)) {
+      const spaceIdx = routeKey.indexOf(' ');
+      const method = spaceIdx === -1 ? 'GET' : routeKey.slice(0, spaceIdx);
+      const route = spaceIdx === -1 ? routeKey : routeKey.slice(spaceIdx + 1);
+      const safeRoute = route.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      lines.push(
+        `rca_http_route_requests_total{method="${method}",route="${safeRoute}"} ${stat.count}`
+      );
+    }
+
+    return `${lines.join('\n')}\n`;
   }
 }
 

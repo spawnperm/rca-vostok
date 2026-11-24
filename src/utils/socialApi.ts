@@ -142,7 +142,11 @@ export class SocialApiError extends Error {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Requested-With': 'fetch',
+      ...(init.headers || {}),
+    },
     ...init,
   });
 
@@ -206,31 +210,37 @@ export const socialApi = {
       publish?: boolean;
     }
   ) =>
-    request<FeedPost>(`/api/social/posts/${postId}`, {
+    request<FeedPost>(`/api/social/posts/${encodeURIComponent(postId)}`, {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
 
   deletePost: (postId: string) =>
-    request<{ ok: true }>(`/api/social/posts/${postId}`, {
+    request<{ ok: true }>(`/api/social/posts/${encodeURIComponent(postId)}`, {
       method: 'DELETE',
     }),
 
   getPost: (postId: string) =>
-    request<{ post: FeedPost; comments: PostComment[] }>(`/api/social/posts/${postId}`),
+    request<{ post: FeedPost; comments: PostComment[] }>(
+      `/api/social/posts/${encodeURIComponent(postId)}`
+    ),
 
   addComment: (postId: string, body: string) =>
-    request<PostComment>(`/api/social/posts/${postId}/comments`, {
+    request<PostComment>(`/api/social/posts/${encodeURIComponent(postId)}/comments`, {
       method: 'POST',
       body: JSON.stringify({ body }),
     }),
 
   toggleLike: (postId: string) =>
-    request<{ liked: boolean; count: number }>(`/api/social/posts/${postId}/like`, {
-      method: 'POST',
-    }),
+    request<{ liked: boolean; count: number }>(
+      `/api/social/posts/${encodeURIComponent(postId)}/like`,
+      {
+        method: 'POST',
+      }
+    ),
 
-  profile: (userId: string) => request<SocialProfileData>(`/api/social/profiles/${userId}`),
+  profile: (userId: string) =>
+    request<SocialProfileData>(`/api/social/profiles/${encodeURIComponent(userId)}`),
 
   updateProfile: (input: Record<string, unknown>) =>
     request<SocialProfileData>('/api/social/profile', {
@@ -240,7 +250,7 @@ export const socialApi = {
 
   follow: (userId: string, follow: boolean) =>
     request<{ following: boolean; followerCount: number }>(
-      `/api/social/profiles/${userId}/follow`,
+      `/api/social/profiles/${encodeURIComponent(userId)}/follow`,
       { method: 'POST', body: JSON.stringify({ follow }) }
     ),
 
@@ -258,36 +268,41 @@ export const chatApi = {
     }),
 
   join: (channelId: string) =>
-    request<{ ok: true }>(`/api/chat/channels/${channelId}/join`, { method: 'POST' }),
+    request<{ ok: true }>(`/api/chat/channels/${encodeURIComponent(channelId)}/join`, {
+      method: 'POST',
+    }),
 
   messages: (channelId: string, threadRootId?: string) => {
     const qs = new URLSearchParams();
     if (threadRootId) qs.set('threadRootId', threadRootId);
     return request<{ messages: ChatMessageData[]; members: unknown[] }>(
-      `/api/chat/channels/${channelId}/messages?${qs}`
+      `/api/chat/channels/${encodeURIComponent(channelId)}/messages?${qs}`
     );
   },
 
   send: (channelId: string, body: string, rootId?: string) =>
-    request<ChatMessageData>(`/api/chat/channels/${channelId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ body, rootId }),
-    }),
+    request<ChatMessageData>(
+      `/api/chat/channels/${encodeURIComponent(channelId)}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ body, rootId }),
+      }
+    ),
 
   edit: (messageId: string, body: string) =>
-    request<ChatMessageData>(`/api/chat/messages/${messageId}`, {
+    request<ChatMessageData>(`/api/chat/messages/${encodeURIComponent(messageId)}`, {
       method: 'PATCH',
       body: JSON.stringify({ body }),
     }),
 
   remove: (messageId: string) =>
-    request<{ ok: true }>(`/api/chat/messages/${messageId}`, {
+    request<{ ok: true }>(`/api/chat/messages/${encodeURIComponent(messageId)}`, {
       method: 'DELETE',
     }),
 
   react: (messageId: string, emoji: string) =>
     request<{ emoji: string; active: boolean }>(
-      `/api/chat/messages/${messageId}/reactions`,
+      `/api/chat/messages/${encodeURIComponent(messageId)}/reactions`,
       { method: 'POST', body: JSON.stringify({ emoji }) }
     ),
 
@@ -333,7 +348,10 @@ export const mediaApi = {
     const res = await fetch(`/api/media/assets?${qs}`, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': mimeType },
+      headers: {
+        'Content-Type': mimeType,
+        'X-Requested-With': 'fetch',
+      },
       body: file,
     });
 
@@ -347,10 +365,14 @@ export const mediaApi = {
   },
 
   deleteAsset: (assetId: string) =>
-    request<{ ok: true }>(`/api/media/assets/${assetId}`, { method: 'DELETE' }),
+    request<{ ok: true }>(`/api/media/assets/${encodeURIComponent(assetId)}`, {
+      method: 'DELETE',
+    }),
 
   deleteAlbum: (albumId: string) =>
-    request<{ ok: true }>(`/api/media/albums/${albumId}`, { method: 'DELETE' }),
+    request<{ ok: true }>(`/api/media/albums/${encodeURIComponent(albumId)}`, {
+      method: 'DELETE',
+    }),
 };
 
 function inferUploadMimeType(file: File): string {

@@ -2,10 +2,10 @@ name: rca-vostok
 
 # Production stack for РЦА «Русский Восток».
 #
-#   traefik   :80 public entrypoint, Docker label-based routing
+#   traefik   :80 public entrypoint, file-provider routing + security headers
 #   app       : Express + Vite bundle, PostgreSQL-backed DDD contexts
-#   postgres  : system of record for analytics / inquiries / feedback
-#   garage    : S3-compatible store for database and artifact backups
+#   postgres  : system of record for analytics / inquiries / feedback / identity
+#   garage    : S3-compatible store for media assets and database backups
 #   forgejo   : self-hosted Git (source of truth for deploys)
 #
 # Secrets come from .env (see .env.example). Nothing sensitive is committed.
@@ -15,6 +15,8 @@ services:
     image: traefik:v3.3
     container_name: rca-traefik
     restart: unless-stopped
+    init: true
+    mem_limit: 192m
     command:
       - --configFile=/etc/traefik/traefik.yml
     ports:
@@ -39,6 +41,8 @@ services:
     image: rca-vostok:latest
     container_name: rca-vostok-app
     restart: unless-stopped
+    init: true
+    mem_limit: 768m
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,7 +50,10 @@ services:
       NODE_ENV: production
       PORT: "3000"
       APP_URL: ${APP_URL:-http://46.173.16.90}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      RCA_ADMIN_SETUP_KEY: ${RCA_ADMIN_SETUP_KEY:-}
       # Domain event fan-out. Optional: the app falls back to an in-memory bus
       # when the broker is unreachable, so chat/feed never depend on it.
       NATS_URL: ${NATS_URL:-nats://nats:4222}
@@ -57,6 +64,24 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL:-/media}
+      # Optional SMTP mail delivery
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      # Optional Git sync & linked OAuth credentials
+      GIT_ACCESS_KEY: ${GIT_ACCESS_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      VK_CLIENT_ID: ${VK_CLIENT_ID:-}
+      VK_CLIENT_SECRET: ${VK_CLIENT_SECRET:-}
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       # Structured logging (DEBUG | INFO | ERROR) with file rotation.
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_TO_FILE: ${LOG_TO_FILE:-true}
@@ -74,7 +99,7 @@ services:
         - CMD
         - node
         - -e
-        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -91,6 +116,7 @@ services:
     image: postgres:17-alpine
     container_name: rca-postgres
     restart: unless-stopped
+    mem_limit: 768m
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -118,8 +144,7 @@ services:
     image: nats:2.10-alpine
     container_name: rca-nats
     restart: unless-stopped
-    # JetStream on, monitoring port 8222. Memory store is bounded so the broker
-    # cannot grow unbounded on a 3.8 GB host (`-js` alone uses defaults).
+    mem_limit: 128m
     command: ["-js", "-sd", "/tmp/nats", "-m", "8222"]
     expose:
       - "4222"
@@ -136,7 +161,7 @@ services:
     image: dxflrs/garage:v1.0.1
     container_name: rca-garage
     restart: unless-stopped
-    # Garage reads /etc/garage.toml by default; no --config flag needed.
+    mem_limit: 384m
     command: ["/garage", "server"]
     volumes:
       - ./deploy/garage.toml:/etc/garage.toml:ro
@@ -178,6 +203,7 @@ services:
     image: codeberg.org/forgejo/forgejo:9
     container_name: rca-forgejo
     restart: unless-stopped
+    mem_limit: 512m
     depends_on:
       postgres:
         condition: service_healthy

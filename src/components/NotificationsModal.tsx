@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -81,6 +81,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
     getBrowserPushPermissionStatus()
   );
   const [pushNotice, setPushNotice] = useState<string | null>(null);
+  const modalPanelRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -102,7 +103,10 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
       if (session.user.permissions.includes('inquiries:view_own')) {
         const res = await fetch('/api/account/inquiries', {
           credentials: 'same-origin',
-          headers: { Accept: 'application/json' },
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'fetch',
+          },
         });
         if (res.ok) {
           const data = (await res.json()) as { inquiries?: InquiryRecord[] };
@@ -132,11 +136,48 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    const previousFocused = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusTimer = window.setTimeout(() => {
+      const firstFocusable = modalPanelRef.current?.querySelector<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
+    }, 0);
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key === 'Tab' && modalPanelRef.current) {
+        const focusable = Array.from(
+          modalPanelRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => el.offsetParent !== null);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocused?.focus?.();
+    };
   }, [open, onClose]);
 
   const notifications = useMemo(
@@ -264,7 +305,10 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
         className="fixed inset-0 cursor-default"
       />
 
-      <div className="relative z-10 bg-white border border-slate-200 rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+      <div
+        ref={modalPanelRef}
+        className="relative z-10 bg-white border border-slate-200 rounded-xl shadow-xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden"
+      >
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-200 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -318,9 +362,11 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
               className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg"
             >
               <button
+                id="notif-tab-documents"
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'documents'}
+                aria-controls="notif-panel-documents"
                 onClick={() => setActiveTab('documents')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   activeTab === 'documents'
@@ -331,9 +377,11 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                 Документы ({notifications.length})
               </button>
               <button
+                id="notif-tab-feed"
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'feed'}
+                aria-controls="notif-panel-feed"
                 onClick={() => setActiveTab('feed')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   activeTab === 'feed'
@@ -344,9 +392,11 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                 Вакансии и комиссии ({matchedAlerts.length})
               </button>
               <button
+                id="notif-tab-subscriptions"
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'subscriptions'}
+                aria-controls="notif-panel-subscriptions"
                 onClick={() => setActiveTab('subscriptions')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   activeTab === 'subscriptions'
@@ -378,7 +428,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
           )}
 
           {activeTab === 'documents' && (
-            <>
+            <div id="notif-panel-documents" role="tabpanel" aria-labelledby="notif-tab-documents">
               {loading ? (
                 <div role="status" className="space-y-3 py-2">
                   {[0, 1, 2].map((idx) => (
@@ -418,11 +468,16 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
                   })}
                 </ul>
               )}
-            </>
+            </div>
           )}
 
           {activeTab === 'feed' && (
-            <div className="space-y-4">
+            <div
+              id="notif-panel-feed"
+              role="tabpanel"
+              aria-labelledby="notif-tab-feed"
+              className="space-y-4"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 text-xs">
                 <span className="text-slate-600">
                   Подборка по подписке:{' '}
@@ -534,7 +589,12 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({
           )}
 
           {activeTab === 'subscriptions' && (
-            <div className="space-y-5">
+            <div
+              id="notif-panel-subscriptions"
+              role="tabpanel"
+              aria-labelledby="notif-tab-subscriptions"
+              className="space-y-5"
+            >
               {/* Browser Push Activation Banner */}
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1">

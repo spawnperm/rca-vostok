@@ -61,6 +61,7 @@ export class GitApiError extends Error {
 function buildHeaders(bearerToken?: string | null, hasBody = false): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
+    'X-Requested-With': 'fetch',
   };
   if (hasBody) {
     headers['Content-Type'] = 'application/json';

@@ -457,13 +457,31 @@ export const GitSyncModal: React.FC<GitSyncModalProps> = ({
   bearerToken,
   onTokenChange,
 }) => {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
+    const prevFocus = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusTimer = window.setTimeout(() => {
+      const firstFocusable = containerRef.current?.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
+    }, 10);
+
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', handleKey);
+      document.body.style.overflow = prevOverflow;
+      prevFocus?.focus?.();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -481,7 +499,10 @@ export const GitSyncModal: React.FC<GitSyncModalProps> = ({
         onClick={onClose}
         className="absolute inset-0 bg-slate-900/50 backdrop-blur-[1px]"
       />
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl rounded-xl">
+      <div
+        ref={containerRef}
+        className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl rounded-xl"
+      >
         <GitSyncPanel
           onClose={onClose}
           bearerToken={bearerToken}

@@ -59,9 +59,9 @@ GARAGE_S3_BUCKET=rca-vostok-backups
 ./deploy/backup.sh
 ```
 
-Скрипт снимает `pg_dump`, сжимает его, выгружает в
-`s3://rca-vostok-backups/postgres/` и удаляет дампы старше `RETENTION_DAYS`
-(по умолчанию 14 дней). Для регулярного запуска — cron:
+Скрипт снимает `pg_dump`, сжимает его во временный архив, проверяет целостность
+через `gzip -t`, выгружает в `s3://rca-vostok-backups/postgres/` и удаляет
+дампы старше `RETENTION_DAYS` (по умолчанию 14 дней). Для регулярного запуска — cron:
 
 ```cron
 0 3 * * * cd /opt/rca-vostok && ./deploy/backup.sh >> /var/log/rca-backup.log 2>&1
@@ -177,7 +177,7 @@ wsl -d Ubuntu -u root
 
 ## Тесты
 
-- `pnpm test` — доменные и прикладные тесты. Интеграционные тесты
+- `npm test` — доменные, прикладные и HTTP/API-тесты. Интеграционные тесты
   пропускаются, если не задан `TEST_DATABASE_URL`, поэтому команда работает
   без базы.
 - `TEST_DATABASE_URL=postgres://... node --test tests/postgres-integration.test.ts`
@@ -203,17 +203,17 @@ wsl -d Ubuntu -u root
 
 ## Наблюдаемость
 
-- `GET /api/health` — проверяет БД (`SELECT 1`), шину событий и применённые
-  миграции. Отдаёт **503**, если БД недоступна, и `200` со статусом `degraded`,
-  если недоступна необязательная зависимость.
-- `GET /api/metrics` — счётчики запросов, ошибки, срабатывания лимитера,
-  p50/p95 задержки, разбивка по маршрутам, RSS и heap. Счётчики живут в процессе
-  и обнуляются при перезапуске; гистограмм нет.
+- `GET /api/health` и `GET /api/health/ready` — проверяют БД (`SELECT 1`), шину событий и применённые
+  миграции. Отдают **503**, если БД недоступна, и `200` со статусом `degraded`,
+  если недоступна необязательная зависимость. `GET /api/health/live` — быстрый liveness-зонд процесса.
+- `GET /api/metrics` (и `?format=prometheus`) — счётчики запросов, ошибки, срабатывания лимитера (с ограниченным пулом бакетов),
+  скользящие `p50`/`p95`/`max` задержки (кольцевой буфер последних 500 замеров), разбивка по маршрутам, RSS и heap.
 
 ## Проверка после деплоя
 
 ```bash
-curl -fsS http://<host>/api/health          # persistence.adapter == postgresql
+curl -fsS http://<host>/api/health/ready     # persistence.adapter == postgresql
+curl -fsS "http://<host>/api/metrics?format=prometheus" | head -n 10
 curl -fsS http://<host>/robots.txt
 curl -fsS http://<host>/sitemap.xml | head
 curl -fsS -o /dev/null -w '%{http_code}\n' http://<host>/git/

@@ -42,6 +42,8 @@ export interface ServerSeoStatus {
   robotsConfigured: boolean;
   sitemapConfigured: boolean;
   indexedRoutes: number;
+  indexedSections?: number;
+  indexedSubSections?: number;
 }
 
 export interface ServerMetricsSnapshot {
@@ -192,7 +194,7 @@ export const API_ENDPOINTS_REFERENCE: readonly ApiEndpointDoc[] = [
     path: '/api/analytics/reset',
     category: 'analytics',
     description: 'Сброс накопленного журнала поведенческих событий',
-    auth: 'Публичный',
+    auth: 'Сессия / RBAC (analytics:view)',
   },
   {
     method: 'GET',

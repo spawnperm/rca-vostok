@@ -1,7 +1,9 @@
 import type express from 'express';
 import { appLogger } from '../logging/Logger.ts';
+import { getClientIp } from './ErrorHandler.ts';
 
 const rateLimitLog = appLogger.child('rate-limit');
+const MAX_BUCKETS = 10_000;
 
 /**
  * In-memory, fixed-window rate limiter.
@@ -16,16 +18,6 @@ const rateLimitLog = appLogger.child('rate-limit');
  * rotates IPs would otherwise get unlimited attempts against one account, and
  * one who hammers many accounts from one IP would exhaust a shared budget.
  */
-
-/** Extracts the client IP, honouring the proxy header set by Traefik. */
-function clientIp(req: express.Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    // The left-most entry is the original client when exactly one proxy is used.
-    return forwarded.split(',')[0].trim();
-  }
-  return req.socket.remoteAddress ?? 'unknown';
-}
 
 export interface RateLimitRule {
   /** Human-readable name used in logs. */
@@ -50,14 +42,16 @@ interface Bucket {
 
 /**
  * A counter collection with atomic check-and-increment semantics inside one
- * process. Expired buckets are swept lazily to avoid an unbounded map.
+ * process. Expired buckets are swept lazily and total map size is bounded.
  */
 export class RateLimiter {
   private readonly buckets = new Map<string, Bucket>();
   private readonly rules: RateLimitRule[];
+  private readonly maxBuckets: number;
 
-  constructor(rules: RateLimitRule[]) {
+  constructor(rules: RateLimitRule[], maxBuckets = MAX_BUCKETS) {
     this.rules = rules;
+    this.maxBuckets = maxBuckets;
   }
 
   /** Registers an attempt for `key` against the rule matching `name`. */
@@ -76,6 +70,10 @@ export class RateLimiter {
     const existing = this.buckets.get(composite);
 
     if (!existing || existing.resetAt <= now) {
+      if (!existing && this.buckets.size >= this.maxBuckets) {
+        const oldestKey = this.buckets.keys().next().value;
+        if (oldestKey !== undefined) this.buckets.delete(oldestKey);
+      }
       this.buckets.set(composite, { count: 1, resetAt: now + rule.windowMs });
       return { allowed: true, retryAfterSec: 0, remaining: rule.max - 1 };
     }
@@ -128,7 +126,7 @@ export interface LoginRateLimitOptions {
  */
 export function createLoginRateLimit(options: LoginRateLimitOptions): express.RequestHandler {
   return (req, res, next) => {
-    const ip = clientIp(req);
+    const ip = getClientIp(req);
     const emailRaw = (req.body ?? {}) as { email?: unknown };
     const email =
       typeof emailRaw.email === 'string' ? emailRaw.email.trim().toLowerCase() : '';
@@ -171,6 +169,8 @@ export function createLoginRateLimit(options: LoginRateLimitOptions): express.Re
 
 /** Default rules matching the platform's threat model. */
 export const DEFAULT_LOGIN_RULES: RateLimitRule[] = [
+  // Account registration throttling per IP to stop mass fake account creation.
+  { name: 'register-ip', windowMs: 60 * 60 * 1000, max: 10 },
   // Ten attempts per IP per 15 minutes: enough for a person who forgets a
   // password, too slow for scripted guessing.
   { name: 'login-ip', windowMs: 15 * 60 * 1000, max: 10 },
@@ -205,7 +205,7 @@ export const DEFAULT_LOGIN_RULES: RateLimitRule[] = [
 /** Blocks with a JSON 429 and a Retry-After header. */
 export function createRateLimit(limiter: RateLimiter, ruleName: string): express.RequestHandler {
   return (req, res, next) => {
-    const outcome = limiter.hit(ruleName, clientIp(req));
+    const outcome = limiter.hit(ruleName, getClientIp(req));
     if (!outcome.allowed) {
       res.setHeader('Retry-After', String(outcome.retryAfterSec));
       res.status(429).json({

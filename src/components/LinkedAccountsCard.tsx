@@ -151,12 +151,7 @@ export const LinkedAccountsCard: React.FC<LinkedAccountsCardProps> = ({
   // Listen for OAuth popup completion via postMessage
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (
-        origin !== window.location.origin &&
-        !origin.endsWith('.run.app') &&
-        !origin.includes('localhost')
-      ) {
+      if (event.origin !== window.location.origin) {
         return;
       }
       const data = event.data as {

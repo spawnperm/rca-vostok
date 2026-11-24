@@ -3,30 +3,30 @@ import type express from 'express';
 /**
  * OpenAPI 3.1 description of the public API, rendered by Scalar at /api/docs.
  *
- * Kept as a plain object rather than generated from decorators: the server is
- * hand-written Express, and one readable document is easier to keep truthful
- * than scattering annotations across routers.
+ * Kept as a single declarative specification object matching every Express router.
  */
 export const openApiDocument = {
   openapi: '3.1.0',
   info: {
     title: 'РЦА «Русский Восток» API',
-    version: '1.0.0',
+    version: '1.1.0',
     description:
-      'Публичный API платформы: аналитика кадровой потребности ДФО, заявки на аттестацию, ' +
-      'личный кабинет с RBAC, лента сообщества и блог, чат по каналам и медиатека.',
+      'Публичный и кабинетный API платформы: аналитика кадровой потребности ДФО, заявки на аттестацию, ' +
+      'личный кабинет с RBAC, социальная лента и блог, чат по каналам, медиатека, журнал стажа, LMS, ' +
+      'телеметрия сервиса и ИИ-консультант.',
   },
   servers: [{ url: '/', description: 'Текущий хост' }],
   tags: [
-    { name: 'System', description: 'Состояние сервиса' },
-    { name: 'Auth', description: 'Регистрация, вход, сессии' },
-    { name: 'Account', description: 'Профиль пользователя' },
-    { name: 'Admin', description: 'Управление пользователями (RBAC)' },
-    { name: 'Social', description: 'Лента, блог, комментарии, подписки' },
+    { name: 'System', description: 'Состояние сервиса, готовность, метрики и SEO' },
+    { name: 'Auth', description: 'Регистрация, вход, сессии, восстановление пароля' },
+    { name: 'Account', description: 'Профиль, связанные аккаунты, журнал стажа, LMS' },
+    { name: 'Admin', description: 'Управление пользователями и заявками (RBAC)' },
+    { name: 'Social', description: 'Лента, блог, новости, комментарии, подписки' },
     { name: 'Chat', description: 'Каналы, сообщения, треды, реакции' },
-    { name: 'Media', description: 'Альбомы и файлы' },
-    { name: 'Analytics', description: 'Поведение пользователей' },
-    { name: 'Content', description: 'Заявки и обратная связь' },
+    { name: 'Media', description: 'Альбомы и медиафайлы' },
+    { name: 'Analytics', description: 'Поведенческая аналитика и рейтинг проводников' },
+    { name: 'Content', description: 'Заявки, опросы готовности и обратная связь' },
+    { name: 'Market', description: 'Оперативная сводка рынка ДФО, погода, карты, ИИ-помощник' },
   ],
   components: {
     securitySchemes: {
@@ -34,7 +34,7 @@ export const openApiDocument = {
         type: 'apiKey',
         in: 'cookie',
         name: 'rca_session',
-        description: 'Сессионная cookie, выдаётся /api/auth/login.',
+        description: 'Сессионная cookie (HttpOnly), выдаётся /api/auth/login и /api/auth/register.',
       },
     },
     schemas: {
@@ -67,7 +67,7 @@ export const openApiDocument = {
           id: { type: 'string' },
           authorId: { type: 'string' },
           authorName: { type: 'string' },
-          kind: { type: 'string', enum: ['update', 'article'] },
+          kind: { type: 'string', enum: ['update', 'article', 'news'] },
           title: { type: 'string' },
           body: { type: 'string' },
           excerpt: { type: 'string' },
@@ -136,7 +136,11 @@ export const openApiDocument = {
         content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
       },
       Forbidden: {
-        description: 'Недостаточно прав (RBAC)',
+        description: 'Недостаточно прав (RBAC) или отказ CSRF-проверки',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
+      },
+      RateLimited: {
+        description: 'Превышен лимит запросов (см. Retry-After)',
         content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } },
       },
     },
@@ -146,6 +150,47 @@ export const openApiDocument = {
       get: {
         tags: ['System'],
         summary: 'Состояние сервиса и адаптера хранения',
+        responses: {
+          '200': { description: 'OK (healthy или degraded)' },
+          '503': { description: 'Критическая зависимость недоступна' },
+        },
+      },
+    },
+    '/api/health/live': {
+      get: {
+        tags: ['System'],
+        summary: 'Быстрая liveness-проба процесса',
+        responses: { '200': { description: 'Процесс активен' } },
+      },
+    },
+    '/api/health/ready': {
+      get: {
+        tags: ['System'],
+        summary: 'Readiness-проба (БД, миграции, шина событий)',
+        responses: {
+          '200': { description: 'Готов к приёму трафика' },
+          '503': { description: 'Зависимости не готовы' },
+        },
+      },
+    },
+    '/api/metrics': {
+      get: {
+        tags: ['System'],
+        summary: 'Внутрипроцессные метрики (JSON или Prometheus text format)',
+        parameters: [
+          {
+            name: 'format',
+            in: 'query',
+            schema: { type: 'string', enum: ['json', 'prometheus'] },
+          },
+        ],
+        responses: { '200': { description: 'Метрики процесса и маршрутов' } },
+      },
+    },
+    '/api/seo/server-status': {
+      get: {
+        tags: ['System'],
+        summary: 'Статус серверной SEO-конфигурации (robots.txt и sitemap.xml)',
         responses: { '200': { description: 'OK' } },
       },
     },
@@ -174,6 +219,7 @@ export const openApiDocument = {
         responses: {
           '201': { description: 'Создано, cookie установлена' },
           '400': { description: 'Ошибка валидации' },
+          '429': { $ref: '#/components/responses/RateLimited' },
         },
       },
     },
@@ -184,11 +230,29 @@ export const openApiDocument = {
         responses: {
           '200': { description: 'Сессия создана' },
           '401': { description: 'Неверные учётные данные' },
+          '429': { $ref: '#/components/responses/RateLimited' },
         },
       },
     },
     '/api/auth/logout': {
       post: { tags: ['Auth'], summary: 'Выход', responses: { '200': { description: 'OK' } } },
+    },
+    '/api/auth/forgot-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Запрос ссылки восстановления пароля',
+        responses: {
+          '200': { description: 'Единообразный ответ без раскрытия существования адреса' },
+          '429': { $ref: '#/components/responses/RateLimited' },
+        },
+      },
+    },
+    '/api/auth/reset-password': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Смена пароля по одноразовому токену',
+        responses: { '200': { description: 'Пароль обновлён, сессии отозваны' } },
+      },
     },
     '/api/auth/session': {
       get: {
@@ -217,6 +281,60 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/account/password': {
+      post: {
+        tags: ['Account'],
+        summary: 'Смена пароля текущего пользователя',
+        security: [{ sessionCookie: [] }],
+        responses: { '200': { description: 'Пароль обновлён' } },
+      },
+    },
+    '/api/account/inquiries': {
+      get: {
+        tags: ['Account'],
+        summary: 'Список заявок текущего пользователя',
+        security: [{ sessionCookie: [] }],
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/account/linked-accounts': {
+      get: {
+        tags: ['Account'],
+        summary: 'Связанные внешние профили и статус OAuth-провайдеров',
+        security: [{ sessionCookie: [] }],
+        responses: { '200': { description: 'OK' } },
+      },
+      post: {
+        tags: ['Account'],
+        summary: 'Привязать или обновить профиль для автозаполнения',
+        security: [{ sessionCookie: [] }],
+        responses: { '201': { description: 'Сохранено' } },
+      },
+    },
+    '/api/account/experience-journal': {
+      get: {
+        tags: ['Account'],
+        summary: 'Журнал туристского стажа',
+        security: [{ sessionCookie: [] }],
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/account/lms-progress': {
+      get: {
+        tags: ['Account'],
+        summary: 'Прогресс подготовки по программе LMS',
+        security: [{ sessionCookie: [] }],
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/account/leaderboard-sync': {
+      post: {
+        tags: ['Account'],
+        summary: 'Синхронизация показателей проводника с рейтингом ДФО',
+        security: [{ sessionCookie: [] }],
+        responses: { '200': { description: 'OK' } },
+      },
+    },
     '/api/admin/users': {
       get: {
         tags: ['Admin'],
@@ -228,13 +346,30 @@ export const openApiDocument = {
         },
       },
     },
+    '/api/admin/users/{userId}/role': {
+      patch: {
+        tags: ['Admin'],
+        summary: 'Назначить роль пользователю',
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Роль обновлена' } },
+      },
+    },
+    '/api/admin/inquiries': {
+      get: {
+        tags: ['Admin'],
+        summary: 'Все заявки на аттестацию',
+        security: [{ sessionCookie: [] }],
+        responses: { '200': { description: 'OK' } },
+      },
+    },
     '/api/social/feed': {
       get: {
         tags: ['Social'],
-        summary: 'Лента и блог',
+        summary: 'Лента, блог и новости',
         parameters: [
           { name: 'authorId', in: 'query', schema: { type: 'string' } },
-          { name: 'kind', in: 'query', schema: { type: 'string', enum: ['update', 'article'] } },
+          { name: 'kind', in: 'query', schema: { type: 'string', enum: ['update', 'article', 'news'] } },
           { name: 'tag', in: 'query', schema: { type: 'string' } },
           { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 50 } },
           { name: 'offset', in: 'query', schema: { type: 'integer' } },
@@ -245,7 +380,7 @@ export const openApiDocument = {
     '/api/social/posts': {
       post: {
         tags: ['Social'],
-        summary: 'Опубликовать запись или статью',
+        summary: 'Опубликовать запись, статью или новость',
         security: [{ sessionCookie: [] }],
         requestBody: {
           required: true,
@@ -255,7 +390,7 @@ export const openApiDocument = {
                 type: 'object',
                 required: ['body'],
                 properties: {
-                  kind: { type: 'string', enum: ['update', 'article'] },
+                  kind: { type: 'string', enum: ['update', 'article', 'news'] },
                   title: { type: 'string' },
                   body: { type: 'string' },
                   tags: { type: 'array', items: { type: 'string' } },
@@ -269,6 +404,28 @@ export const openApiDocument = {
           '201': { description: 'Создано' },
           '403': { $ref: '#/components/responses/Forbidden' },
         },
+      },
+    },
+    '/api/social/posts/{postId}': {
+      get: {
+        tags: ['Social'],
+        summary: 'Получить публикацию и комментарии',
+        parameters: [{ name: 'postId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'OK' } },
+      },
+      patch: {
+        tags: ['Social'],
+        summary: 'Обновить публикацию',
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: 'postId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Обновлено' } },
+      },
+      delete: {
+        tags: ['Social'],
+        summary: 'Удалить публикацию',
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: 'postId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Удалено' } },
       },
     },
     '/api/social/posts/{postId}/comments': {
@@ -319,6 +476,7 @@ export const openApiDocument = {
         tags: ['Chat'],
         summary: 'Отправить сообщение или ответ в тред',
         security: [{ sessionCookie: [] }],
+        parameters: [{ name: 'channelId', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { '201': { description: 'Создано' } },
       },
     },
@@ -346,10 +504,52 @@ export const openApiDocument = {
         responses: { '201': { description: 'Создано' } },
       },
     },
+    '/media/{assetId}': {
+      get: {
+        tags: ['Media'],
+        summary: 'Потоковая выдача медиафайла с проверкой доступа альбома',
+        parameters: [{ name: 'assetId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'Бинарный поток медиафайла' } },
+      },
+    },
+    '/api/analytics/collect': {
+      post: {
+        tags: ['Analytics'],
+        summary: 'Отправка пакета событий поведения клиента',
+        responses: { '200': { description: 'Принято' } },
+      },
+    },
     '/api/analytics/summary': {
       get: {
         tags: ['Analytics'],
         summary: 'Агрегированная статистика поведения',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/analytics/sessions/{sessionId}': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'События конкретной пользовательской сессии',
+        parameters: [{ name: 'sessionId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/analytics/reset': {
+      delete: {
+        tags: ['Analytics'],
+        summary: 'Очистка журнала аналитики (требуется право analytics:view)',
+        security: [{ sessionCookie: [] }],
+        responses: {
+          '200': { description: 'Очищено' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/api/guides/leaderboard': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Рейтинг активных проводников ДФО по аттестованным маршрутам и стажу',
         responses: { '200': { description: 'OK' } },
       },
     },
@@ -358,6 +558,20 @@ export const openApiDocument = {
         tags: ['Content'],
         summary: 'Заявка на аттестацию',
         responses: { '201': { description: 'Создано' } },
+      },
+    },
+    '/api/inquiries/stats': {
+      get: {
+        tags: ['Content'],
+        summary: 'Агрегированные счётчики заявок',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/inquiries/stats/stream': {
+      get: {
+        tags: ['Content'],
+        summary: 'SSE-поток счётчиков заявок',
+        responses: { '200': { description: 'text/event-stream' } },
       },
     },
     '/api/feedback': {
@@ -374,11 +588,70 @@ export const openApiDocument = {
         responses: { '200': { description: 'OK' } },
       },
     },
-    '/api/guides/leaderboard': {
+    '/api/readiness-survey': {
+      post: {
+        tags: ['Content'],
+        summary: 'Отправка анкеты готовности инструктора',
+        responses: { '201': { description: 'Сохранено' } },
+      },
+    },
+    '/api/readiness-survey/stats': {
       get: {
-        tags: ['Analytics'],
-        summary: 'Рейтинг активных проводников ДФО по аттестованным маршрутам и стажу',
+        tags: ['Content'],
+        summary: 'Сводная статистика анкеты готовности',
         responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/course-satisfaction': {
+      post: {
+        tags: ['Content'],
+        summary: 'Оценка удовлетворённости программой ДПО и аттестацией',
+        responses: { '201': { description: 'Сохранено' } },
+      },
+    },
+    '/api/course-satisfaction/stats': {
+      get: {
+        tags: ['Content'],
+        summary: 'Сводка удовлетворённости обучением',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/market/live-stats': {
+      get: {
+        tags: ['Market'],
+        summary: 'Оперативный срез рынка инструкторов-проводников ДФО',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/market/live-stats/stream': {
+      get: {
+        tags: ['Market'],
+        summary: 'SSE-поток живых показателей рынка ДФО',
+        responses: { '200': { description: 'text/event-stream' } },
+      },
+    },
+    '/api/weather/hubs': {
+      get: {
+        tags: ['Market'],
+        summary: 'Актуальная погода в туристских хабах ДФО',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/maps/config': {
+      get: {
+        tags: ['Market'],
+        summary: 'Публичная конфигурация Google Maps Platform (если задана)',
+        responses: { '200': { description: 'OK' } },
+      },
+    },
+    '/api/assistant/chat': {
+      post: {
+        tags: ['Market'],
+        summary: 'ИИ-консультант личного кабинета с контекстом RAG и правил РЦА',
+        responses: {
+          '200': { description: 'Ответ консультанта' },
+          '429': { $ref: '#/components/responses/RateLimited' },
+        },
       },
     },
   },
@@ -421,13 +694,18 @@ export function mountApiDocs(app: express.Express): void {
         загрузилась, используйте JSON-спецификацию выше.
       </p>
       <script>
-        // Scalar standalone bundle, loaded lazily from CDN.
         (function () {
           var s = document.createElement('script');
           s.src = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference';
           s.onload = function () {
             var root = document.getElementById('app');
-            if (root) root.innerHTML = '<script id="api-reference" data-url="/api/openapi.json"><\\/script>';
+            if (root) {
+              while (root.firstChild) root.removeChild(root.firstChild);
+              var ref = document.createElement('script');
+              ref.id = 'api-reference';
+              ref.setAttribute('data-url', '/api/openapi.json');
+              root.appendChild(ref);
+            }
             var sc = document.createElement('script');
             sc.src = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference';
             document.body.appendChild(sc);

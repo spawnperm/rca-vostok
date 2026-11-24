@@ -234,6 +234,7 @@ export const RcaAssistantChatWidget: React.FC<RcaAssistantChatWidgetProps> = ({
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
+          'X-Requested-With': 'fetch',
         },
         body: JSON.stringify({
           messages: apiMessages,

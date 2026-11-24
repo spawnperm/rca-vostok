@@ -24,7 +24,7 @@
 
 - **Операционная система**: Linux (Ubuntu 22.04+/Debian 12+), macOS или Windows WSL2.
 - **Node.js**: **>= 22.18** (в `Dockerfile` используется `node:22.23.5-bookworm-slim`). Требуется для прямого запуска `server.ts` со встроенным стриппингом TypeScript-типов (`node server.ts`, `node --test tests/*.test.ts`).
-- **Менеджер пакетов**: **pnpm** (через `corepack enable`) или **npm** (в средах без pnpm).
+- **Менеджер пакетов**: **npm** (входит в состав Node.js 22).
 - **Git**: `2.30+`.
 
 ### 2.2. Опциональные внешние сервисы (для полного функционала и продакшена)
@@ -43,10 +43,8 @@
 | **Сервер и API** | `express`, `dotenv`, `zod`, `@scalar/express-api-reference` | HTTP-сервер, загрузка `.env`, валидация запросов, OpenAPI 3.1 + Scalar (`/api/docs`) |
 | **Хранение и интеграции** | `pg`, `nats`, `@aws-sdk/client-s3`, `nodemailer` | Клиенты PostgreSQL, NATS, S3/Garage и SMTP |
 | **Фронтенд и UI** | `react`, `react-dom`, `lucide-react`, `motion`, `tailwindcss`, `@tailwindcss/vite` | SPA-интерфейс, иконки, анимации, стилизация Tailwind CSS v4 |
-| **Визуализация и карты** | `recharts`, `leaflet`, `react-leaflet`, `jspdf` | Графики спроса/статистики, интерактивные карты ДФО и Приморья, генерация PDF |
+| **Визуализация и карты** | `recharts`, `d3`, `leaflet`, `react-leaflet`, `@vis.gl/react-google-maps`, `jspdf` | Графики спроса/статистики, карты ДФО, экспорт PDF |
 | **Сборка и разработка** | `vite`, `tsx`, `typescript`, `esbuild`, `@types/*` | Сборка SPA, запуск `server.ts` в dev-режиме (`tsx`), проверка типов (`tsc --noEmit`) |
-
-> **Важно про pnpm 11:** при установке через `pnpm` по умолчанию блокируются `postinstall`-скрипты зависимостей. При добавлении новых пакетов со скриптами сборки их необходимо явно разрешить в `pnpm-workspace.yaml` в секции `allowBuilds` (например, `esbuild`), иначе `pnpm install` завершится ошибкой `ERR_PNPM_IGNORED_BUILDS`.
 
 ---
 
@@ -60,17 +58,6 @@ cd rca_vostok
 ```
 
 ### Шаг 2. Установка Node.js-зависимостей
-
-**Вариант A — через `pnpm` (рекомендуется для CI и локальной разработки с `pnpm-lock.yaml`):**
-
-```bash
-corepack enable
-pnpm install --frozen-lockfile
-```
-
-Если в репозитории отсутствует `pnpm-lock.yaml` или вы работаете в среде с `npm`:
-
-**Вариант Б — через `npm`:**
 
 ```bash
 npm install
@@ -95,6 +82,7 @@ cp .env.example .env
 | `PORT` | Нет | `3000` | Порт HTTP-сервера Express |
 | `NODE_ENV` | Нет | `development` | Режим (`development` или `production`) |
 | `APP_URL` | Да (в prod) | `http://localhost:3000` | Публичный URL (canonical-ссылки, `robots.txt`, `sitemap.xml`, флаг `Secure` у cookie, ссылки сброса пароля) |
+| `TRUST_PROXY` | Нет | `true` (`1` в Docker Compose) | Политика `trust proxy` Express (число хопов прокси за Traefik/Cloud Run или `true`/`false`) |
 | `GEMINI_API_KEY` | Нет | — | Серверный ключ Gemini API (при подключении ИИ-функций) |
 | `DATABASE_URL` | Нет | — | Строка подключения PostgreSQL (`postgres://user:pass@host:5432/db`). Приоритетнее `PG*` |
 | `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | Нет | `PGPORT=5432`, `PGDATABASE=rca_vostok`, `PGUSER=rca` | Раздельные параметры подключения к PostgreSQL (используются, если не задан `DATABASE_URL`) |
@@ -251,8 +239,6 @@ docker compose exec app tail -f /app/logs/rca-vostok.log
 
 ```bash
 npm run dev
-# или с pnpm:
-pnpm run dev
 ```
 
 Сервер поднимется на `http://0.0.0.0:3000`. В режиме `development` Express монтирует `vite.middlewares`, поэтому фронтенд и API работают в одном процессе на порту `3000`.
@@ -295,7 +281,10 @@ JSON
 
 ```bash
 curl -fsS http://127.0.0.1:3000/api/health
+curl -fsS http://127.0.0.1:3000/api/health/live
+curl -fsS http://127.0.0.1:3000/api/health/ready
 curl -fsS http://127.0.0.1:3000/api/metrics
+curl -fsS "http://127.0.0.1:3000/api/metrics?format=prometheus" | head -n 15
 curl -fsS http://127.0.0.1:3000/robots.txt
 curl -fsS http://127.0.0.1:3000/sitemap.xml | head -n 10
 ```
@@ -363,10 +352,10 @@ docker compose up -d app
 
 ## 8. Проверка качества и тестирование
 
-| Проверка | Команда (`npm` / `pnpm`) | Что проверяет |
+| Проверка | Команда (`npm`) | Что проверяет |
 |---|---|---|
 | Типизация TypeScript | `npm run lint` | `tsc --noEmit` без ошибок |
-| Модульные и прикладные тесты | `npm test` | Все `tests/*.test.ts` (включая `tests/logger.test.ts`; тесты БД пропускаются без `TEST_DATABASE_URL`) |
+| Модульные и прикладные тесты | `npm test` | Все `tests/*.test.ts` (включая HTTP/API-тесты безопасности и `tests/logger.test.ts`; тесты БД пропускаются без `TEST_DATABASE_URL`) |
 | Интеграционные тесты PostgreSQL | `TEST_DATABASE_URL=postgres://rca:pass@127.0.0.1:5432/rca_vostok_test node --test tests/postgres-integration.test.ts` | Реальные миграции, SQL-агрегаты, ограничения и каскады |
 | Сборка бандла | `npm run build` | `vite build` в `dist/` |
 | Полный цикл проверки | `npm run verify` | `lint` + `test` + `build` |
@@ -375,15 +364,13 @@ docker compose up -d app
 
 ## 9. Решение типовых проблем (Troubleshooting)
 
-1. **`ERR_PNPM_IGNORED_BUILDS` или ошибка запуска `esbuild` при использовании `pnpm`**
-   - Убедитесь, что используется `pnpm` версии из поля `packageManager` (`corepack enable && corepack prepare --activate`), а в `pnpm-workspace.yaml` разрешён `esbuild`.
-2. **При запуске `node server.ts` падает с ошибкой синтаксиса TypeScript**
-   - Проверьте версию Node.js (`node -v`). Требуется **Node.js >= 22.18** с поддержкой прямого стриппинга типов.
-3. **Разделы «Лента», «Чат», «Медиа» недоступны после старта**
+1. **При запуске `node server.ts` падает с ошибкой синтаксиса TypeScript**
+   - Проверьте версию Node.js (`node -v`). Требуется **Node.js >= 22.18** с поддержкой прямого стриппинга типов (не используйте `enum` и parameter properties в серверных `.ts`-модулях).
+2. **Разделы «Лента», «Чат», «Медиа» недоступны после старта**
    - Эти 3 контекста требуют PostgreSQL (`DATABASE_URL` или `PGHOST` + `PGDATABASE`). Без БД сервер работает в режиме `json-file` и монтирует только публичную часть и базовый кабинет `identity`.
-4. **`GET /api/health` возвращает `503 unhealthy`**
+3. **`GET /api/health/ready` или `/api/health` возвращает `503 unhealthy`**
    - Проверьте доступность PostgreSQL и завершение миграций (`SELECT version FROM schema_migrations;`), а также лог-файл `logs/rca-vostok.log` с уровнем `LOG_LEVEL=DEBUG`.
-5. **Ошибки прав записи в `/app/logs` или `/app/data` при монтировании локальных папок в Docker**
+4. **Ошибки прав записи в `/app/logs` или `/app/data` при монтировании локальных папок в Docker**
    - В контейнере процесс работает от пользователя `node` (UID `1000`). Используйте именованные Docker-тома (как `rca-app-logs:/app/logs` в `docker-compose.yml`) либо назначьте владельца `chown -R 1000:1000 ./logs ./data` на хосте.
-6. **Лимитер (`429 RATE_LIMITED`) срабатывает одинаково для всех пользователей**
-   - Убедитесь, что перед приложением стоит доверенный обратный прокси (например, Traefik), перезаписывающий заголовок `X-Forwarded-For`, и в `server.ts` включён `app.set('trust proxy', true)`.
+5. **Лимитер (`429 RATE_LIMITED`) срабатывает одинаково для всех пользователей**
+   - Убедитесь, что перед приложением стоит доверенный обратный прокси (например, Traefik), перезаписывающий заголовок `X-Forwarded-For`, и корректно задана переменная `TRUST_PROXY=1`.

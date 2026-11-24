@@ -27,6 +27,12 @@ RETENTION_DAYS="${RETENTION_DAYS:-14}"
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 KEY="postgres/rca_vostok_${STAMP}.sql.gz"
+TMP_DUMP="$(mktemp "/tmp/rca_vostok_${STAMP}.XXXXXX.sql.gz")"
+
+cleanup() {
+  rm -f "${TMP_DUMP}"
+}
+trap cleanup EXIT
 
 if ! docker ps --format '{{.Names}}' | grep -qx rca-postgres; then
   echo "[backup] rca-postgres is not running" >&2
@@ -36,15 +42,22 @@ fi
 echo "[backup] dumping ${POSTGRES_DB}"
 docker exec -i rca-postgres pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   --no-owner --no-privileges \
-  | gzip -9 \
-  | docker run --rm -i \
-      --network rca-vostok_rca \
-      -e AWS_ACCESS_KEY_ID="${GARAGE_S3_ACCESS_KEY}" \
-      -e AWS_SECRET_ACCESS_KEY="${GARAGE_S3_SECRET_KEY}" \
-      -e AWS_DEFAULT_REGION=garage \
-      amazon/aws-cli:2.19.3 \
-      --endpoint-url http://garage:3900 \
-      s3 cp - "s3://${BUCKET}/${KEY}"
+  | gzip -9 > "${TMP_DUMP}"
+
+if [ ! -s "${TMP_DUMP}" ] || ! gzip -t "${TMP_DUMP}"; then
+  echo "[backup] integrity check failed for ${TMP_DUMP}" >&2
+  exit 1
+fi
+
+echo "[backup] uploading verified dump ($(wc -c < "${TMP_DUMP}") bytes)"
+docker run --rm -i \
+  --network rca-vostok_rca \
+  -e AWS_ACCESS_KEY_ID="${GARAGE_S3_ACCESS_KEY}" \
+  -e AWS_SECRET_ACCESS_KEY="${GARAGE_S3_SECRET_KEY}" \
+  -e AWS_DEFAULT_REGION=garage \
+  amazon/aws-cli:2.19.3 \
+  --endpoint-url http://garage:3900 \
+  s3 cp - "s3://${BUCKET}/${KEY}" < "${TMP_DUMP}"
 
 echo "[backup] uploaded s3://${BUCKET}/${KEY}"
 

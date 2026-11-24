@@ -341,3 +341,21 @@
   - На `Главной` убрано дублирующее нагромождение полноразмерных графов — оставлена компактная сводная панель с прямыми переходами к графу компетенций (D3.js), тренажёру ФСТР, библиотеке и глоссарию; в `LearningSection` удалён дубль `<InteractiveGlossary />` во вкладке литературы.
   - В `AccountSection` длинные ленты вкладок «Подготовка» и «Документы и стаж» сгруппированы по подвкладкам с сохранением переходов ко всем виджетам через `navigateCabinetTarget`.
 - **Тесты (`tests/platform-routing-and-utils.test.ts`)**: добавлены модульные тесты парсинга/построения маршрутов `?tab=&sub=`, состава `PUBLIC_SITEMAP_ROUTES` (15 маршрутов без `account`), UTC-даты/таймера, `.ics`-утилит и валидации заявок.
+
+
+## [2026-11-24] hardening/architecture | Комплексное улучшение 11 инженерных контуров
+- **Архитектура и модульность (`server.ts`, `src/infrastructure/http/*`, `src/components/layout/*`)**:
+  - `server.ts` преобразован в чистый Composition Root с экспортируемой функцией `createApp(options)` для изоляции жизненного цикла и сквозного HTTP-тестирования.
+  - HTTP-маршруты вынесены в тематические роутеры: `SystemRouter.ts`, `AnalyticsRouter.ts`, `CertificationRouter.ts`, `PlatformUtilityRouter.ts`, `SecurityMiddleware.ts` и `ErrorHandler.ts`.
+  - Оболочка `src/App.tsx` декомпозирована на `src/components/layout/{navigationConfig.ts, AppHeader.tsx, PlatformSidebar.tsx, AppFooter.tsx}` с предзагрузкой ленивых чанков при наведении/фокусе (`prefetchSection`, `prefetchModal`) и ленивой загрузкой модальных окон (`NotificationsModalLazy`, `GitSyncModalLazy`).
+- **Безопасность**:
+  - Закрыта мутация `DELETE /api/analytics/reset` проверками `requireAuth()` и `requirePermission(PERMISSIONS.VIEW_ANALYTICS)`.
+  - Внедрена CSRF-защита для cookie-аутентифицированных мутаций (`createCookieCsrfMiddleware`: проверка `Origin`/`Referer` и заголовка `X-Requested-With`); клиенты обновлены (`socialApi.ts`, `AnalyticsSection.tsx`, `NotificationsModal.tsx`, `RcaAssistantChatWidget.tsx`, `gitSyncApi.ts`).
+  - В `LinkedAccountsRouter.ts` и `LinkedAccountsCard.tsx` убран wildcard `'*'` в `window.opener.postMessage` — используется точный origin приложения; `/api/auth/register` защищён лимитером `register-ip`; сброс cookies унифицирован через `clearSessionCookie`.
+  - В `RateLimiter.ts` введено ограничение памяти `MAX_BUCKETS = 10_000`; `SecurityMiddleware.ts` добавляет CSP с доменами Google Maps и строгим `object-src 'none'`.
+- **API, наблюдаемость, DevOps и CI/CD**:
+  - В `Metrics.ts` устранён застой перцентилей после 500 запросов (кольцевой буфер `MAX_GLOBAL_SAMPLES = 500` и монотонный `maxDurationMs`), добавлен экспорт Prometheus `0.0.4` (`GET /api/metrics?format=prometheus`), а также зонды `/api/health/live` и `/api/health/ready`.
+  - `OpenApi.ts` расширен до полного покрытия 10 тегов (включая `news`, опросы, рейтинг, карты, метрики и зонды) без `innerHTML` на странице `/api/docs`.
+  - `Dockerfile`, `.github/workflows/ci.yml`, `docker-compose.yml`, `deploy/traefik-dynamic.yml` и `deploy/backup.sh` переведены на актуальный стек Node 22 + `npm`, минимальные права CI, проверку сборки образа Docker, лимиты памяти, заголовки Traefik и проверку `gzip -t` до выгрузки бэкапов в S3.
+- **UI/UX и доступность**: добавлены skip-link (`#main-content`), `aria-current="page"`, связанные `role="tab"`/`role="tabpanel"`, управление фокусом и блокировка прокрутки в модалках и мобильном меню, а также `@media (prefers-reduced-motion: reduce)` в `src/index.css`.
+- **Тестирование**: добавлен набор сквозных HTTP/API-тестов `tests/http-api-security-and-metrics.test.ts` (зонды, OpenAPI 3.1, метрики >500 запросов + Prometheus, заголовки безопасности, RBAC на `/api/analytics/reset`, CSRF, `postMessage` origin и rate-limiting регистрации).

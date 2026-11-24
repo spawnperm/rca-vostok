@@ -220,11 +220,27 @@ export const AnalyticsSection: React.FC<AnalyticsSectionProps> = ({
 
   const handleResetAnalytics = async () => {
     try {
-      const res = await fetch('/api/analytics/reset', { method: 'DELETE' });
+      setErrorMsg(null);
+      const res = await fetch('/api/analytics/reset', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'fetch' },
+      });
       if (res.ok) {
         setConfirmClear(false);
         setSessionEvents([]);
         await fetchSummary();
+        return;
+      }
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      setConfirmClear(false);
+      if (res.status === 401 || res.status === 403) {
+        setErrorMsg(
+          payload.error ||
+            'Очистка журнала аналитики доступна только авторизованному куратору или администратору в личном кабинете.'
+        );
+      } else {
+        setErrorMsg(payload.error || `Не удалось очистить журнал (${res.status})`);
       }
     } catch {
       setErrorMsg('Не удалось очистить журнал');

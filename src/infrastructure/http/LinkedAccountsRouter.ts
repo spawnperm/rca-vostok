@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import express from 'express';
-import { DomainError, ValidationError } from '../../domain/shared/DomainError.ts';
+import { ValidationError } from '../../domain/shared/DomainError.ts';
 import { PERMISSIONS } from '../../domain/identity/Rbac.ts';
 import {
   buildExamAutofillFromAccounts,
@@ -13,6 +13,7 @@ import {
 import type { UserRepository } from '../../domain/identity/IdentityRepositories.ts';
 import type { SocialRepository } from '../../domain/social/SocialRepository.ts';
 import { requireAuth, requirePermission } from './AuthMiddleware.ts';
+import { sendDomainError } from './ErrorHandler.ts';
 import type { SocialOAuthService } from '../oauth/SocialOAuthProviders.ts';
 import { appLogger } from '../logging/Logger.ts';
 
@@ -27,30 +28,27 @@ export interface LinkedAccountsRouterDeps {
 const log = appLogger.child('linked-accounts');
 
 function sendError(err: unknown, res: express.Response): void {
-  if (err instanceof ValidationError) {
-    res.status(err.code === 'OAUTH_NOT_CONFIGURED' ? 503 : 400).json({
-      error: err.message,
-      code: err.code,
-    });
-    return;
+  sendDomainError(err, res, log, 'Unhandled linked-accounts error');
+}
+
+function resolveTargetOrigin(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).origin;
+  } catch {
+    return '';
   }
-  if (err instanceof DomainError) {
-    const status = err.code === 'FORBIDDEN' ? 403 : err.code === 'NOT_FOUND' ? 404 : 422;
-    res.status(status).json({ error: err.message, code: err.code });
-    return;
-  }
-  log.error('Unhandled linked-accounts error', err);
-  res.status(500).json({ error: 'Внутренняя ошибка сервера.' });
 }
 
 function sendOAuthCallbackHtml(
   res: express.Response,
   payload: Record<string, unknown>,
   heading: string,
-  description: string
+  description: string,
+  targetOrigin: string
 ): void {
   const nonce = crypto.randomBytes(16).toString('base64');
   const safeJson = JSON.stringify(payload).replace(/</g, '\\u003c');
+  const safeOriginJson = JSON.stringify(targetOrigin).replace(/</g, '\\u003c');
   const escapeHtml = (str: string) =>
     str
       .replace(/&/g, '&amp;')
@@ -83,8 +81,9 @@ function sendOAuthCallbackHtml(
     <script nonce="${nonce}">
       (function () {
         var data = ${safeJson};
-        if (window.opener) {
-          window.opener.postMessage(data, '*');
+        var targetOrigin = ${safeOriginJson} || window.location.origin;
+        if (window.opener && targetOrigin) {
+          window.opener.postMessage(data, targetOrigin);
           window.close();
         } else {
           window.location.href = '/?tab=account';
@@ -178,13 +177,15 @@ export function createLinkedAccountsRouter(deps: LinkedAccountsRouterDeps): expr
 
   // OAuth callback handler (supports both with and without trailing slash)
   const oauthCallbackHandler: express.RequestHandler = async (req, res) => {
+    const targetOrigin = resolveTargetOrigin(deps.getBaseUrl(req));
     const rawProvider = req.params.provider;
     if (!isOAuthProvider(rawProvider)) {
       sendOAuthCallbackHtml(
         res,
         { type: 'OAUTH_AUTH_ERROR', error: 'Неизвестный провайдер.' },
         'Ошибка подключения',
-        'Указанный провайдер не поддерживается.'
+        'Указанный провайдер не поддерживается.',
+        targetOrigin
       );
       return;
     }
@@ -199,7 +200,8 @@ export function createLinkedAccountsRouter(deps: LinkedAccountsRouterDeps): expr
           error: 'Доступ отклонён пользователем.',
         },
         'Подключение отменено',
-        'Вы можете закрыть это окно и повторить попытку в личном кабинете.'
+        'Вы можете закрыть это окно и повторить попытку в личном кабинете.',
+        targetOrigin
       );
       return;
     }
@@ -216,7 +218,8 @@ export function createLinkedAccountsRouter(deps: LinkedAccountsRouterDeps): expr
           error: 'Отсутствуют параметры авторизации.',
         },
         'Ошибка авторизации',
-        'Параметры подтверждения не получены.'
+        'Параметры подтверждения не получены.',
+        targetOrigin
       );
       return;
     }
@@ -251,7 +254,8 @@ export function createLinkedAccountsRouter(deps: LinkedAccountsRouterDeps): expr
         res,
         { type: 'OAUTH_AUTH_SUCCESS', provider: rawProvider },
         `${LINKED_PROVIDER_META[rawProvider].label} подключён`,
-        'Данные синхронизированы для автозаполнения очных экзаменов. Окно закроется автоматически.'
+        'Данные синхронизированы для автозаполнения очных экзаменов. Окно закроется автоматически.',
+        targetOrigin
       );
     } catch (err) {
       const message =
@@ -262,7 +266,8 @@ export function createLinkedAccountsRouter(deps: LinkedAccountsRouterDeps): expr
         res,
         { type: 'OAUTH_AUTH_ERROR', provider: rawProvider, error: message },
         'Ошибка привязки профиля',
-        message
+        message,
+        targetOrigin
       );
     }
   };

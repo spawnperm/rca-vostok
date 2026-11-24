@@ -13,14 +13,11 @@
 
 ## Локальный запуск
 
-Проект использует **pnpm** (версия зафиксирована в поле `packageManager`).
-Если pnpm ещё не установлен, включите его через Corepack — Node сам поставит
-нужную версию:
+Проект рассчитан на **Node.js >= 22.18** (нативный запуск TypeScript `node server.ts` и `node --test tests/*.test.ts`) и **npm**:
 
 ```bash
-corepack enable
-pnpm install
-pnpm run dev
+npm install
+npm run dev
 ```
 
 Приложение запускается на порту `3000` (`server.ts` + Vite).
@@ -28,21 +25,24 @@ pnpm run dev
 ## Сборка и запуск в продакшене
 
 ```bash
-pnpm run build
-pnpm run start
+npm run build
+NODE_ENV=production npm run start
 ```
 
 ## Проверки качества
 
 ```bash
-pnpm run lint     # типизация (tsc --noEmit)
-pnpm test         # доменные и прикладные тесты
-pnpm run verify   # lint + test + build одной командой
+npm run lint     # типизация (tsc --noEmit)
+npm test         # доменные, прикладные и HTTP/API-тесты безопасности
+npm run verify   # lint + test + build одной командой
 ```
 
-## Логирование
+## Наблюдаемость, OpenAPI и логирование
 
-Серверная часть (`src/infrastructure/logging/Logger.ts` + `src/infrastructure/http/RequestLogger.ts`) ведёт структурированное логирование с уровнями `DEBUG`, `INFO`, `ERROR`, маскированием секретов и сохранением в файл с ротацией (`LOG_LEVEL`, `LOG_TO_FILE`, `LOG_DIR`, `LOG_FILE`, `LOG_FORMAT`, `LOG_MAX_SIZE_MB`, `LOG_MAX_FILES` в `.env`). По умолчанию записи сохраняются в `./logs/rca-vostok.log`.
+- **Зонды состояния**: `GET /api/health` (общий), `GET /api/health/live` (liveness), `GET /api/health/ready` (readiness: БД + миграции).
+- **Метрики**: `GET /api/metrics` (JSON) и `GET /api/metrics?format=prometheus` (формат Prometheus `0.0.4`).
+- **Контракт API**: OpenAPI 3.1 (`GET /api/openapi.json`) и интерактивная документация Scalar (`GET /api/docs`).
+- **Логирование**: `src/infrastructure/logging/Logger.ts` + `src/infrastructure/http/RequestLogger.ts` ведут структурированное NDJSON-логирование (`DEBUG`, `INFO`, `ERROR`) с маскированием секретов и ротацией (`LOG_LEVEL`, `LOG_TO_FILE`, `LOG_DIR`, `LOG_FILE`, `LOG_FORMAT`, `LOG_MAX_SIZE_MB`, `LOG_MAX_FILES`). По умолчанию записи сохраняются в `./logs/rca-vostok.log`.
 
 ## Документация и база знаний проекта
 
