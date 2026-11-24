@@ -1,10 +1,10 @@
-import { ApiError } from './identityApi';
+import { ApiError } from './identityApi.ts';
 import type {
   ExamAutofillPayload,
   LinkedAccountDTO,
   LinkedProviderId,
   OAuthProviderId,
-} from '../domain/identity/LinkedAccounts';
+} from '../domain/identity/LinkedAccounts.ts';
 
 export type {
   ExamAutofillPayload,

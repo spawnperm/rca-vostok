@@ -2,7 +2,7 @@ import {
   DFO_REGIONAL_DEMAND_FORECAST_2025_2030,
   DFO_REGIONS_DISTRIBUTION,
   type DfoRegionDistribution,
-} from '../data/researchData';
+} from '../data/researchData.ts';
 
 export interface DfoReportAnalyticsSnapshot {
   sessions: number;

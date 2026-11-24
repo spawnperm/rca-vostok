@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import {
   CalendarDays,
   ChevronDown,
+  Clock,
+  Info,
   Newspaper,
   Route,
   ShieldCheck,
-  Clock,
-  Info,
 } from 'lucide-react';
 import {
   ATTESTATION_ANNOUNCEMENTS,
@@ -18,16 +18,10 @@ import {
 import { useNewsFeed, type NewsPost } from '../../utils/useNewsFeed';
 import { DISTRICT_TO_ROUTE_ID } from '../../utils/routeWeatherApi';
 import { DfoRoutesGoogleMap } from './DfoRoutesGoogleMap';
+import { RoutePreparationRoadmapBuilder } from './RoutePreparationRoadmapBuilder';
 import { RouteWeatherWidget } from './RouteWeatherWidget';
 import { formatDate } from '../../utils/format.ts';
-
-/**
- * «Новости» and «Маршруты» — the two site sections that were still placeholders
- * on rca-vostok.ru. Rather than ship empty headings, both are backed by the
- * platform's own researched datasets: INDUSTRY_NEWS / ATTESTATION_ANNOUNCEMENTS
- * and PRIMORYE_DISTRICTS. Nothing here is invented — every figure comes from
- * src/data/researchData.ts.
- */
+import { tracker } from '../../utils/tracker';
 
 const NEWS_CATEGORY_LABELS: Record<IndustryNewsItem['category'], string> = {
   regulation: 'Нормативная база',
@@ -35,17 +29,15 @@ const NEWS_CATEGORY_LABELS: Record<IndustryNewsItem['category'], string> = {
   market: 'Рынок',
 };
 
-
 function NewsCard({ item }: { item: IndustryNewsItem }) {
   const [open, setOpen] = useState<boolean>(false);
 
   return (
     <article className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-semibold rounded">
-          {NEWS_CATEGORY_LABELS[item.category]}
-        </span>
-        <span className="text-[11px] text-slate-500">{formatDate(item.isoDate)}</span>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <span className="font-semibold text-teal-800">{NEWS_CATEGORY_LABELS[item.category]}</span>
+        <span aria-hidden="true">·</span>
+        <span className="font-mono tabular-nums">{formatDate(item.isoDate)}</span>
       </div>
 
       <h3 className="text-sm font-bold text-slate-900 leading-snug">{item.title}</h3>
@@ -58,7 +50,7 @@ function NewsCard({ item }: { item: IndustryNewsItem }) {
       )}
 
       <div className="flex items-center justify-between gap-3 pt-1">
-        <span className="text-[11px] text-slate-400">{item.source}</span>
+        <span className="text-xs text-slate-400">{item.source}</span>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -79,24 +71,25 @@ function NewsCard({ item }: { item: IndustryNewsItem }) {
 function AnnouncementRow({ item }: { item: AttestationAnnouncement }) {
   return (
     <li className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <span
-          className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded border ${
-            item.kind === 'session'
-              ? 'bg-teal-50 border-teal-200 text-teal-800'
-              : 'bg-amber-50 border-amber-200 text-amber-800'
+          className={`font-semibold ${
+            item.kind === 'session' ? 'text-teal-800' : 'text-amber-800'
           }`}
         >
           {item.kindLabel}
         </span>
-        <span className="text-[11px] text-slate-500">{item.statusLabel}</span>
+        <span aria-hidden="true" className="text-slate-300">
+          ·
+        </span>
+        <span className="text-slate-500">{item.statusLabel}</span>
       </div>
 
       <p className="text-sm font-semibold text-slate-900">{item.title}</p>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
         <span className="inline-flex items-center gap-1">
-          <CalendarDays className="w-3 h-3" aria-hidden="true" />
+          <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
           {item.eventWindow}
         </span>
         <span>{item.venueOrLegalBasis}</span>
@@ -105,30 +98,69 @@ function AnnouncementRow({ item }: { item: AttestationAnnouncement }) {
   );
 }
 
-/** «Новости» — cabinet-published news, industry news and attestation notices. */
+/** «Новости» — публикации центра, отраслевые новости и анонсы сессий. */
 export function NewsSection() {
   const { news, loading, reload } = useNewsFeed(6);
+  const [categoryFilter, setCategoryFilter] = useState<'all' | IndustryNewsItem['category']>('all');
 
   const sessionAnnouncements = ATTESTATION_ANNOUNCEMENTS.filter((a) => a.kind === 'session');
   const regulationAnnouncements = ATTESTATION_ANNOUNCEMENTS.filter(
     (a) => a.kind === 'regulation'
   );
 
+  const visibleIndustryNews =
+    categoryFilter === 'all'
+      ? INDUSTRY_NEWS
+      : INDUSTRY_NEWS.filter((item) => item.category === categoryFilter);
+
   return (
     <section className="space-y-8">
-      <header id="news" className="scroll-mt-24 space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Новости</p>
-        <h2 className="text-2xl font-bold text-slate-900 text-balance">
-          Новости аттестации и рынка
-        </h2>
-        <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
-          Публикации центра, изменения нормативной базы и события рынка активного туризма
-          Дальнего Востока.
-        </p>
-      </header>
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <header id="news" className="scroll-mt-24 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Новости</p>
+          <h2 className="text-2xl font-bold text-slate-900 text-balance">
+            Новости аттестации и рынка
+          </h2>
+          <p className="text-sm text-slate-600 leading-relaxed max-w-3xl">
+            Публикации центра, изменения нормативной базы и события рынка активного туризма
+            Дальнего Востока.
+          </p>
+        </header>
 
-      {/* News published from the personal cabinet. Hidden while empty so the
-          landing page never shows an empty heading. */}
+        <div
+          role="tablist"
+          aria-label="Фильтр новостей"
+          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start lg:self-auto"
+        >
+          {(
+            [
+              { id: 'all', label: 'Все новости' },
+              { id: 'regulation', label: 'Нормативная база' },
+              { id: 'rca', label: 'РЦА и ВВГУ' },
+              { id: 'market', label: 'Рынок ДФО' },
+            ] as const
+          ).map((tab) => {
+            const active = categoryFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setCategoryFilter(tab.id)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  active
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {(loading || news.length > 0) && (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -155,12 +187,12 @@ export function NewsSection() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {INDUSTRY_NEWS.map((item) => (
+        {visibleIndustryNews.map((item) => (
           <NewsCard key={item.id} item={item} />
         ))}
       </div>
 
-      <div className="space-y-4 pt-4">
+      <div className="space-y-4 pt-2">
         <h3 className="text-base font-bold text-slate-900">Анонсы сессий и изменения НПА</h3>
 
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -191,12 +223,13 @@ function LandingNewsCard({ item }: { item: NewsPost }) {
 
   return (
     <article className="bg-white border border-teal-200 rounded-xl p-5 space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-semibold rounded">
-          <Newspaper className="w-3 h-3" aria-hidden="true" />
+      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <span className="inline-flex items-center gap-1.5 font-semibold text-teal-800">
+          <Newspaper className="w-3.5 h-3.5" aria-hidden="true" />
           Новость центра
         </span>
-        <span className="text-[11px] text-slate-500">{formatDate(published)}</span>
+        <span aria-hidden="true">·</span>
+        <span className="font-mono tabular-nums">{formatDate(published)}</span>
       </div>
 
       <h3 className="text-sm font-bold text-slate-900 leading-snug">{item.title}</h3>
@@ -205,17 +238,13 @@ function LandingNewsCard({ item }: { item: NewsPost }) {
       </p>
 
       {item.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {item.tags.map((tag) => (
-            <span key={tag} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] rounded">
-              #{tag}
-            </span>
-          ))}
-        </div>
+        <p className="text-xs text-slate-500">
+          {item.tags.map((tag) => `#${tag}`).join(' · ')}
+        </p>
       )}
 
       <div className="flex items-center justify-between gap-3 pt-1">
-        <span className="text-[11px] text-slate-400">{item.authorName}</span>
+        <span className="text-xs text-slate-400">{item.authorName}</span>
         {item.body.length > item.excerpt.length && (
           <button
             type="button"
@@ -235,7 +264,7 @@ function LandingNewsCard({ item }: { item: NewsPost }) {
   );
 }
 
-/** «Маршруты» — ДФО interactive Google Map + eight Primorye districts + weather widget. */
+/** «Маршруты» — интерактивная карта маршрутов ДФО + 8 округов Приморья + прогноз погоды. */
 export function RoutesSection() {
   const [activeId, setActiveId] = useState<string>(PRIMORYE_DISTRICTS[0]?.id ?? '');
   const [selectedMapRouteId, setSelectedMapRouteId] = useState<string | null>(null);
@@ -265,18 +294,20 @@ export function RoutesSection() {
 
         <div className="flex flex-wrap gap-6 pt-2">
           <div>
-            <p className="text-lg font-bold text-slate-900 tabular-nums">{totalRoutes}</p>
-            <p className="text-[11px] text-slate-500">активных маршрутов</p>
+            <p className="text-lg font-bold text-slate-900 font-mono tabular-nums">{totalRoutes}</p>
+            <p className="text-xs text-slate-500">активных маршрутов</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-900 tabular-nums">{totalCertified}</p>
-            <p className="text-[11px] text-slate-500">проводников в реестре</p>
+            <p className="text-lg font-bold text-slate-900 font-mono tabular-nums">
+              {totalCertified}
+            </p>
+            <p className="text-xs text-slate-500">проводников в реестре</p>
           </div>
           <div>
-            <p className="text-lg font-bold text-slate-900 tabular-nums">
+            <p className="text-lg font-bold text-slate-900 font-mono tabular-nums">
               {PRIMORYE_DISTRICTS.length}
             </p>
-            <p className="text-[11px] text-slate-500">округов</p>
+            <p className="text-xs text-slate-500">округов</p>
           </div>
         </div>
       </header>
@@ -284,7 +315,6 @@ export function RoutesSection() {
       <DfoRoutesGoogleMap onSelectRouteId={(routeId) => setSelectedMapRouteId(routeId)} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* District selector */}
         <nav aria-label="Округа Приморского края" className="space-y-1 lg:col-span-1">
           {PRIMORYE_DISTRICTS.map((district) => {
             const isActive = district.id === active?.id;
@@ -304,7 +334,7 @@ export function RoutesSection() {
                 }`}
               >
                 <span className="truncate">{district.shortName}</span>
-                <span className="text-[11px] text-slate-400 tabular-nums shrink-0">
+                <span className="text-xs font-mono text-slate-400 tabular-nums shrink-0">
                   {district.activeRoutesCount}
                 </span>
               </button>
@@ -312,7 +342,6 @@ export function RoutesSection() {
           })}
         </nav>
 
-        {/* Selected district detail */}
         {active && (
           <article className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6 space-y-5">
             <div className="space-y-1">
@@ -322,19 +351,19 @@ export function RoutesSection() {
 
             <dl className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div>
-                <dt className="text-[11px] text-slate-500">В реестре</dt>
-                <dd className="text-base font-bold text-slate-900 tabular-nums">
+                <dt className="text-xs text-slate-500">В реестре</dt>
+                <dd className="text-base font-bold font-mono text-slate-900 tabular-nums">
                   {active.certifiedInRegistry}
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] text-slate-500">Расчётная потребность</dt>
-                <dd className="text-base font-bold text-slate-900 tabular-nums">
+                <dt className="text-xs text-slate-500">Расчётная потребность</dt>
+                <dd className="text-base font-bold font-mono text-slate-900 tabular-nums">
                   {active.estimatedDemand}
                 </dd>
               </div>
               <div>
-                <dt className="text-[11px] text-slate-500">Активность</dt>
+                <dt className="text-xs text-slate-500">Активность</dt>
                 <dd className="text-base font-bold text-slate-900">{active.activityLevel}</dd>
               </div>
             </dl>
@@ -343,7 +372,7 @@ export function RoutesSection() {
               <div className="flex items-start gap-2">
                 <Route className="w-4 h-4 text-teal-700 shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Ключевые точки
                   </p>
                   <p className="text-slate-700 leading-relaxed">{active.keySpots}</p>
@@ -356,7 +385,7 @@ export function RoutesSection() {
                   aria-hidden="true"
                 />
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Безопасность
                   </p>
                   <p className="text-slate-700 leading-relaxed">{active.safetyNote}</p>
@@ -366,7 +395,7 @@ export function RoutesSection() {
               <div className="flex items-start gap-2">
                 <Clock className="w-4 h-4 text-teal-700 shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Сезон
                   </p>
                   <p className="text-slate-700">{active.seasonWindow}</p>
@@ -376,6 +405,8 @@ export function RoutesSection() {
           </article>
         )}
       </div>
+
+      <RoutePreparationRoadmapBuilder selectedRouteId={selectedMapRouteId} />
 
       <RouteWeatherWidget
         suggestedRouteId={selectedMapRouteId ?? DISTRICT_TO_ROUTE_ID[active?.id ?? '']}
@@ -387,5 +418,69 @@ export function RoutesSection() {
         Восток» (срез 2026 года).
       </p>
     </section>
+  );
+}
+
+/** Unified «Маршруты и новости» tab for the top navigation. */
+export function RoutesAndNewsWorkspace({
+  initialSubTab = 'routes',
+}: {
+  initialSubTab?: 'routes' | 'news';
+}) {
+  const [subTab, setSubTab] = useState<'routes' | 'news'>(initialSubTab);
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+            Навигатор маршрутов и событий ДФО
+          </p>
+          <h1 className="text-xl font-bold text-slate-900">
+            Атлас маршрутов, погода и новости нормативной базы
+          </h1>
+        </div>
+        <div
+          role="tablist"
+          aria-label="Разделы маршрутов и новостей"
+          className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg self-start sm:self-auto"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={subTab === 'routes'}
+            onClick={() => {
+              setSubTab('routes');
+              tracker.trackCustomInteraction('Маршруты и новости · Маршруты и погода', 'routes');
+            }}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              subTab === 'routes'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Маршруты и погода ДФО
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={subTab === 'news'}
+            onClick={() => {
+              setSubTab('news');
+              tracker.trackCustomInteraction('Маршруты и новости · Новости и НПА', 'news');
+            }}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              subTab === 'news'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Новости и анонсы НПА
+          </button>
+        </div>
+      </div>
+
+      {subTab === 'routes' ? <RoutesSection /> : <NewsSection />}
+    </div>
   );
 }

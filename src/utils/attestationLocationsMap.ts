@@ -94,8 +94,8 @@ export const DFO_ATTESTATION_LOCATIONS: readonly DfoAttestationLocation[] = [
     badgeCode: 'ООПТ',
     kind: 'field_polygon',
     kindLabel: 'Полигон ООПТ и таёжных сплавов',
-    regionName: 'Приморский край (Север)',
-    city: 'Пожарский округ, с. Красный Яр',
+    regionName: 'Приморский край',
+    city: 'Пожарский округ, с. Красный Яр (Север Приморья)',
     address: 'Визит-центр Национального парка «Бикин» и речной полигон р. Бикин',
     coordinates: { lat: 46.5405, lng: 135.349 },
     trialFormats: [
@@ -130,6 +130,28 @@ export const DFO_ATTESTATION_LOCATIONS: readonly DfoAttestationLocation[] = [
     capacityNote: 'Потоки по 8–15 соискателей · межрегиональная комиссия РЦА + ФСТР',
     chairName: 'Григорий Саранча, Андрей Киселёв',
     protocolNote: 'Межрегиональный протокол РЦА «Русский Восток» · Срок записи 5 лет',
+  },
+  {
+    id: 'loc-amur-hub',
+    name: 'Приамурская выездная площадка · Амурская область',
+    shortName: 'Благовещенск',
+    badgeCode: 'ДФО',
+    kind: 'regional_hub',
+    kindLabel: 'Выездная комиссия ДФО',
+    regionName: 'Амурская область',
+    city: 'г. Благовещенск',
+    address: 'Учебно-методический центр туризма и краеведения (выездной приём РЦА)',
+    coordinates: { lat: 50.2906, lng: 127.5272 },
+    trialFormats: [
+      'Сверка справок походного опыта и верификация категорийности маршрутов Приамурья',
+      'Приём очной теории по безопасности на таёжных и трансграничных реках',
+      'Консультации по регистрации групп в ЦУКС МЧС по Амурской области',
+    ],
+    disciplines: ['Пешеходный 1–3 КС', 'Речные сплавы', 'Экотуризм ООПТ'],
+    nextSessions: '14–16 мая 2027 · сентябрь 2027',
+    capacityNote: 'Потоки до 12 соискателей · выездная подкомиссия РЦА + ФСТР',
+    chairName: 'Андрей Киселёв, Ольга Нестерова',
+    protocolNote: 'Региональный стандарт безопасности и оповещения МЧС РФ',
   },
   {
     id: 'loc-kamchatka-hub',
@@ -176,6 +198,28 @@ export const DFO_ATTESTATION_LOCATIONS: readonly DfoAttestationLocation[] = [
     protocolNote: 'Совмещённые билеты «пешеходный + водный» по методике ФСТР',
   },
   {
+    id: 'loc-magadan-hub',
+    name: 'Колымский координационный пункт · Магаданская область',
+    shortName: 'Магадан',
+    badgeCode: 'ДФО',
+    kind: 'regional_hub',
+    kindLabel: 'Северный узел ДФО',
+    regionName: 'Магаданская область',
+    city: 'г. Магадан',
+    address: 'Координационный центр горно-таёжных и экспедиционных маршрутов Колымы',
+    coordinates: { lat: 59.5612, lng: 150.8301 },
+    trialFormats: [
+      'Проверка планов аварийно-спасательного обеспечения на отдалённых хребтах',
+      'Очный приём документов и допуск к дистанционно-очной сессии РЦА',
+      'Аудит спутниковых маяков и навигации в условиях горной тундры',
+    ],
+    disciplines: ['Горный 1–3 КС', 'Экспедиционный', 'Автономная WFA'],
+    nextSessions: '4–6 июня 2027 · октябрь 2027',
+    capacityNote: 'Малые группы 6–8 человек · гибридная аттестация ВВГУ + выездной эксперт',
+    chairName: 'Наталья Соколова, Игорь Ткаченко',
+    protocolNote: 'ПП РФ № 1893 · Повышенный контроль радиосвязи и эвакуации',
+  },
+  {
     id: 'loc-yakutia-hub',
     name: 'Северный экспедиционный узел · Республика Саха (Якутия)',
     shortName: 'Якутск',
@@ -199,13 +243,65 @@ export const DFO_ATTESTATION_LOCATIONS: readonly DfoAttestationLocation[] = [
   },
 ];
 
+export interface DfoRegionFilterOption {
+  id: string;
+  label: string;
+  shortLabel: string;
+  count: number;
+}
+
+const REGION_SHORT_LABELS: Record<string, string> = {
+  'Приморский край': 'Приморский край',
+  'Хабаровский край': 'Хабаровский край',
+  'Амурская область': 'Амурская обл.',
+  'Сахалинская область': 'Сахалинская обл.',
+  'Камчатский край': 'Камчатский край',
+  'Магаданская область': 'Магаданская обл.',
+  'Республика Саха (Якутия)': 'Якутия (Саха)',
+};
+
+export function getDfoRegionFilterOptions(
+  locations: readonly DfoAttestationLocation[]
+): DfoRegionFilterOption[] {
+  const counts = new Map<string, number>();
+  for (const loc of locations) {
+    counts.set(loc.regionName, (counts.get(loc.regionName) ?? 0) + 1);
+  }
+
+  const orderedRegions = Array.from(counts.entries())
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      return a[0].localeCompare(b[0], 'ru');
+    })
+    .map(([regionName, count]) => ({
+      id: regionName,
+      label: regionName,
+      shortLabel: REGION_SHORT_LABELS[regionName] ?? regionName,
+      count,
+    }));
+
+  return [
+    {
+      id: 'all',
+      label: 'Все регионы ДФО',
+      shortLabel: 'Все регионы ДФО',
+      count: locations.length,
+    },
+    ...orderedRegions,
+  ];
+}
+
 export function filterAttestationLocations(
   locations: readonly DfoAttestationLocation[],
   kindFilter: AttestationLocationFilterId,
-  searchQuery = ''
+  searchQuery = '',
+  regionFilter = 'all'
 ): DfoAttestationLocation[] {
   const normalizedQuery = searchQuery.trim().toLowerCase();
   return locations.filter((loc) => {
+    if (regionFilter !== 'all' && loc.regionName !== regionFilter) {
+      return false;
+    }
     if (kindFilter !== 'all' && loc.kind !== kindFilter) {
       return false;
     }
@@ -241,4 +337,8 @@ export function sortAttestationLocationsForStacking(
 export function buildAttestationGoogleMapsUrl(location: DfoAttestationLocation): string {
   const query = encodeURIComponent(`${location.coordinates.lat},${location.coordinates.lng}`);
   return `https://www.google.com/maps/search/?api=1&query=${query}`;
+}
+
+export function buildAttestationYandexMapsUrl(location: DfoAttestationLocation): string {
+  return `https://yandex.ru/maps/?pt=${location.coordinates.lng},${location.coordinates.lat}&z=13&l=map`;
 }

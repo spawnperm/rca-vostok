@@ -35,7 +35,7 @@ export const SECTION_SEO_MAP: Record<SiteTabId, SectionSeoMeta> = {
       'Подготовка инструкторов-проводников по туризму: программы обучения, практика, график аттестаций на 2027 год и консалтинг на базе ВВГУ.',
     keywords:
       'инструктор-проводник обучение, аттестация проводников, Русский Восток, ВВГУ туризм',
-    pathQuery: '?tab=home',
+    pathQuery: '',
   },
   learning: {
     tab: 'learning',
@@ -118,7 +118,7 @@ export const SECTION_SEO_MAP: Record<SiteTabId, SectionSeoMeta> = {
     description:
       'Аналитика рынка инструкторов-проводников Приморья и ДФО, калькулятор потребности до 2030 г., диссертация ВАК 5.2.3 и аттестация на базе ВВГУ.',
     keywords: 'РЦА Русский Восток, инструктор-проводник, аттестация Приморье, ВВГУ',
-    pathQuery: '',
+    pathQuery: '?tab=overview',
   },
   calculator: {
     tab: 'calculator',
@@ -226,7 +226,7 @@ export function applySectionSeo(tab: SiteTabId): void {
         name: 'РЦА «Русский Восток»',
         item: `${window.location.origin}${window.location.pathname}`,
       },
-      ...(tab !== 'overview'
+      ...(tab !== 'home'
         ? [
             {
               '@type': 'ListItem',

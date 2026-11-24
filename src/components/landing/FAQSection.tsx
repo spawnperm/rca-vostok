@@ -10,10 +10,13 @@ import {
   X,
 } from 'lucide-react';
 import { ATTESTATION_FAQ, type FaqItem } from '../../data/researchData';
+import { ENRICHED_ATTESTATION_FAQ } from '../../utils/accountKnowledgeBase';
 import { generateFaqPdf } from '../../utils/faqPdfExport';
 import { tracker } from '../../utils/tracker';
 
 type FaqCategoryFilter = 'all' | FaqItem['category'];
+
+const QUICK_TOPICS = ['документы', 'Контур А', '27 200 ₽', 'пересдача', '5 лет', 'ООПТ'];
 
 const CATEGORY_TABS: { id: FaqCategoryFilter; label: string }[] = [
   { id: 'all', label: 'Все вопросы' },
@@ -77,6 +80,20 @@ export function FAQSection({
     });
   };
 
+  const applyQuickTopic = (topic: string) => {
+    setCategory('all');
+    setQuery(topic);
+    const matched = ATTESTATION_FAQ.filter(
+      (item) =>
+        item.question.toLowerCase().includes(topic.toLowerCase()) ||
+        item.answer.toLowerCase().includes(topic.toLowerCase())
+    ).map((item) => item.id);
+    if (matched.length > 0) {
+      setOpenIds(matched);
+    }
+    tracker.trackCustomInteraction(`FAQ быстрый тег: ${topic}`, 'faq');
+  };
+
   const handleToggleAll = () => {
     if (allVisibleOpen) {
       const visibleSet = new Set(filteredItems.map((i) => i.id));
@@ -89,13 +106,18 @@ export function FAQSection({
   const handleExportPdf = () => {
     setPdfError(null);
     try {
-      const itemsToExport = filteredItems.length > 0 ? filteredItems : ATTESTATION_FAQ;
+      const isUnfiltered =
+        filteredItems.length === ATTESTATION_FAQ.length && !normalizedQuery && category === 'all';
+      const itemsToExport = isUnfiltered
+        ? ENRICHED_ATTESTATION_FAQ
+        : filteredItems.length > 0
+          ? filteredItems
+          : ENRICHED_ATTESTATION_FAQ;
       const activeCategoryLabel =
         CATEGORY_TABS.find((t) => t.id === category)?.label ?? 'Все вопросы';
-      const scopeLabel =
-        filteredItems.length === ATTESTATION_FAQ.length
-          ? 'Полное руководство по аттестации'
-          : `${activeCategoryLabel}${normalizedQuery ? ` · «${query.trim()}»` : ''}`;
+      const scopeLabel = isUnfiltered
+        ? 'Полный справочник соискателя по аттестации'
+        : `${activeCategoryLabel}${normalizedQuery ? ` · «${query.trim()}»` : ''}`;
 
       const result = generateFaqPdf(itemsToExport, scopeLabel);
       setPdfNotice(
@@ -238,6 +260,25 @@ export function FAQSection({
           </span>
         </div>
 
+        {/* Quick Topic Filters */}
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-slate-500 mr-1">Быстрые темы:</span>
+          {QUICK_TOPICS.map((topic) => (
+            <button
+              key={topic}
+              type="button"
+              onClick={() => applyQuickTopic(topic)}
+              className={`px-2.5 py-1 rounded-md border text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                query.toLowerCase() === topic.toLowerCase()
+                  ? 'bg-teal-50 border-teal-300 text-teal-800'
+                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'
+              }`}
+            >
+              {topic}
+            </button>
+          ))}
+        </div>
+
         {/* Accordion List */}
         {filteredItems.length === 0 ? (
           <div className="py-10 px-4 text-center bg-slate-50 border border-slate-200 rounded-xl space-y-3">
@@ -336,3 +377,4 @@ export function FAQSection({
     </section>
   );
 }
+

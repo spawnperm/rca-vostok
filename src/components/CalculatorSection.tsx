@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FileDown, RotateCcw } from 'lucide-react';
+import { Award, Calculator, FileDown, RotateCcw, TrendingUp } from 'lucide-react';
 import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
 import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
 import { exportCalculatorAnalyticsPdf } from '../utils/analyticsPdfReports';
@@ -13,16 +13,15 @@ import {
   CalculatorSensitivityRechartsChart,
   CalculatorYearly2030RechartsChart,
 } from './CalculatorForecastRechartsCharts';
+import { CostAndBudgetSuite } from './CostAndBudgetSuite';
 import { DemandDynamics2030Chart } from './DemandDynamics2030Chart';
 import { DfoRegionalForecastModule } from './DfoRegionalForecastModule';
-import { TrainingAndAttestationCostEstimator } from './TrainingAndAttestationCostEstimator';
-import { IntensiveAttestationCostModule } from './IntensiveAttestationCostModule';
-import { TrainingCostByComplexityChart } from './TrainingCostByComplexityChart';
-import { StateDutyAttestationCalculator } from './StateDutyAttestationCalculator';
-import { AttestationKnowledgeQuiz } from './AttestationKnowledgeQuiz';
 import { ExpertRatingCalculatorWidget } from './ExpertRatingCalculatorWidget';
 
+type CalculatorWorkspaceTab = 'demand_2030' | 'costs_budget' | 'expert_rating';
+
 export const CalculatorSection: React.FC = () => {
+  const [workspaceTab, setWorkspaceTab] = useState<CalculatorWorkspaceTab>('demand_2030');
   const [activePresetId, setActivePresetId] = useState<string>(DEMAND_PRESETS[0].id);
   const [forecastScenario2030, setForecastScenario2030] =
     useState<CalculatorForecastScenario>('baseline');
@@ -165,16 +164,55 @@ export const CalculatorSection: React.FC = () => {
           </p>
         )}
 
-        {/* Formula Banner */}
-        <div className="bg-slate-900 text-white rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="font-mono text-sm sm:text-base tracking-tight">
-            N = ((T_act × P_org) / G_size / G_season) × K_season × K_turnover
-          </div>
-          <div className="text-xs text-slate-300 font-mono tabular-nums">
-            = (({tAct.toLocaleString('ru-RU')} × {(pOrg / 100).toFixed(2)}) / {gSize} / {groupsPerSeason}) × {kSeason.toFixed(2)} × {kTurnover.toFixed(2)} ={' '}
-            <span className="text-teal-300 font-semibold">{results.totalDemand.toLocaleString('ru-RU')} чел.</span>
-          </div>
+        {/* Workspace Mode Switcher */}
+        <div
+          role="tablist"
+          aria-label="Разделы калькулятора"
+          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
+        >
+          {(
+            [
+              { id: 'demand_2030', label: 'Модель потребности 2030', Icon: TrendingUp },
+              { id: 'costs_budget', label: 'Смета обучения и госпошлина', Icon: Calculator },
+              { id: 'expert_rating', label: 'Рейтинг экспертов', Icon: Award },
+            ] as const
+          ).map(({ id, label, Icon }) => {
+            const active = workspaceTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setWorkspaceTab(id);
+                  tracker.trackCustomInteraction(`Калькулятор · вкладка ${label}`, 'calculator');
+                }}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  active
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5 text-teal-700 shrink-0" aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </div>
+
+        {workspaceTab === 'demand_2030' && (
+          <>
+            {/* Formula Banner */}
+            <div className="bg-slate-900 text-white rounded-lg p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="font-mono text-sm sm:text-base tracking-tight">
+                N = ((T_act × P_org) / G_size / G_season) × K_season × K_turnover
+              </div>
+              <div className="text-xs text-slate-300 font-mono tabular-nums">
+                = (({tAct.toLocaleString('ru-RU')} × {(pOrg / 100).toFixed(2)}) / {gSize} / {groupsPerSeason}) × {kSeason.toFixed(2)} × {kTurnover.toFixed(2)} ={' '}
+                <span className="text-teal-300 font-semibold">{results.totalDemand.toLocaleString('ru-RU')} чел.</span>
+              </div>
+            </div>
 
         {/* Presets */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -235,8 +273,12 @@ export const CalculatorSection: React.FC = () => {
             })}
           </div>
         </div>
+          </>
+        )}
       </section>
 
+      {workspaceTab === 'demand_2030' && (
+        <>
       {/* Main Simulator Grid */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left: Controls */}
@@ -600,24 +642,12 @@ export const CalculatorSection: React.FC = () => {
 
       {/* Regional DFO 2030 Forecast Module with Tourist Flow */}
       <DfoRegionalForecastModule onApplyRegionToCalculator={applyRegionToMainCalculator} />
+        </>
+      )}
 
-      {/* Training & Attestation Cost Estimator by Guide Category and DFO Region */}
-      <TrainingAndAttestationCostEstimator />
+      {workspaceTab === 'costs_budget' && <CostAndBudgetSuite />}
 
-      {/* Auxiliary cost estimator by complexity category & intensive days */}
-      <IntensiveAttestationCostModule />
-
-      {/* Recharts stacked bar chart of training cost across 1-3 complexity categories */}
-      <TrainingCostByComplexityChart />
-
-      {/* Interactive state duty & PP RF 891 fee calculator */}
-      <StateDutyAttestationCalculator />
-
-      {/* Expert Rating Calculator, Gauge Chart & Dynamic Collapsible Expert Tips */}
-      <ExpertRatingCalculatorWidget />
-
-      {/* 5-question interactive self-check quiz with instant feedback */}
-      <AttestationKnowledgeQuiz />
+      {workspaceTab === 'expert_rating' && <ExpertRatingCalculatorWidget />}
     </div>
   );
 };

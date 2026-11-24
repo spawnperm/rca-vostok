@@ -1,4 +1,4 @@
-import type { SiteTabId } from './seo';
+import type { SiteTabId } from './seo.ts';
 
 export interface ClientBehaviorEvent {
   id: string;

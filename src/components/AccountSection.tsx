@@ -2,31 +2,23 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   Award,
   BarChart3,
-  Briefcase,
-  CalendarClock,
-  CalendarDays,
-  CheckCircle2,
+  BookOpen,
   Compass,
+  DatabaseBackup,
   Download,
   Eye,
   FileBadge2,
-  FileCheck2,
-  FileJson,
   GitBranch,
-  GraduationCap,
-  HelpCircle,
-  Link2,
+  KeyRound,
   LogIn,
   LogOut,
-  MessageSquareText,
-  ShieldCheck,
+  Save,
   ShieldAlert,
+  ShieldCheck,
   Trophy,
   UserPlus,
   UserRound,
   Users,
-  KeyRound,
-  Save,
   X,
 } from 'lucide-react';
 import { tracker } from '../utils/tracker';
@@ -59,6 +51,7 @@ import { RouteComplexityPieWidget } from './RouteComplexityPieWidget';
 import { ProfileAttestationCertificateCard } from './ProfileAttestationCertificateCard';
 import { PreparationChecklistPdfCard } from './PreparationChecklistPdfCard';
 import { QualificationCertificatesJsonExportCard } from './QualificationCertificatesJsonExportCard';
+import { AccountDataBackupCard } from './AccountDataBackupCard';
 import {
   AchievementIcon,
   InstructorAchievementsWidget,
@@ -96,9 +89,43 @@ import {
   isAttestationEligibleForCertificate,
   type GeneratedFinalCertificateResult,
 } from '../utils/attestationFinalCertificatePdf';
+import { collectAndDownloadFullAccountBackup } from '../utils/accountBackupExport';
 import type { SiteTabId } from '../utils/seo';
 
 type AuthMode = 'login' | 'register';
+type CabinetTab = 'profile' | 'preparation' | 'documents' | 'community';
+
+const CABINET_TABS: readonly {
+  id: CabinetTab;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  {
+    id: 'profile',
+    label: 'Профиль и заявки',
+    description: 'Заявки, уведомления, OAuth, профиль и безопасность',
+    icon: UserRound,
+  },
+  {
+    id: 'preparation',
+    label: 'Подготовка и путь',
+    description: 'Маршрут 5 этапов, календарь комиссий, план и база знаний',
+    icon: Compass,
+  },
+  {
+    id: 'documents',
+    label: 'Опыт и документы',
+    description: 'Журнал походов, цифровой паспорт, резюме и выгрузки',
+    icon: FileBadge2,
+  },
+  {
+    id: 'community',
+    label: 'Сообщество и рейтинг',
+    description: 'Лента, чат, достижения, рейтинг ДФО и отзывы',
+    icon: Users,
+  },
+];
 
 const REGIONS = [
   'Приморский край',
@@ -125,6 +152,9 @@ export function AccountSection({
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [cabinetTab, setCabinetTab] = useState<CabinetTab>('profile');
+  const [guestPreviewTab, setGuestPreviewTab] = useState<'analytics' | 'kb'>('analytics');
+
   /** Password recovery views: null = normal auth, 'forgot' = request, string = reset token. */
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [showForgot, setShowForgot] = useState<boolean>(false);
@@ -146,9 +176,6 @@ export function AccountSection({
     query: string;
     nonce: number;
   } | null>(null);
-  const [analyticsSubView, setAnalyticsSubView] = useState<
-    'all' | 'leaderboard' | 'reviews'
-  >('all');
   const [externalSelectedStage, setExternalSelectedStage] = useState<{
     stageId: AttestationStageId;
     nonce: number;
@@ -163,6 +190,11 @@ export function AccountSection({
     null
   );
   const [finalCertPreviewOpen, setFinalCertPreviewOpen] = useState<boolean>(false);
+  const [backupBusy, setBackupBusy] = useState<boolean>(false);
+  const [backupNotice, setBackupNotice] = useState<{
+    kind: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     const url = finalCertResult?.pdfBlobUrl;
@@ -205,8 +237,6 @@ export function AccountSection({
     dispatchOpenRcaAssistant({ prompt, mode: 'rag' });
   }, []);
 
-  // A reset link lands on ?tab=account&reset=<token>, so the cabinet opens
-  // straight into the "set a new password" step.
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -330,6 +360,46 @@ export function AccountSection({
     }
   }, []);
 
+  const scrollToElementById = (elementId: string) => {
+    const el = document.getElementById(elementId);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const navigateCabinetTarget = (targetTab: CabinetTab, elementId: string) => {
+    setCabinetTab(targetTab);
+    window.setTimeout(() => scrollToElementById(elementId), 60);
+  };
+
+  const jumpToKnowledgeBaseWithQuery = (query?: string) => {
+    setKbExternalSearch((prev) => ({
+      query: query ?? '',
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
+    if (!user) {
+      setGuestPreviewTab('kb');
+      window.setTimeout(() => scrollToElementById('account-knowledge-base'), 60);
+    } else {
+      navigateCabinetTarget('preparation', 'account-knowledge-base');
+    }
+  };
+
+  const jumpToAchievementAction = (action: AchievementTargetAction) => {
+    if (!user && (action === 'profile' || action === 'attestation' || action === 'linked')) {
+      scrollToElementById('account-auth-panel');
+      return;
+    }
+    const targetMap: Record<AchievementTargetAction, { tab: CabinetTab; id: string }> = {
+      experience: { tab: 'documents', id: 'professional-experience-log' },
+      attestation: { tab: 'preparation', id: 'attestation-progress-widget' },
+      profile: { tab: 'profile', id: 'account-profile-card' },
+      diagnostics: { tab: 'preparation', id: 'attestation-self-diagnostics' },
+      self_check: { tab: 'preparation', id: 'qualification-self-check' },
+      linked: { tab: 'profile', id: 'account-linked-profiles' },
+    };
+    const mapped = targetMap[action] ?? { tab: 'documents', id: 'professional-experience-log' };
+    navigateCabinetTarget(mapped.tab, mapped.id);
+  };
+
   if (loading) {
     return (
       <section className="bg-white border border-slate-200 rounded-xl p-8">
@@ -346,163 +416,143 @@ export function AccountSection({
     return <ForgotPasswordForm onBack={() => setShowForgot(false)} />;
   }
 
-  const scrollToElementById = (elementId: string) => {
-    const el = document.getElementById(elementId);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const jumpToKnowledgeBaseWithQuery = (query?: string) => {
-    setKbExternalSearch((prev) => ({
-      query: query ?? '',
-      nonce: (prev?.nonce ?? 0) + 1,
-    }));
-    scrollToElementById('account-knowledge-base');
-  };
-
-  const jumpToAchievementAction = (action: AchievementTargetAction) => {
-    const targetMap: Record<AchievementTargetAction, string> = {
-      experience: 'professional-experience-log',
-      attestation: 'attestation-progress-widget',
-      profile: 'account-profile-card',
-      diagnostics: 'attestation-self-diagnostics',
-      self_check: 'qualification-self-check',
-      linked: 'account-linked-profiles',
-    };
-    if (!user && (action === 'profile' || action === 'attestation' || action === 'linked')) {
-      scrollToElementById('account-auth-panel');
-      return;
-    }
-    scrollToElementById(targetMap[action] ?? 'professional-experience-log');
-  };
-
+  // ── Unauthenticated guest view ────────────────────────────────────────────
   if (!user) {
     return (
-      <div className="space-y-6">
-        <AuthPanel
-          mode={authMode}
-          onModeChange={setAuthMode}
-          onAuthenticated={handleAuthenticated}
-          onForgotPassword={() => setShowForgot(true)}
-        />
-        <AttestationExpiryMonitorWidget
-          user={null}
-          inquiries={[]}
-          onBookReattestation={({ recommendedSessionDate, note }) => {
-            if (recommendedSessionDate) {
-              setSelectedExamDate(recommendedSessionDate);
-            }
-            setReattestationPrefill((prev) => ({
-              note,
-              nonce: (prev?.nonce ?? 0) + 1,
-            }));
-            scrollToElementById('attestation-sessions-calendar');
-          }}
-          onFocusAuth={() => scrollToElementById('account-auth-panel')}
-        />
-        <ApplicationProgressIndicator
-          user={null}
-          inquiries={[]}
-          onFocusAuth={() => scrollToElementById('account-auth-panel')}
-        />
-        <AttestationPathWidget
-          user={null}
-          onFocusAuth={() => {
-            scrollToElementById('account-auth-panel');
-          }}
-        />
-        <ProfileAttestationCertificateCard
-          user={null}
-          onFocusAuth={() => scrollToElementById('account-auth-panel')}
-        />
-        <PreparationChecklistPdfCard
-          user={null}
-          onFocusAuth={() => scrollToElementById('account-auth-panel')}
-        />
-        <QualificationCertificatesJsonExportCard
-          user={null}
-          onFocusAuth={() => scrollToElementById('account-auth-panel')}
-        />
-        <AttestationSelfDiagnosticsWidget
-          user={null}
-          onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
-          onJumpToConsultant={(prompt) => openAiAssistant(prompt)}
-          onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
-        />
-        <PersonalLearningPlanWidget
-          user={null}
-          onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
-        />
-        <InstructorResumeGeneratorCard user={null} />
-        <ProfessionalExperienceLogCard user={null} />
-        <RouteComplexityPieWidget
-          user={null}
-          onJumpToJournal={() => scrollToElementById('professional-experience-log')}
-        />
-        <RouteComplexityForecastCard
-          user={null}
-          onJumpToJournal={() => scrollToElementById('professional-experience-log')}
-        />
-        <InstructorAchievementsWidget
-          user={null}
-          summary={achievementsSummary}
-          onActionJump={jumpToAchievementAction}
-          onFocusAuth={() => scrollToElementById('account-auth-panel')}
-        />
-        <AttestationSessionsCalendarWidget
-          user={null}
-          inquiries={[]}
-          onFocusAuth={(mode) => {
-            if (mode) setAuthMode(mode);
-            scrollToElementById('account-auth-panel');
-          }}
-        />
-        <AccountKnowledgeBaseWidget
-          user={null}
-          externalSearch={kbExternalSearch}
-          onNavigate={onNavigate}
-          onJumpToConsultant={() =>
-            openAiAssistant('Подскажите, какие документы нужны для аттестации?')
-          }
-        />
-        <FavoriteLiteratureCabinetWidget
-          userId={null}
-          onOpenOverviewLibrary={
-            onNavigate
-              ? () => {
-                  onNavigate('overview');
-                  window.setTimeout(() => {
-                    document
-                      .getElementById('recommended-literature')
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }, 240);
-                }
-              : undefined
-          }
-        />
-        <section
-          id="account-analytics-section"
-          aria-labelledby="account-analytics-guest-heading"
-          className="space-y-4 scroll-mt-24"
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
-            <div>
-              <h3
-                id="account-analytics-guest-heading"
-                className="text-lg font-bold text-slate-900"
-              >
-                Аналитический раздел личного кабинета
-              </h3>
-              <p className="text-xs sm:text-sm text-slate-600">
-                Открытая аналитика реестра аттестованных проводников ДФО из базы данных РЦА.
+      <div className="space-y-8">
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <div className="lg:col-span-5">
+            <AuthPanel
+              mode={authMode}
+              onModeChange={setAuthMode}
+              onAuthenticated={handleAuthenticated}
+              onForgotPassword={() => setShowForgot(true)}
+            />
+          </div>
+
+          <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                Единое пространство соискателя и проводника
+              </p>
+              <h1 className="text-2xl font-bold text-slate-900 text-balance">
+                Личный кабинет РЦА «Русский Восток»
+              </h1>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                После входа или регистрации открывается персональный контур подготовки к
+                аттестации инструкторов-проводников по ПП № 1003 (ред. № 1893).
               </p>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {CABINET_TABS.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-1.5"
+                  >
+                    <p className="text-xs font-bold text-slate-900 inline-flex items-center gap-1.5">
+                      <Icon className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                      <span>{item.label}</span>
+                    </p>
+                    <p className="text-xs text-slate-600 leading-relaxed">{item.description}</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <DfoGuidesLeaderboardWidget />
+        </section>
+
+        {/* Public analytics / knowledge preview tabs for guests */}
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">
+                Открытые инструменты и рейтинг реестра
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600">
+                Доступны без авторизации — для знакомства со статистикой ДФО и справочником
+                соискателя.
+              </p>
+            </div>
+
+            <div
+              role="tablist"
+              aria-label="Открытые разделы для гостей"
+              className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={guestPreviewTab === 'analytics'}
+                onClick={() => setGuestPreviewTab('analytics')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  guestPreviewTab === 'analytics'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Рейтинг ДФО и отзывы</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={guestPreviewTab === 'kb'}
+                onClick={() => setGuestPreviewTab('kb')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  guestPreviewTab === 'kb'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>База знаний и библиотека</span>
+              </button>
+            </div>
+          </div>
+
+          {guestPreviewTab === 'analytics' && (
+            <div className="space-y-6">
+              <DfoGuidesLeaderboardWidget />
+              <ReviewStatsWidget refreshKey={reviewsRefreshKey} />
+            </div>
+          )}
+
+          {guestPreviewTab === 'kb' && (
+            <div className="space-y-6">
+              <AccountKnowledgeBaseWidget
+                user={null}
+                externalSearch={kbExternalSearch}
+                onNavigate={onNavigate}
+                onJumpToConsultant={() =>
+                  openAiAssistant('Подскажите, какие документы нужны для аттестации?')
+                }
+              />
+              <FavoriteLiteratureCabinetWidget
+                userId={null}
+                onOpenOverviewLibrary={
+                  onNavigate
+                    ? () => {
+                        onNavigate('learning');
+                        window.setTimeout(() => {
+                          document
+                            .getElementById('recommended-literature')
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }, 240);
+                      }
+                    : undefined
+                }
+              />
+            </div>
+          )}
         </section>
       </div>
     );
   }
 
+  // ── Authenticated cabinet view ────────────────────────────────────────────
   const effectiveProgressSummary =
     resolvedProgressSummary ?? computeUserAttestationSummary(user, inquiries);
   const isAttestationComplete = isAttestationEligibleForCertificate(effectiveProgressSummary);
@@ -531,36 +581,80 @@ export function AccountSection({
     }
   };
 
+  const handleDownloadFullBackup = async () => {
+    setBackupBusy(true);
+    setBackupNotice(null);
+    try {
+      const res = await collectAndDownloadFullAccountBackup({
+        user,
+        progressSummary: effectiveProgressSummary,
+        achievementsSummary,
+        inquiries,
+        linkedAccounts,
+        selectedExamDate,
+        selectedContour,
+      });
+      setBackupNotice({
+        kind: 'success',
+        text: `Резервная копия данных кабинета сохранена: ${res.fileName} (${res.formattedSize}) — включены статистика, ачивки (${res.payload.achievements.unlockedCount}/${res.payload.achievements.totalCount}) и история походов (${res.payload.hikeHistory.totalEntries}).`,
+      });
+      tracker.trackCustomInteraction(
+        'Личный кабинет · Быстрый экспорт резервной копии JSON',
+        res.formattedSize
+      );
+    } catch (err) {
+      setBackupNotice({
+        kind: 'error',
+        text:
+          err instanceof Error
+            ? err.message
+            : 'Не удалось сформировать резервную копию данных в JSON.',
+      });
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <CabinetHeader
         user={user}
+        cabinetTab={cabinetTab}
+        onSelectCabinetTab={(tab) => {
+          setCabinetTab(tab);
+          tracker.trackCustomInteraction(`Личный кабинет · ${tab}`, 'account');
+        }}
         achievementsSummary={achievementsSummary}
         isAttestationComplete={isAttestationComplete}
         certificateBusy={finalCertBusy}
         onDownloadCertificate={handleDownloadFinalCertificate}
+        backupBusy={backupBusy}
+        onDownloadBackup={() => void handleDownloadFullBackup()}
         onLogout={handleLogout}
-        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
-        onJumpToExpiryMonitor={() => scrollToElementById('attestation-expiry-monitor')}
-        onJumpToLinkedProfiles={() => scrollToElementById('account-linked-profiles')}
-        onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
-        onJumpToLearningPlan={() => scrollToElementById('personal-learning-plan')}
-        onJumpToAnalytics={() => scrollToElementById('account-analytics-section')}
-        onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
-        onJumpToResume={() => scrollToElementById('instructor-resume-generator')}
-        onJumpToExperienceLog={() => scrollToElementById('professional-experience-log')}
-        onJumpToAchievements={() => scrollToElementById('instructor-achievements')}
-        onJumpToCertificateGenerator={() => scrollToElementById('account-certificate-generator')}
-        onJumpToChecklistPdf={() => scrollToElementById('account-checklist-pdf')}
-        onJumpToJsonExport={() => scrollToElementById('account-json-export')}
-        onJumpToFaq={() => scrollToElementById('account-knowledge-base')}
-        onJumpToReviews={() => scrollToElementById('account-reviews-section')}
       />
+
+      {backupNotice && (
+        <p
+          role="status"
+          className={`text-xs rounded-lg px-4 py-2.5 font-medium border ${
+            backupNotice.kind === 'error'
+              ? 'text-red-800 bg-red-50 border-red-200'
+              : 'text-teal-900 bg-teal-50 border-teal-200'
+          }`}
+        >
+          {backupNotice.text}
+        </p>
+      )}
+
       {finalCertError && (
-        <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5">
+        <p
+          role="alert"
+          className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5"
+        >
           {finalCertError}
         </p>
       )}
+
       {finalCertResult && (
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-emerald-50/85 border border-emerald-200 rounded-xl text-xs">
           <div className="flex items-center gap-2 text-emerald-950">
@@ -593,283 +687,61 @@ export function AccountSection({
           </div>
         </div>
       )}
-      <AttestationExpiryMonitorWidget
-        user={user}
-        inquiries={inquiries}
-        onUserUpdated={handleAuthenticated}
-        onJumpToProfile={() => scrollToElementById('account-profile-card')}
-        onBookReattestation={({ recommendedSessionDate, note }) => {
-          if (recommendedSessionDate) {
-            setSelectedExamDate(recommendedSessionDate);
-          }
-          setReattestationPrefill((prev) => ({
-            note,
-            nonce: (prev?.nonce ?? 0) + 1,
-          }));
-          scrollToElementById('attestation-sessions-calendar');
-        }}
-      />
-      <ApplicationProgressIndicator
-        user={user}
-        inquiries={inquiries}
-        inquiriesLoading={inquiriesLoading}
-        overallChecklistPercent={effectiveProgressSummary.percent}
-        isAttestationComplete={isAttestationComplete}
-        certificateBusy={finalCertBusy}
-        onDownloadCertificate={handleDownloadFinalCertificate}
-        onRefreshInquiries={
-          hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
-        }
-        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
-        onJumpToInquiries={() => scrollToElementById('my-inquiries-status-table')}
-        onJumpToChecklist={() => scrollToElementById('attestation-progress-widget')}
-      />
-      <AttestationPathWidget
-        user={user}
-        summary={effectiveProgressSummary}
-        inquiries={inquiries}
-        examDateIso={selectedExamDate}
-        contour={selectedContour}
-        onSelectStageInChecklist={(stageId) => {
-          setExternalSelectedStage((prev) => ({
-            stageId,
-            nonce: (prev?.nonce ?? 0) + 1,
-          }));
-          scrollToElementById('attestation-progress-details');
-        }}
-        onOpenApplication={() => scrollToElementById('attestation-sessions-calendar')}
-        onJumpToRoadmap={() => scrollToElementById('personal-roadmap-widget')}
-        onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
-      />
-      <AttestationSessionsCalendarWidget
-        user={user}
-        inquiries={inquiries}
-        selectedExamDate={selectedExamDate}
-        linkedAccounts={linkedAccounts}
-        autofill={examAutofill}
-        externalReattestationPrefill={reattestationPrefill}
-        onSelectAutofillSource={(provider) => void handleSelectAutofillSource(provider)}
-        onJumpToLinkedAccounts={() => scrollToElementById('account-linked-profiles')}
-        onSelectExamDate={setSelectedExamDate}
-        onSessionBooked={(sessionDateIso) => {
-          setSelectedExamDate(sessionDateIso);
-          if (hasPermission(user, 'inquiries:view_own')) {
-            void loadInquiries();
-          }
-        }}
-        onJumpToInquiries={() => scrollToElementById('my-inquiries-status-table')}
-      />
-      <LinkedAccountsCard
-        user={user}
-        accounts={linkedAccounts}
-        autofill={examAutofill}
-        providers={oauthProviders}
-        loading={linkedLoading}
-        onUpdated={(accounts, autofill) => {
-          setLinkedAccounts(accounts);
-          setExamAutofill(autofill);
-        }}
-        onRefreshAll={loadLinkedAccounts}
-        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
-      />
-      <MyInquiriesSection
-        canView={hasPermission(user, 'inquiries:view_own')}
-        inquiries={inquiries}
-        loading={inquiriesLoading}
-        error={inquiriesError}
-        onRefresh={() => void loadInquiries()}
-        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
-        onJumpToChecklist={() => scrollToElementById('attestation-progress-widget')}
-      />
-      <AttestationProgressWidget
-        user={user}
-        inquiries={inquiries}
-        inquiriesLoading={inquiriesLoading}
-        selectedExamDate={selectedExamDate}
-        externalSelectedStage={externalSelectedStage}
-        onSummaryChange={setLiveProgressSummary}
-        onRefreshInquiries={
-          hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
-        }
-        onOpenApplication={onNavigate ? () => onNavigate('overview') : undefined}
-      />
-      <PersonalRoadmapWidget
-        user={user}
-        summary={effectiveProgressSummary}
-        onExamDateChange={setSelectedExamDate}
-        onContourChange={setSelectedContour}
-      />
-      <QualificationSelfCheckWidget
-        user={user}
-        onChange={() => setSelfCheckRevision((n) => n + 1)}
-        onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
-        onJumpToConsultant={() =>
-          openAiAssistant('Помогите разобраться с пробелами по итогам самопроверки.')
-        }
-      />
-      <AttestationSelfDiagnosticsWidget
-        user={user}
-        onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
-        onJumpToConsultant={(prompt) => openAiAssistant(prompt)}
-        onJumpToSelfCheck={() => scrollToElementById('qualification-self-check')}
-        onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
-      />
-      <PersonalLearningPlanWidget
-        user={user}
-        selfCheckRevision={selfCheckRevision}
-        selectedContour={selectedContour}
-        onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
-      />
-      <InstructorPassportCard
-        user={user}
-        summary={effectiveProgressSummary}
-        inquiries={inquiries}
-        selfCheckRevision={selfCheckRevision}
-      />
-      <InstructorResumeGeneratorCard
-        user={user}
-        summary={effectiveProgressSummary}
-        inquiries={inquiries}
-        selfCheckRevision={selfCheckRevision}
-        selectedContour={selectedContour}
-        onJumpToProfile={() => scrollToElementById('account-profile-card')}
-        onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
-      />
-      <ProfessionalExperienceLogCard user={user} />
-      <RouteComplexityPieWidget
-        user={user}
-        onJumpToJournal={() => scrollToElementById('professional-experience-log')}
-      />
-      <RouteComplexityForecastCard
-        user={user}
-        onJumpToJournal={() => scrollToElementById('professional-experience-log')}
-      />
-      <InstructorAchievementsWidget
-        user={user}
-        summary={achievementsSummary}
-        onActionJump={jumpToAchievementAction}
-      />
-      <ProfileAttestationCertificateCard
-        user={user}
-        summary={effectiveProgressSummary}
-        inquiries={inquiries}
-        selectedExamDate={selectedExamDate}
-        selectedContour={selectedContour}
-        onJumpToProfile={() => scrollToElementById('account-profile-card')}
-      />
-      <PreparationChecklistPdfCard
-        user={user}
-        summary={effectiveProgressSummary}
-        inquiries={inquiries}
-        selectedContour={selectedContour}
-      />
-      <QualificationCertificatesJsonExportCard
-        user={user}
-        summary={effectiveProgressSummary}
-        inquiries={inquiries}
-        linkedAccounts={linkedAccounts}
-        selectedExamDate={selectedExamDate}
-        selectedContour={selectedContour}
-        selfCheckRevision={selfCheckRevision}
-      />
-      <AccountKnowledgeBaseWidget
-        user={user}
-        externalSearch={kbExternalSearch}
-        onNavigate={onNavigate}
-        onJumpToChecklist={() => scrollToElementById('qualification-self-check')}
-        onJumpToConsultant={() => openAiAssistant()}
-      />
 
-      <FavoriteLiteratureCabinetWidget
-        userId={user.id}
-        onOpenOverviewLibrary={
-          onNavigate
-            ? () => {
-                onNavigate('overview');
-                window.setTimeout(() => {
-                  document
-                    .getElementById('recommended-literature')
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 240);
+      {/* TAB 1: PROFILE, INQUIRIES, NOTIFICATIONS & SECURITY */}
+      {cabinetTab === 'profile' && (
+        <div className="space-y-6">
+          <AttestationExpiryMonitorWidget
+            user={user}
+            inquiries={inquiries}
+            onUserUpdated={handleAuthenticated}
+            onJumpToProfile={() => scrollToElementById('account-profile-card')}
+            onBookReattestation={({ recommendedSessionDate, note }) => {
+              if (recommendedSessionDate) {
+                setSelectedExamDate(recommendedSessionDate);
               }
-            : undefined
-        }
-      />
-
-      {/* Instructor Reviews & Feedback with Rating List */}
-      <InstructorReviewsSection
-        user={user}
-        progressSummary={effectiveProgressSummary}
-        inquiries={inquiries}
-        refreshKey={reviewsRefreshKey}
-        onReviewSubmitted={() => setReviewsRefreshKey((k) => k + 1)}
-        onJumpToProgress={() => scrollToElementById('attestation-progress-widget')}
-      />
-
-      {/* Analytical Section of the Personal Cabinet */}
-      <section
-        id="account-analytics-section"
-        aria-labelledby="account-analytics-heading"
-        className="space-y-4 scroll-mt-24 pt-2"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 px-1">
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-teal-700 inline-flex items-center gap-1.5">
-              <BarChart3 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-              <span>Аналитический раздел личного кабинета · Реестр и качество</span>
-            </p>
-            <h3 id="account-analytics-heading" className="text-lg font-bold text-slate-900">
-              Рейтинг проводников ДФО и статистика аттестаций
-            </h3>
-          </div>
-
-          <div
-            role="tablist"
-            aria-label="Подразделы аналитики кабинета"
-            className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start sm:self-auto"
-          >
-            {(
-              [
-                { id: 'all', label: 'Все виджеты' },
-                { id: 'leaderboard', label: 'Рейтинг ДФО' },
-                { id: 'reviews', label: 'Статистика оценок' },
-              ] as const
-            ).map((tab) => {
-              const active = analyticsSubView === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setAnalyticsSubView(tab.id)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    active
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {(analyticsSubView === 'all' || analyticsSubView === 'leaderboard') && (
-          <DfoGuidesLeaderboardWidget
-            currentUserId={user.id}
-            currentUserRegion={user.region}
+              setReattestationPrefill((prev) => ({
+                note,
+                nonce: (prev?.nonce ?? 0) + 1,
+              }));
+              navigateCabinetTarget('preparation', 'attestation-sessions-calendar');
+            }}
           />
-        )}
 
-        {(analyticsSubView === 'all' || analyticsSubView === 'reviews') && (
-          <ReviewStatsWidget refreshKey={reviewsRefreshKey} />
-        )}
-      </section>
+          <ApplicationProgressIndicator
+            user={user}
+            inquiries={inquiries}
+            inquiriesLoading={inquiriesLoading}
+            overallChecklistPercent={effectiveProgressSummary.percent}
+            isAttestationComplete={isAttestationComplete}
+            certificateBusy={finalCertBusy}
+            onDownloadCertificate={handleDownloadFinalCertificate}
+            onRefreshInquiries={
+              hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
+            }
+            onJumpToCalendar={() =>
+              navigateCabinetTarget('preparation', 'attestation-sessions-calendar')
+            }
+            onJumpToInquiries={() => scrollToElementById('my-inquiries-status-table')}
+            onJumpToChecklist={() =>
+              navigateCabinetTarget('preparation', 'attestation-progress-widget')
+            }
+          />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+          <MyInquiriesSection
+            canView={hasPermission(user, 'inquiries:view_own')}
+            inquiries={inquiries}
+            loading={inquiriesLoading}
+            error={inquiriesError}
+            onRefresh={() => void loadInquiries()}
+            onJumpToCalendar={() =>
+              navigateCabinetTarget('preparation', 'attestation-sessions-calendar')
+            }
+            onJumpToChecklist={() =>
+              navigateCabinetTarget('preparation', 'attestation-progress-widget')
+            }
+          />
+
           <NotificationCenterWidget
             user={user}
             inquiries={inquiries}
@@ -879,48 +751,289 @@ export function AccountSection({
             }
             onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
           />
-          <ProfileCard
-            user={user}
-            achievementsSummary={achievementsSummary}
-            onUpdated={handleAuthenticated}
-            onJumpToAchievements={() => scrollToElementById('instructor-achievements')}
-          />
-          <PasswordCard onChanged={() => setUser(null)} />
-        </div>
-        <div className="space-y-6">
-          <PermissionsCard user={user} />
-          {hasPermission(user, 'users:manage') && <UserAdminCard currentUserId={user.id} />}
-          {onOpenGitSync && hasPermission(user, 'users:manage') && (
-            <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-900 inline-flex items-center gap-2">
-                  <GitBranch className="w-4 h-4 text-teal-700" aria-hidden="true" />
-                  <span>Публикация в репозиторий</span>
-                </h3>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Фиксация изменений коммитом и отправка в ветку <code className="font-mono">main</code>{' '}
-                  репозитория <code className="font-mono">spawnperm/rca-vostok</code>.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onOpenGitSync}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <GitBranch className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
-                <span>Зафиксировать и отправить в main</span>
-              </button>
-            </section>
-          )}
-        </div>
-      </div>
 
-      {/* Social profile: feed, blog, chat and media library */}
-      <SocialProfileSection
-        userId={user.id}
-        currentUserId={user.id}
-        permissions={user.permissions}
-      />
+          <LinkedAccountsCard
+            user={user}
+            accounts={linkedAccounts}
+            autofill={examAutofill}
+            providers={oauthProviders}
+            loading={linkedLoading}
+            onUpdated={(accounts, autofill) => {
+              setLinkedAccounts(accounts);
+              setExamAutofill(autofill);
+            }}
+            onRefreshAll={loadLinkedAccounts}
+            onJumpToCalendar={() =>
+              navigateCabinetTarget('preparation', 'attestation-sessions-calendar')
+            }
+          />
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <ProfileCard
+                user={user}
+                achievementsSummary={achievementsSummary}
+                onUpdated={handleAuthenticated}
+                onJumpToAchievements={() =>
+                  navigateCabinetTarget('community', 'instructor-achievements')
+                }
+              />
+              <PasswordCard onChanged={() => setUser(null)} />
+            </div>
+            <div className="space-y-6">
+              <PermissionsCard user={user} />
+              {hasPermission(user, 'users:manage') && <UserAdminCard currentUserId={user.id} />}
+              {onOpenGitSync && hasPermission(user, 'users:manage') && (
+                <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-slate-900 inline-flex items-center gap-2">
+                      <GitBranch className="w-4 h-4 text-teal-700" aria-hidden="true" />
+                      <span>Публикация в репозиторий</span>
+                    </h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Фиксация изменений коммитом и отправка в ветку{' '}
+                      <code className="font-mono">main</code> репозитория{' '}
+                      <code className="font-mono">spawnperm/rca-vostok</code>.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onOpenGitSync}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <GitBranch className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
+                    <span>Зафиксировать и отправить в main</span>
+                  </button>
+                </section>
+              )}
+            </div>
+          </div>
+
+          <AccountDataBackupCard
+            user={user}
+            progressSummary={effectiveProgressSummary}
+            achievementsSummary={achievementsSummary}
+            inquiries={inquiries}
+            linkedAccounts={linkedAccounts}
+            selectedExamDate={selectedExamDate}
+            selectedContour={selectedContour}
+            selfCheckRevision={selfCheckRevision}
+          />
+        </div>
+      )}
+
+      {/* TAB 2: PREPARATION, PATH, CALENDAR, DIAGNOSTICS & KNOWLEDGE BASE */}
+      {cabinetTab === 'preparation' && (
+        <div className="space-y-6">
+          <AttestationPathWidget
+            user={user}
+            summary={effectiveProgressSummary}
+            inquiries={inquiries}
+            examDateIso={selectedExamDate}
+            contour={selectedContour}
+            onSelectStageInChecklist={(stageId) => {
+              setExternalSelectedStage((prev) => ({
+                stageId,
+                nonce: (prev?.nonce ?? 0) + 1,
+              }));
+              scrollToElementById('attestation-progress-details');
+            }}
+            onOpenApplication={() => scrollToElementById('attestation-sessions-calendar')}
+            onJumpToRoadmap={() => scrollToElementById('personal-roadmap-widget')}
+            onJumpToPassport={() =>
+              navigateCabinetTarget('documents', 'instructor-digital-passport')
+            }
+          />
+
+          <AttestationProgressWidget
+            user={user}
+            inquiries={inquiries}
+            inquiriesLoading={inquiriesLoading}
+            selectedExamDate={selectedExamDate}
+            externalSelectedStage={externalSelectedStage}
+            onSummaryChange={setLiveProgressSummary}
+            onRefreshInquiries={
+              hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
+            }
+            onOpenApplication={onNavigate ? () => onNavigate('overview') : undefined}
+          />
+
+          <PersonalRoadmapWidget
+            user={user}
+            summary={effectiveProgressSummary}
+            onExamDateChange={setSelectedExamDate}
+            onContourChange={setSelectedContour}
+          />
+
+          <AttestationSessionsCalendarWidget
+            user={user}
+            inquiries={inquiries}
+            selectedExamDate={selectedExamDate}
+            linkedAccounts={linkedAccounts}
+            autofill={examAutofill}
+            externalReattestationPrefill={reattestationPrefill}
+            onSelectAutofillSource={(provider) => void handleSelectAutofillSource(provider)}
+            onJumpToLinkedAccounts={() =>
+              navigateCabinetTarget('profile', 'account-linked-profiles')
+            }
+            onSelectExamDate={setSelectedExamDate}
+            onSessionBooked={(sessionDateIso) => {
+              setSelectedExamDate(sessionDateIso);
+              if (hasPermission(user, 'inquiries:view_own')) {
+                void loadInquiries();
+              }
+            }}
+            onJumpToInquiries={() =>
+              navigateCabinetTarget('profile', 'my-inquiries-status-table')
+            }
+          />
+
+          <QualificationSelfCheckWidget
+            user={user}
+            onChange={() => setSelfCheckRevision((n) => n + 1)}
+            onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
+            onJumpToConsultant={() =>
+              openAiAssistant('Помогите разобраться с пробелами по итогам самопроверки.')
+            }
+          />
+
+          <AttestationSelfDiagnosticsWidget
+            user={user}
+            onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
+            onJumpToConsultant={(prompt) => openAiAssistant(prompt)}
+            onJumpToSelfCheck={() => scrollToElementById('qualification-self-check')}
+            onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
+          />
+
+          <PersonalLearningPlanWidget
+            user={user}
+            selfCheckRevision={selfCheckRevision}
+            selectedContour={selectedContour}
+            onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
+          />
+
+          <AccountKnowledgeBaseWidget
+            user={user}
+            externalSearch={kbExternalSearch}
+            onNavigate={onNavigate}
+            onJumpToChecklist={() => scrollToElementById('qualification-self-check')}
+            onJumpToConsultant={() => openAiAssistant()}
+          />
+
+          <FavoriteLiteratureCabinetWidget
+            userId={user.id}
+            onOpenOverviewLibrary={
+              onNavigate
+                ? () => {
+                    onNavigate('learning');
+                    window.setTimeout(() => {
+                      document
+                        .getElementById('recommended-literature')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 240);
+                  }
+                : undefined
+            }
+          />
+        </div>
+      )}
+
+      {/* TAB 3: EXPERIENCE JOURNAL & OFFICIAL DOCUMENTS */}
+      {cabinetTab === 'documents' && (
+        <div className="space-y-6">
+          <InstructorPassportCard
+            user={user}
+            summary={effectiveProgressSummary}
+            inquiries={inquiries}
+            selfCheckRevision={selfCheckRevision}
+          />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ProfileAttestationCertificateCard
+              user={user}
+              summary={effectiveProgressSummary}
+              inquiries={inquiries}
+              selectedExamDate={selectedExamDate}
+              selectedContour={selectedContour}
+              onJumpToProfile={() => navigateCabinetTarget('profile', 'account-profile-card')}
+            />
+            <PreparationChecklistPdfCard
+              user={user}
+              summary={effectiveProgressSummary}
+              inquiries={inquiries}
+              selectedContour={selectedContour}
+            />
+          </div>
+
+          <InstructorResumeGeneratorCard
+            user={user}
+            summary={effectiveProgressSummary}
+            inquiries={inquiries}
+            selfCheckRevision={selfCheckRevision}
+            selectedContour={selectedContour}
+            onJumpToProfile={() => navigateCabinetTarget('profile', 'account-profile-card')}
+            onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
+          />
+
+          <QualificationCertificatesJsonExportCard
+            user={user}
+            summary={effectiveProgressSummary}
+            inquiries={inquiries}
+            linkedAccounts={linkedAccounts}
+            selectedExamDate={selectedExamDate}
+            selectedContour={selectedContour}
+            selfCheckRevision={selfCheckRevision}
+          />
+
+          <ProfessionalExperienceLogCard user={user} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <RouteComplexityPieWidget
+              user={user}
+              onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+            />
+            <RouteComplexityForecastCard
+              user={user}
+              onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: COMMUNITY, ACHIEVEMENTS, LEADERBOARD & REVIEWS */}
+      {cabinetTab === 'community' && (
+        <div className="space-y-6">
+          <SocialProfileSection
+            userId={user.id}
+            currentUserId={user.id}
+            permissions={user.permissions}
+          />
+
+          <InstructorAchievementsWidget
+            user={user}
+            summary={achievementsSummary}
+            onActionJump={jumpToAchievementAction}
+          />
+
+          <DfoGuidesLeaderboardWidget
+            currentUserId={user.id}
+            currentUserRegion={user.region}
+          />
+
+          <InstructorReviewsSection
+            user={user}
+            progressSummary={effectiveProgressSummary}
+            inquiries={inquiries}
+            refreshKey={reviewsRefreshKey}
+            onReviewSubmitted={() => setReviewsRefreshKey((k) => k + 1)}
+            onJumpToProgress={() =>
+              navigateCabinetTarget('preparation', 'attestation-progress-widget')
+            }
+          />
+
+          <ReviewStatsWidget refreshKey={reviewsRefreshKey} />
+        </div>
+      )}
 
       {finalCertPreviewOpen && finalCertResult && (
         <div
@@ -1042,9 +1155,9 @@ function AuthPanel({
     <section
       id="account-auth-panel"
       aria-labelledby="account-auth-heading"
-      className="bg-white border border-slate-200 rounded-xl p-8 scroll-mt-24"
+      className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 scroll-mt-24"
     >
-      <div className="max-w-md mx-auto space-y-6">
+      <div className="space-y-6">
         <div className="space-y-2 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal-50 border border-teal-200">
             <UserRound className="w-6 h-6 text-teal-700" aria-hidden="true" />
@@ -1153,7 +1266,10 @@ function AuthPanel({
           )}
 
           {error && (
-            <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p
+              role="alert"
+              className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+            >
               {error}
             </p>
           )}
@@ -1208,66 +1324,44 @@ function Field({
   );
 }
 
-// ── Cabinet header ──────────────────────────────────────────────────────────
+// ── Streamlined Cabinet Header + 4-Tab Workspace Navigation ─────────────────
 
 function CabinetHeader({
   user,
+  cabinetTab,
+  onSelectCabinetTab,
   achievementsSummary,
   isAttestationComplete,
   certificateBusy,
   onDownloadCertificate,
+  backupBusy,
+  onDownloadBackup,
   onLogout,
-  onJumpToCalendar,
-  onJumpToExpiryMonitor,
-  onJumpToLinkedProfiles,
-  onJumpToDiagnostics,
-  onJumpToLearningPlan,
-  onJumpToAnalytics,
-  onJumpToPassport,
-  onJumpToResume,
-  onJumpToExperienceLog,
-  onJumpToAchievements,
-  onJumpToCertificateGenerator,
-  onJumpToChecklistPdf,
-  onJumpToJsonExport,
-  onJumpToFaq,
-  onJumpToReviews,
 }: {
   user: SessionUser;
+  cabinetTab: CabinetTab;
+  onSelectCabinetTab: (tab: CabinetTab) => void;
   achievementsSummary: InstructorAchievementsSummary;
   isAttestationComplete: boolean;
   certificateBusy: boolean;
   onDownloadCertificate: () => void;
+  backupBusy: boolean;
+  onDownloadBackup: () => void;
   onLogout: () => void;
-  onJumpToCalendar: () => void;
-  onJumpToExpiryMonitor: () => void;
-  onJumpToLinkedProfiles: () => void;
-  onJumpToDiagnostics: () => void;
-  onJumpToLearningPlan: () => void;
-  onJumpToAnalytics: () => void;
-  onJumpToPassport: () => void;
-  onJumpToResume: () => void;
-  onJumpToExperienceLog: () => void;
-  onJumpToAchievements: () => void;
-  onJumpToCertificateGenerator: () => void;
-  onJumpToChecklistPdf: () => void;
-  onJumpToJsonExport: () => void;
-  onJumpToFaq: () => void;
-  onJumpToReviews: () => void;
 }) {
   const featuredProfileBadges = achievementsSummary.featuredBadges.slice(0, 4);
 
   return (
-    <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+    <section className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-teal-50 border border-teal-200 flex items-center justify-center shrink-0">
             <UserRound className="w-7 h-7 text-teal-700" aria-hidden="true" />
           </div>
           <div className="space-y-1">
-            <h2 className="text-xl font-bold text-slate-900">{user.fullName}</h2>
+            <h1 className="text-xl font-bold text-slate-900">{user.fullName}</h1>
             <p className="text-sm text-slate-600">{user.email}</p>
-            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-slate-600">
               <span className="inline-flex items-center gap-1.5 font-semibold text-teal-800">
                 <ShieldCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span>{ROLE_LABELS[user.role]}</span>
@@ -1277,7 +1371,7 @@ function CabinetHeader({
               <span aria-hidden="true">·</span>
               <button
                 type="button"
-                onClick={onJumpToAchievements}
+                onClick={() => onSelectCabinetTab('community')}
                 className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-teal-800 hover:text-teal-950 cursor-pointer tabular-nums"
               >
                 <Trophy className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
@@ -1304,137 +1398,13 @@ function CabinetHeader({
 
           <button
             type="button"
-            onClick={onJumpToCalendar}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+            onClick={onDownloadBackup}
+            disabled={backupBusy}
+            title="Скачать полную резервную копию данных кабинета (статистика, ачивки, история походов) в JSON"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-60 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
           >
-            <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Календарь аттестаций</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToExpiryMonitor}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <CalendarClock className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Срок аттестации</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToLinkedProfiles}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <Link2 className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Связанные профили</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToDiagnostics}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <GraduationCap className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Самодиагностика</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToLearningPlan}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <GraduationCap className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>План обучения</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToPassport}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-          >
-            <FileBadge2 className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
-            <span>Цифровой паспорт</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToResume}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <Briefcase className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Резюме PDF</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToExperienceLog}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <Compass className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Журнал опыта</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToAchievements}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <Trophy className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
-            <span>Достижения ({achievementsSummary.unlockedCount})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToCertificateGenerator}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <Award className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Сертификат PDF</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToChecklistPdf}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <FileCheck2 className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Чек-лист PDF</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToJsonExport}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <FileJson className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Экспорт JSON</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToAnalytics}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <BarChart3 className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Аналитика и рейтинг</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToReviews}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <MessageSquareText className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
-            <span>Отзывы</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onJumpToFaq}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold rounded-lg hover:bg-teal-100 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
-          >
-            <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>FAQ</span>
+            <DatabaseBackup className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            <span>{backupBusy ? 'Экспорт…' : 'Резервная копия JSON'}</span>
           </button>
 
           <button
@@ -1446,6 +1416,35 @@ function CabinetHeader({
             <span>Выйти</span>
           </button>
         </div>
+      </div>
+
+      {/* 4 Clean Workspace Section Tabs */}
+      <div
+        role="tablist"
+        aria-label="Разделы личного кабинета"
+        className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-lg"
+      >
+        {CABINET_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const active = cabinetTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSelectCabinetTab(tab.id)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+                active
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {featuredProfileBadges.length > 0 && (
@@ -1460,7 +1459,7 @@ function CabinetHeader({
                 <button
                   key={badge.id}
                   type="button"
-                  onClick={onJumpToAchievements}
+                  onClick={() => onSelectCabinetTab('community')}
                   title={badge.description}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-xs font-medium text-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
@@ -1478,7 +1477,7 @@ function CabinetHeader({
           {achievementsSummary.unlockedCount > featuredProfileBadges.length && (
             <button
               type="button"
-              onClick={onJumpToAchievements}
+              onClick={() => onSelectCabinetTab('community')}
               className="text-xs font-semibold text-teal-800 hover:text-teal-950 whitespace-nowrap shrink-0 cursor-pointer"
             >
               + ещё {achievementsSummary.unlockedCount - featuredProfileBadges.length}
@@ -1622,7 +1621,10 @@ function ProfileCard({
         </Field>
 
         {error && (
-          <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <p
+            role="alert"
+            className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+          >
             {error}
           </p>
         )}
@@ -1639,7 +1641,7 @@ function ProfileCard({
             </button>
             {status === 'saved' && (
               <span className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700">
-                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                <ShieldCheck className="w-4 h-4" aria-hidden="true" />
                 Изменения сохранены
               </span>
             )}
@@ -1676,7 +1678,6 @@ function PasswordCard({ onChanged }: { onChanged: () => void }) {
     try {
       await identityApi.changePassword({ currentPassword, newPassword });
       tracker.trackCustomInteraction('Смена пароля', 'account');
-      // The server invalidates all sessions, so the UI must sign out too.
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось изменить пароль.');
@@ -1718,7 +1719,10 @@ function PasswordCard({ onChanged }: { onChanged: () => void }) {
         </Field>
 
         {error && (
-          <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <p
+            role="alert"
+            className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+          >
             {error}
           </p>
         )}
@@ -1819,7 +1823,10 @@ function UserAdminCard({ currentUserId }: { currentUserId: string }) {
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+        <p
+          role="alert"
+          className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+        >
           {error}
         </p>
       )}
@@ -1849,7 +1856,6 @@ function UserAdminCard({ currentUserId }: { currentUserId: string }) {
                   </span>
                 </div>
 
-                {/* Compact per-user attestation progress bar */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-600">
                     <span className="truncate">

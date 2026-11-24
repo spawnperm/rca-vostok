@@ -1,46 +1,34 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { Bell, ChevronLeft, ChevronRight, GitBranch, Menu, UserRound, X } from 'lucide-react';
-import { ApiStatusIndicator } from './components/ApiStatusIndicator';
+import {
+  ArrowRight,
+  BarChart3,
+  Bell,
+  ChevronLeft,
+  ChevronRight,
+  Compass,
+  GitBranch,
+  HelpCircle,
+  Menu,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { Breadcrumbs } from './components/Breadcrumbs';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GitSyncModal } from './components/GitSyncModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import { RcaAssistantChatWidget } from './components/RcaAssistantChatWidget';
 import {
-  LandingHero,
-  LearningSection,
-  PreparationSection,
   CertificationSection,
   ConsultingSection,
   ContactsSection,
+  HelpAndContactsWorkspace,
+  LandingHero,
+  LearningSection,
 } from './components/landing/LandingSections';
-import { NewsSection, RoutesSection } from './components/landing/NewsAndRoutes';
-import { FAQSection } from './components/landing/FAQSection';
-import { LANDING_SECTIONS } from './data/landingContent';
+import { RoutesAndNewsWorkspace } from './components/landing/NewsAndRoutes';
 import { applySectionSeo, SECTION_SEO_MAP, type SiteTabId } from './utils/seo';
 import { tracker } from './utils/tracker';
 
-/**
- * Heavy platform sections are split out of the entry chunk.
- *
- * The landing page is what every visitor loads, so it stays in the initial
- * bundle; the analytical sections (charts, presentations, the cabinet) are only
- * fetched when their tab is opened. Before this split the whole application —
- * including Recharts and every analytical page — shipped as one 1.2 MB chunk
- * that had to be parsed before the landing could render.
- */
-/**
- * Lazy import that survives a deploy.
- *
- * Vite emits hashed chunk names, so a tab left open across a release holds an
- * index.html referencing chunks that no longer exist. The import then fails,
- * and without handling, ErrorBoundary shows "Не удалось отобразить текущий
- * блок" — which reads like a broken feature rather than a stale page.
- *
- * On failure this reloads once (a fresh index.html points at the current
- * chunks). A sessionStorage flag stops a reload loop if the chunk is genuinely
- * missing, in which case the error propagates and the boundary explains it.
- */
 function lazyWithReload<T>(
   factory: () => Promise<T>,
   key: string
@@ -53,8 +41,6 @@ function lazyWithReload<T>(
       if (!sessionStorage.getItem(flag)) {
         sessionStorage.setItem(flag, '1');
         window.location.reload();
-        // Return a never-resolving promise so React does not render an error
-        // while the page is navigating away.
         return new Promise<T>(() => {});
       }
       sessionStorage.removeItem(flag);
@@ -63,40 +49,53 @@ function lazyWithReload<T>(
   };
 }
 
-const OverviewSection = lazy(lazyWithReload(
-  () => import('./components/OverviewSection').then((m) => ({ default: m.OverviewSection })),
-  'OverviewSection'
-)
+const OverviewSection = lazy(
+  lazyWithReload(
+    () => import('./components/OverviewSection').then((m) => ({ default: m.OverviewSection })),
+    'OverviewSection'
+  )
 );
-const CalculatorSection = lazy(lazyWithReload(
-  () => import('./components/CalculatorSection').then((m) => ({ default: m.CalculatorSection })),
-  'CalculatorSection'
-)
+const CalculatorSection = lazy(
+  lazyWithReload(
+    () => import('./components/CalculatorSection').then((m) => ({ default: m.CalculatorSection })),
+    'CalculatorSection'
+  )
 );
-const MarketSection = lazy(lazyWithReload(
-  () => import('./components/MarketSection').then((m) => ({ default: m.MarketSection })),
-  'MarketSection'
-)
+const MarketSection = lazy(
+  lazyWithReload(
+    () => import('./components/MarketSection').then((m) => ({ default: m.MarketSection })),
+    'MarketSection'
+  )
 );
-const DissertationSection = lazy(lazyWithReload(
-  () => import('./components/DissertationSection').then((m) => ({ default: m.DissertationSection })),
-  'DissertationSection'
-)
+const DissertationSection = lazy(
+  lazyWithReload(
+    () =>
+      import('./components/DissertationSection').then((m) => ({
+        default: m.DissertationSection,
+      })),
+    'DissertationSection'
+  )
 );
-const PresentationsSection = lazy(lazyWithReload(
-  () => import('./components/PresentationsSection').then((m) => ({ default: m.PresentationsSection })),
-  'PresentationsSection'
-)
+const PresentationsSection = lazy(
+  lazyWithReload(
+    () =>
+      import('./components/PresentationsSection').then((m) => ({
+        default: m.PresentationsSection,
+      })),
+    'PresentationsSection'
+  )
 );
-const AnalyticsSection = lazy(lazyWithReload(
-  () => import('./components/AnalyticsSection').then((m) => ({ default: m.AnalyticsSection })),
-  'AnalyticsSection'
-)
+const AnalyticsSection = lazy(
+  lazyWithReload(
+    () => import('./components/AnalyticsSection').then((m) => ({ default: m.AnalyticsSection })),
+    'AnalyticsSection'
+  )
 );
-const AccountSection = lazy(lazyWithReload(
-  () => import('./components/AccountSection').then((m) => ({ default: m.AccountSection })),
-  'AccountSection'
-)
+const AccountSection = lazy(
+  lazyWithReload(
+    () => import('./components/AccountSection').then((m) => ({ default: m.AccountSection })),
+    'AccountSection'
+  )
 );
 
 /** Placeholder shown while a lazy section is being fetched. */
@@ -116,41 +115,31 @@ function SectionFallback({ label }: { label: string }) {
   );
 }
 
-/**
- * Navigation is split in two, mirroring the product's two halves:
- *
- *   top     — the public landing, with the same sections as rca-vostok.ru
- *   sidebar — the analytical platform sections (right-hand rail)
- *
- * `home` is the landing hub: it renders the hero plus every site section.
- */
-const TOP_NAV: { id: SiteTabId; label: string }[] = [
+/** Concise 5-item primary navigation matching the consolidated site structure. */
+const TOP_NAV: readonly { id: SiteTabId; label: string; matches?: readonly SiteTabId[] }[] = [
   { id: 'home', label: 'Главная' },
-  ...LANDING_SECTIONS.map((s) => ({ id: s.id as SiteTabId, label: s.label })),
+  { id: 'learning', label: 'Обучение', matches: ['learning', 'preparation'] },
+  { id: 'certification', label: 'Аттестация' },
+  { id: 'routes', label: 'Маршруты', matches: ['routes', 'news'] },
+  { id: 'faq', label: 'FAQ и связь', matches: ['faq', 'consulting', 'contacts'] },
 ];
 
-const SIDEBAR_NAV: { id: SiteTabId; label: string }[] = [
+const SIDEBAR_NAV: readonly { id: SiteTabId; label: string }[] = [
   { id: 'overview', label: 'Обзор центра' },
   { id: 'calculator', label: 'Калькулятор' },
   { id: 'market', label: 'Рынок ДФО' },
   { id: 'dissertation', label: 'Диссертация' },
   { id: 'presentations', label: 'Презентации' },
-  { id: 'analytics', label: 'SEO и аналитика' },
+  { id: 'analytics', label: 'Аналитика и SEO' },
   { id: 'account', label: 'Личный кабинет' },
 ];
 
-/** Landing tabs are the site sections; the rest belong to the platform. */
-const LANDING_TABS = new Set<SiteTabId>([
-  'home',
-  'learning',
-  'preparation',
-  'certification',
-  'consulting',
-  'news',
-  'routes',
-  'faq',
-  'contacts',
-]);
+function isTopNavActive(item: (typeof TOP_NAV)[number], activeTab: SiteTabId): boolean {
+  if (item.matches) {
+    return item.matches.includes(activeTab);
+  }
+  return activeTab === item.id;
+}
 
 function getInitialTab(): SiteTabId {
   try {
@@ -167,7 +156,6 @@ function getInitialTab(): SiteTabId {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<SiteTabId>(getInitialTab);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
@@ -204,14 +192,11 @@ export default function App() {
 
   const navigateTo = (tab: SiteTabId) => {
     setActiveTab(tab);
-    setMobileMenuOpen(false);
     setMobileSidebarOpen(false);
     tracker.trackTabChange(tab, SECTION_SEO_MAP[tab].name);
 
     const nextUrl =
-      tab === 'overview'
-        ? window.location.pathname
-        : `${window.location.pathname}?tab=${tab}`;
+      tab === 'home' ? window.location.pathname : `${window.location.pathname}?tab=${tab}`;
     window.history.pushState({ tab }, '', nextUrl);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -220,33 +205,21 @@ export default function App() {
   const scrollToSection = (id: string) => {
     if (activeTab !== 'home') {
       setActiveTab('home');
-      window.history.pushState({ tab: 'home' }, '', `${window.location.pathname}?tab=home`);
+      window.history.pushState({ tab: 'home' }, '', window.location.pathname);
     }
-    // Wait for the section to mount before scrolling.
     window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const target = document.getElementById(id);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (id in SECTION_SEO_MAP) {
+        navigateTo(id as SiteTabId);
+      }
     }, 60);
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
-      {mapsQuotaExceeded && (
-        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
-          <span>
-            Google Maps Platform quota reached. If you are the app owner, visit{' '}
-            <a
-              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline font-semibold text-amber-950 hover:text-amber-800"
-            >
-              maps developer site
-            </a>{' '}
-            for instructions to update your account.
-          </span>
-        </div>
-      )}
-      {/* Top bar: brand, public landing sections, account action */}
+      {/* Top bar: strict 3-zone layout (Brand | 5 primary links | utility actions) */}
       <header className="no-print sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-slate-200">
         <div className="max-w-[1400px] mx-auto px-6 h-16 flex items-center justify-between gap-6">
           <button
@@ -257,9 +230,9 @@ export default function App() {
             РЦА «Русский Восток»
           </button>
 
-          <nav aria-label="Разделы сайта" className="hidden lg:flex items-center gap-4 xl:gap-5">
+          <nav aria-label="Разделы сайта" className="hidden lg:flex items-center gap-6">
             {TOP_NAV.map((item) => {
-              const active = activeTab === item.id;
+              const active = isTopNavActive(item, activeTab);
               return (
                 <button
                   key={item.id}
@@ -311,8 +284,6 @@ export default function App() {
               <span className="hidden sm:inline">Кабинет</span>
             </button>
 
-            <ApiStatusIndicator />
-
             {/* Sidebar toggle doubles as the platform menu on small screens. */}
             <button
               type="button"
@@ -328,15 +299,15 @@ export default function App() {
 
         {/* Landing navigation on narrow screens */}
         <div className="lg:hidden border-t border-slate-200 bg-white px-4 py-2 overflow-x-auto">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-5">
             {TOP_NAV.map((item) => {
-              const active = activeTab === item.id;
+              const active = isTopNavActive(item, activeTab);
               return (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => navigateTo(item.id)}
-                  className={`py-1.5 text-sm font-medium whitespace-nowrap border-b-2 cursor-pointer ${
+                  className={`py-1.5 text-sm font-medium whitespace-nowrap shrink-0 border-b-2 cursor-pointer ${
                     active
                       ? 'text-teal-800 border-teal-700'
                       : 'text-slate-600 border-transparent'
@@ -355,39 +326,112 @@ export default function App() {
       {/* Body: content + right-hand platform sidebar */}
       <div className="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 pt-6 pb-8 flex gap-6">
         <main className="flex-1 min-w-0">
+          {mapsQuotaExceeded && (
+            <div className="mb-6 bg-amber-50 border border-amber-200 text-amber-900 px-4 py-2.5 rounded-xl text-xs">
+              Интерактивный слой Google Maps временно переключён в резервный режим из-за квоты API;
+              доступны картографические слои ДФО и Приморья без потери данных.
+            </div>
+          )}
+
           <ErrorBoundary onReset={() => navigateTo('home')}>
             {activeTab === 'home' && (
-              <div className="space-y-16">
-                <LandingHero onNavigate={scrollToSection} />
-                <LearningSection />
-                <PreparationSection />
-                <CertificationSection />
+              <div className="space-y-14">
+                <LandingHero onNavigate={scrollToSection} onNavigateTab={navigateTo} />
+
+                <div className="space-y-4">
+                  <LearningSection compact />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => navigateTo('learning')}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800 hover:text-teal-950 whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      <span>Открыть тренажёр экзамена ФСТР, библиотеку и глоссарий</span>
+                      <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <CertificationSection compact />
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => navigateTo('certification')}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800 hover:text-teal-950 whitespace-nowrap shrink-0 cursor-pointer"
+                    >
+                      <span>Календарь комиссий ДФО, карта площадок и реестр ФСТР</span>
+                      <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+
                 <ConsultingSection />
-                <NewsSection />
-                <RoutesSection />
-                <FAQSection
-                  onNavigateToContacts={() => scrollToSection('contacts')}
-                  onNavigateToCertification={() => scrollToSection('certification')}
-                />
+
+                {/* Quick portal directory for Routes, FAQ, and Analytical Platform */}
+                <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('routes')}
+                    className="text-left bg-white border border-slate-200 rounded-xl p-5 space-y-2 hover:border-teal-300 transition-colors cursor-pointer"
+                  >
+                    <Compass className="w-5 h-5 text-teal-700" aria-hidden="true" />
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Маршруты и новости отрасли
+                    </h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Обеспеченность проводниками по 8 округам Приморья, сезонность и обновления
+                      НПА.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('faq')}
+                    className="text-left bg-white border border-slate-200 rounded-xl p-5 space-y-2 hover:border-teal-300 transition-colors cursor-pointer"
+                  >
+                    <HelpCircle className="w-5 h-5 text-teal-700" aria-hidden="true" />
+                    <h3 className="text-sm font-bold text-slate-900">Частые вопросы (FAQ)</h3>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Порядок допуска, зачёт стажа (Контур А), стоимость ДПО ВВГУ и экспорт
+                      справочника в PDF.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('overview')}
+                    className="text-left bg-slate-900 text-white border border-slate-900 rounded-xl p-5 space-y-2 hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <BarChart3 className="w-5 h-5 text-teal-300" aria-hidden="true" />
+                    <h3 className="text-sm font-bold">Аналитическая платформа ДФО</h3>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Модель дефицита кадров до 2030 года, геоаналитика, смета и диссертация ВАК
+                      5.2.3.
+                    </p>
+                  </button>
+                </section>
+
                 <ContactsSection />
               </div>
             )}
-            {activeTab === 'learning' && <LearningSection />}
-            {activeTab === 'preparation' && <PreparationSection />}
-            {activeTab === 'certification' && <CertificationSection />}
-            {activeTab === 'consulting' && <ConsultingSection />}
-            {activeTab === 'news' && <NewsSection />}
-            {activeTab === 'routes' && <RoutesSection />}
-            {activeTab === 'faq' && (
-              <FAQSection
-                onNavigateToContacts={() => navigateTo('contacts')}
-                onNavigateToCertification={() => navigateTo('certification')}
-              />
-            )}
-            {activeTab === 'contacts' && <ContactsSection />}
 
-            {/* Lazy sections need a boundary per tab so switching tabs shows a
-                placeholder instead of suspending the whole page. */}
+            {activeTab === 'learning' && <LearningSection />}
+            {activeTab === 'preparation' && <LearningSection initialSubTab="exam" />}
+            {activeTab === 'certification' && <CertificationSection />}
+            {activeTab === 'routes' && <RoutesAndNewsWorkspace initialSubTab="routes" />}
+            {activeTab === 'news' && <RoutesAndNewsWorkspace initialSubTab="news" />}
+            {activeTab === 'faq' && (
+              <HelpAndContactsWorkspace initialSubTab="faq" onNavigateTab={navigateTo} />
+            )}
+            {activeTab === 'consulting' && (
+              <HelpAndContactsWorkspace initialSubTab="consulting" onNavigateTab={navigateTo} />
+            )}
+            {activeTab === 'contacts' && (
+              <HelpAndContactsWorkspace initialSubTab="contacts" onNavigateTab={navigateTo} />
+            )}
+
+            {/* Lazy analytical platform sections */}
             <Suspense fallback={<SectionFallback label={SECTION_SEO_MAP[activeTab].name} />}>
               {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
               {activeTab === 'calculator' && <CalculatorSection />}
@@ -557,7 +601,7 @@ export default function App() {
               onClick={() => navigateTo('analytics')}
               className="hover:text-slate-900 transition-colors cursor-pointer"
             >
-              SEO и статистика
+              Аналитика, SEO и API
             </button>
             <span aria-hidden="true">·</span>
             <span>Специальность ВАК 5.2.3 (область 4.15)</span>

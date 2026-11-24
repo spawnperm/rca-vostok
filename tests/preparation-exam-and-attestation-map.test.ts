@@ -3,7 +3,9 @@ import test from 'node:test';
 import {
   DFO_ATTESTATION_LOCATIONS,
   buildAttestationGoogleMapsUrl,
+  buildAttestationYandexMapsUrl,
   filterAttestationLocations,
+  getDfoRegionFilterOptions,
   sortAttestationLocationsForStacking,
 } from '../src/utils/attestationLocationsMap.ts';
 import {
@@ -29,10 +31,11 @@ test('DFO_ATTESTATION_LOCATIONS contains valid DFO coordinates, trial formats, a
     assert.ok(loc.trialFormats.length >= 2);
     assert.ok(loc.address.length > 5);
     assert.ok(buildAttestationGoogleMapsUrl(loc).startsWith('https://www.google.com/maps/search/'));
+    assert.ok(buildAttestationYandexMapsUrl(loc).startsWith('https://yandex.ru/maps/?pt='));
   }
 });
 
-test('filterAttestationLocations filters by kind and Cyrillic search query', () => {
+test('filterAttestationLocations filters by kind, DFO region, and Cyrillic search query', () => {
   const polygons = filterAttestationLocations(DFO_ATTESTATION_LOCATIONS, 'field_polygon');
   assert.ok(polygons.length >= 2);
   assert.ok(polygons.every((loc) => loc.kind === 'field_polygon'));
@@ -44,6 +47,37 @@ test('filterAttestationLocations filters by kind and Cyrillic search query', () 
   const hq = filterAttestationLocations(DFO_ATTESTATION_LOCATIONS, 'headquarters', 'Гоголя');
   assert.equal(hq.length, 1);
   assert.equal(hq[0].id, 'loc-vladivostok-vvgu');
+
+  const regions = getDfoRegionFilterOptions(DFO_ATTESTATION_LOCATIONS);
+  assert.equal(regions[0].id, 'all');
+  assert.equal(regions[0].count, DFO_ATTESTATION_LOCATIONS.length);
+  assert.ok(regions.length >= 7);
+
+  const primorye = filterAttestationLocations(
+    DFO_ATTESTATION_LOCATIONS,
+    'all',
+    '',
+    'Приморский край'
+  );
+  assert.equal(primorye.length, 3);
+  assert.ok(primorye.every((loc) => loc.regionName === 'Приморский край'));
+
+  const primoryePolygons = filterAttestationLocations(
+    DFO_ATTESTATION_LOCATIONS,
+    'field_polygon',
+    '',
+    'Приморский край'
+  );
+  assert.equal(primoryePolygons.length, 2);
+
+  const amur = filterAttestationLocations(
+    DFO_ATTESTATION_LOCATIONS,
+    'all',
+    '',
+    'Амурская область'
+  );
+  assert.equal(amur.length, 1);
+  assert.equal(amur[0].id, 'loc-amur-hub');
 });
 
 test('sortAttestationLocationsForStacking orders northern latitudes lower in z-index than southern ones', () => {
