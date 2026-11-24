@@ -30,6 +30,7 @@ import {
   isAttestationEligibleForCertificate,
   type FinalAttestationCertificateData,
 } from './attestationFinalCertificatePdf.ts';
+import { downloadTextFile } from './download.ts';
 
 export type JsonExportScope = 'all' | 'qualification' | 'certificates';
 
@@ -302,16 +303,6 @@ export function downloadQualificationCertificatesJson(
 ): { fileName: string; jsonContent: string } {
   const jsonContent = buildQualificationCertificatesJsonString(payload, scope, options);
   const fileName = buildQualificationCertificatesFileName(payload, scope);
-  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-
+  downloadTextFile(jsonContent, fileName, 'application/json;charset=utf-8');
   return { fileName, jsonContent };
 }

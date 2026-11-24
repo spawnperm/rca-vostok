@@ -25,6 +25,69 @@ export interface SectionSeoMeta {
   pathQuery: string;
 }
 
+export interface NavigateOptions {
+  subTab?: string;
+  anchor?: string;
+}
+
+export interface SitemapRouteMeta {
+  tab: SiteTabId;
+  slug: string;
+  priority: string;
+  changefreq: 'daily' | 'weekly' | 'monthly';
+}
+
+export const PUBLIC_SITEMAP_ROUTES: readonly SitemapRouteMeta[] = [
+  { tab: 'home', slug: '', priority: '1.0', changefreq: 'weekly' },
+  { tab: 'learning', slug: '?tab=learning', priority: '0.9', changefreq: 'weekly' },
+  { tab: 'preparation', slug: '?tab=preparation', priority: '0.8', changefreq: 'weekly' },
+  { tab: 'certification', slug: '?tab=certification', priority: '0.9', changefreq: 'weekly' },
+  { tab: 'routes', slug: '?tab=routes', priority: '0.8', changefreq: 'weekly' },
+  { tab: 'news', slug: '?tab=news', priority: '0.8', changefreq: 'weekly' },
+  { tab: 'consulting', slug: '?tab=consulting', priority: '0.7', changefreq: 'monthly' },
+  { tab: 'faq', slug: '?tab=faq', priority: '0.8', changefreq: 'monthly' },
+  { tab: 'contacts', slug: '?tab=contacts', priority: '0.7', changefreq: 'monthly' },
+  { tab: 'overview', slug: '?tab=overview', priority: '0.9', changefreq: 'weekly' },
+  { tab: 'calculator', slug: '?tab=calculator', priority: '0.9', changefreq: 'monthly' },
+  { tab: 'market', slug: '?tab=market', priority: '0.9', changefreq: 'monthly' },
+  { tab: 'dissertation', slug: '?tab=dissertation', priority: '0.8', changefreq: 'monthly' },
+  { tab: 'presentations', slug: '?tab=presentations', priority: '0.8', changefreq: 'monthly' },
+  { tab: 'analytics', slug: '?tab=analytics', priority: '0.6', changefreq: 'daily' },
+];
+
+export function parseRouteFromSearch(search: string): {
+  tab: SiteTabId;
+  subTab?: string;
+} {
+  try {
+    const params = new URLSearchParams(search);
+    const rawTab = params.get('tab') as SiteTabId | null;
+    const rawSub = params.get('sub')?.trim() || undefined;
+    if (rawTab && rawTab in SECTION_SEO_MAP) {
+      return { tab: rawTab, subTab: rawSub };
+    }
+  } catch {
+    // ignore malformed query strings
+  }
+  return { tab: 'home', subTab: undefined };
+}
+
+export function buildRouteUrl(
+  pathname: string,
+  tab: SiteTabId,
+  subTab?: string
+): string {
+  const params = new URLSearchParams();
+  if (tab !== 'home') {
+    params.set('tab', tab);
+  }
+  if (subTab && subTab.trim()) {
+    params.set('sub', subTab.trim());
+  }
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export const SECTION_SEO_MAP: Record<SiteTabId, SectionSeoMeta> = {
   // ── Public landing sections (content mirrors rca-vostok.ru) ──────────────
   home: {

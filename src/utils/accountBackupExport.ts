@@ -45,6 +45,7 @@ import {
   readNotificationSubscriptionPrefs,
   type NotificationSubscriptionPrefs,
 } from './notificationSubscriptions.ts';
+import { downloadTextFile } from './download.ts';
 
 export const ACCOUNT_BACKUP_SCHEMA_VERSION = 'rca-vostok.account-backup.v1' as const;
 
@@ -469,19 +470,9 @@ export function downloadAccountBackupJson(
 ): { fileName: string; byteSize: number; formattedSize: string } {
   const fileName = buildAccountBackupFileName(payload, scope);
   const jsonText = serializeAccountBackupJson(payload, scope, options);
-  const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8;' });
-  const byteSize = blob.size;
+  const { byteSize } = downloadTextFile(jsonText, fileName, 'application/json;charset=utf-8;');
   const formattedSize =
     byteSize >= 1024 ? `${(byteSize / 1024).toFixed(1)} КБ` : `${byteSize} Б`;
-
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 
   return { fileName, byteSize, formattedSize };
 }

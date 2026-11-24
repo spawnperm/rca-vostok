@@ -421,17 +421,30 @@ export function RoutesSection() {
   );
 }
 
+function resolveRoutesSubTab(sub?: string): 'routes' | 'news' {
+  return sub === 'news' ? 'news' : 'routes';
+}
+
 /** Unified «Маршруты и новости» tab for the top navigation. */
 export function RoutesAndNewsWorkspace({
   initialSubTab = 'routes',
+  onSubTabChange,
 }: {
-  initialSubTab?: 'routes' | 'news';
+  initialSubTab?: string;
+  onSubTabChange?: (subTab: string) => void;
 }) {
-  const [subTab, setSubTab] = useState<'routes' | 'news'>(initialSubTab);
+  const [subTab, setSubTab] = useState<'routes' | 'news'>(() =>
+    resolveRoutesSubTab(initialSubTab)
+  );
 
   useEffect(() => {
-    setSubTab(initialSubTab);
+    setSubTab(resolveRoutesSubTab(initialSubTab));
   }, [initialSubTab]);
+
+  const selectSubTab = (next: 'routes' | 'news') => {
+    setSubTab(next);
+    onSubTabChange?.(next);
+  };
 
   return (
     <div className="space-y-8">
@@ -454,7 +467,7 @@ export function RoutesAndNewsWorkspace({
             role="tab"
             aria-selected={subTab === 'routes'}
             onClick={() => {
-              setSubTab('routes');
+              selectSubTab('routes');
               tracker.trackCustomInteraction('Маршруты и новости · Маршруты и погода', 'routes');
             }}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
@@ -470,7 +483,7 @@ export function RoutesAndNewsWorkspace({
             role="tab"
             aria-selected={subTab === 'news'}
             onClick={() => {
-              setSubTab('news');
+              selectSubTab('news');
               tracker.trackCustomInteraction('Маршруты и новости · Новости и НПА', 'news');
             }}
             className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${

@@ -3,6 +3,11 @@ import {
   type CertifiedGuideRecord,
   type GuideTrack,
 } from '../domain/certification/GuideLeaderboard.ts';
+import {
+  formatDateIsoUtc,
+  formatDateRuUtc,
+  parseIsoDateUtc,
+} from './format.ts';
 
 export type CertificateValidityFilter =
   | 'all'
@@ -38,31 +43,6 @@ export interface CertifiedGuidesRegistryFilter {
 }
 
 const VALIDITY_PERIOD_YEARS = 5;
-
-function parseIsoDateUtc(isoDate: string): Date {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate.trim());
-  if (!match) {
-    return new Date(Date.UTC(2026, 0, 1));
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  return new Date(Date.UTC(year, month, day));
-}
-
-function formatDateRuUtc(dt: Date): string {
-  const d = String(dt.getUTCDate()).padStart(2, '0');
-  const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
-  const y = dt.getUTCFullYear();
-  return `${d}.${m}.${y}`;
-}
-
-function formatDateIsoUtc(dt: Date): string {
-  const d = String(dt.getUTCDate()).padStart(2, '0');
-  const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
-  const y = dt.getUTCFullYear();
-  return `${y}-${m}-${d}`;
-}
 
 export function computeValidUntilDate(lastAttestationDate: string): Date {
   const issued = parseIsoDateUtc(lastAttestationDate);

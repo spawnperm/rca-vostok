@@ -1,3 +1,5 @@
+import { downloadTextFile } from './download.ts';
+
 export type CalendarEventKind = 'session' | 'webinar';
 
 export interface AttestationCalendarEvent {
@@ -368,7 +370,7 @@ export function filterAttestationCalendarEvents(
   });
 }
 
-function escapeIcsText(value: string): string {
+export function escapeIcsText(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
     .replace(/\r?\n/g, '\\n')
@@ -376,7 +378,7 @@ function escapeIcsText(value: string): string {
     .replace(/;/g, '\\;');
 }
 
-function formatIcsUtcTimestamp(date: Date): string {
+export function formatIcsUtcTimestamp(date: Date): string {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, '0');
   const d = String(date.getUTCDate()).padStart(2, '0');
@@ -457,18 +459,8 @@ export function downloadCalendarIcs(
   reminderMinutesBefore = 1440
 ): string {
   const ics = buildIcsEventContent(event, reminderMinutesBefore);
-  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
   const fileName = `RCA_Vostok_${event.startDateIso}_${event.id}.ics`;
-
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-
+  downloadTextFile(ics, fileName, 'text/calendar;charset=utf-8');
   return fileName;
 }
 

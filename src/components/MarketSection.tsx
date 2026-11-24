@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, BarChart3, Compass, FileDown, Map, ShieldAlert } from 'lucide-react';
 import {
   BOTTLENECKS,
@@ -7,7 +7,7 @@ import {
   RECOMMENDATIONS,
 } from '../data/researchData';
 import { exportMarketAnalyticsPdf } from '../utils/analyticsPdfReports';
-import type { SiteTabId } from '../utils/seo';
+import type { NavigateOptions, SiteTabId } from '../utils/seo';
 import { tracker } from '../utils/tracker';
 import { DfoMultiRegionConcentrationChart } from './DfoMultiRegionConcentrationChart';
 import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
@@ -32,12 +32,33 @@ const MARKET_TABS: {
   { id: 'strategy', label: 'Сегменты, риски и 7 мер', Icon: ShieldAlert },
 ];
 
-interface MarketSectionProps {
-  onNavigate?: (tab: SiteTabId) => void;
+const VALID_MARKET_TABS = new Set<MarketTabId>(['geo', 'demand', 'strategy']);
+
+function resolveMarketTab(sub?: string): MarketTabId {
+  if (sub && VALID_MARKET_TABS.has(sub as MarketTabId)) {
+    return sub as MarketTabId;
+  }
+  return 'geo';
 }
 
-export const MarketSection: React.FC<MarketSectionProps> = ({ onNavigate }) => {
-  const [marketTab, setMarketTab] = useState<MarketTabId>('geo');
+interface MarketSectionProps {
+  initialSubTab?: string;
+  onSubTabChange?: (subTab: string) => void;
+  onNavigate?: (tab: SiteTabId, options?: NavigateOptions) => void;
+}
+
+export const MarketSection: React.FC<MarketSectionProps> = ({
+  initialSubTab,
+  onSubTabChange,
+  onNavigate,
+}) => {
+  const [marketTab, setMarketTab] = useState<MarketTabId>(() => resolveMarketTab(initialSubTab));
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setMarketTab(resolveMarketTab(initialSubTab));
+    }
+  }, [initialSubTab]);
   const [geoLayer, setGeoLayer] = useState<GeoLayerId>('leaflet_dfo');
   const [demandChart, setDemandChart] = useState<DemandChartId>('concentration');
   const [selectedHorizonId, setSelectedHorizonId] = useState<string>(HORIZON_STAGES[0].id);
@@ -121,6 +142,7 @@ export const MarketSection: React.FC<MarketSectionProps> = ({ onNavigate }) => {
                 aria-selected={active}
                 onClick={() => {
                   setMarketTab(id);
+                  onSubTabChange?.(id);
                   tracker.trackCustomInteraction(`Рынок ДФО · ${label}`, 'market');
                 }}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
@@ -520,7 +542,7 @@ export const MarketSection: React.FC<MarketSectionProps> = ({ onNavigate }) => {
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => onNavigate('calculator')}
+                    onClick={() => onNavigate('calculator', { subTab: 'costs_budget' })}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <span>Калькулятор и смета</span>
@@ -528,7 +550,7 @@ export const MarketSection: React.FC<MarketSectionProps> = ({ onNavigate }) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => onNavigate('certification')}
+                    onClick={() => onNavigate('certification', { subTab: 'calendars' })}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <span>График аттестаций 2027</span>

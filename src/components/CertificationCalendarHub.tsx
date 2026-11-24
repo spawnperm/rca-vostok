@@ -4,6 +4,7 @@ import { CertificationAttestationCalendar } from './CertificationAttestationCale
 import { AttestationEventsCalendarWidget } from './AttestationEventsCalendarWidget';
 import { MarketFieldCommissionsCalendar } from './MarketFieldCommissionsCalendar';
 import { OverviewWebinarsSchedule } from './OverviewWebinarsSchedule';
+import { buildRouteUrl, type NavigateOptions, type SiteTabId } from '../utils/seo';
 import { tracker } from '../utils/tracker';
 
 type CalendarTabId = 'dfo_sessions' | 'events_commissions' | 'field_commissions' | 'webinars';
@@ -16,25 +17,25 @@ const CALENDAR_TABS: {
 }[] = [
   {
     id: 'dfo_sessions',
-    label: 'Сессии по субъектам ДФО',
-    description: 'Экзамены и очные комиссии по 7 субъектам ДФО с экспортом в Google/Яндекс/.ics',
+    label: 'Экзамены по 7 субъектам ДФО',
+    description: 'Сводный график экзаменов по 7 субъектам ДФО с экспортом в Google/Яндекс/.ics',
     Icon: CalendarDays,
   },
   {
     id: 'events_commissions',
-    label: 'Календарь комиссий и напоминания',
-    description: 'Выездные комиссии, вехи перехода и персональные напоминания по датам',
+    label: 'Календарь и напоминания',
+    description: 'Контрольные вехи перехода и персональные напоминания по датам сессий',
     Icon: MapPin,
   },
   {
     id: 'field_commissions',
-    label: 'Выездные комиссии (сетка)',
-    description: 'Сетка очных и региональных комиссий по Приморью и субъектам ДФО с .ics-экспортом',
+    label: 'Выездные полигоны (сетка)',
+    description: 'Сетка выездных комиссий на полигонах Приморья и ДФО с выгрузкой .ics',
     Icon: CalendarRange,
   },
   {
     id: 'webinars',
-    label: 'Вебинары и разборы ВВГУ',
+    label: 'Вебинары ВВГУ и запись',
     description: 'Онлайн-консультации с экспертами ФСТР, запись участников и скачивание .ics',
     Icon: Video,
   },
@@ -43,12 +44,14 @@ const CALENDAR_TABS: {
 export interface CertificationCalendarHubProps {
   onApplyForSession?: (regionName: string, trackName: string) => void;
   onContactCurator?: (sourceLabel: string) => void;
+  onNavigateTab?: (tab: SiteTabId, options?: NavigateOptions) => void;
   onRegistered?: () => void;
 }
 
 export const CertificationCalendarHub: React.FC<CertificationCalendarHubProps> = ({
   onApplyForSession,
   onContactCurator,
+  onNavigateTab,
   onRegistered,
 }) => {
   const [activeTab, setActiveTab] = useState<CalendarTabId>('dfo_sessions');
@@ -59,9 +62,12 @@ export const CertificationCalendarHub: React.FC<CertificationCalendarHubProps> =
       onContactCurator(sourceLabel);
       return;
     }
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', 'faq');
-    window.history.pushState({ tab: 'faq' }, '', url.toString());
+    if (onNavigateTab) {
+      onNavigateTab('contacts', { subTab: 'contacts' });
+      return;
+    }
+    const nextUrl = buildRouteUrl(window.location.pathname, 'contacts', 'contacts');
+    window.history.pushState({ tab: 'contacts', subTab: 'contacts' }, '', nextUrl);
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 

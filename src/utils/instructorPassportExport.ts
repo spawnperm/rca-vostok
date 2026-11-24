@@ -9,6 +9,7 @@ import {
   readStoredSelfCheck,
   type QualificationTrackId,
 } from './qualificationSelfCheck.ts';
+import { downloadTextFile } from './download.ts';
 
 export type MaxRouteCategory = '1 КС' | '2 КС' | '3 КС' | '4 КС' | 'Не указана';
 
@@ -345,17 +346,7 @@ export function exportInstructorPassportJson(
 ): GeneratedPassportJsonResult {
   const jsonContent = buildInstructorPassportJsonString(passport);
   const fileName = `Passport_RCA_${sanitizePassportFileSlug(passport.profile.fullName)}_${passport.exportedAtIso}.json`;
-  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-
+  downloadTextFile(jsonContent, fileName, 'application/json;charset=utf-8');
   return { fileName, jsonContent, passport };
 }
 

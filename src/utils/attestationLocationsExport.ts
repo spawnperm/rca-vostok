@@ -5,6 +5,7 @@ import {
   type AttestationLocationFilterId,
   type DfoAttestationLocation,
 } from './attestationLocationsMap.ts';
+import { downloadBlobFile } from './download.ts';
 import { drawRoundedRect } from './pdfCanvasHelpers.ts';
 
 export interface AttestationLocationsExportOptions {
@@ -201,17 +202,6 @@ export function buildAttestationLocationsPdfModel(
   };
 }
 
-function triggerDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 export function exportAttestationLocationsCsv(options: AttestationLocationsExportOptions): string {
   const now = options.exportedAt ?? new Date();
   const isoDate = now.toISOString().slice(0, 10);
@@ -219,7 +209,7 @@ export function exportAttestationLocationsCsv(options: AttestationLocationsExpor
   const fileName = `rca-vostok-venues-${slug}-${isoDate}.csv`;
   const csv = buildAttestationLocationsCsvContent(options);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  triggerDownload(blob, fileName);
+  downloadBlobFile(blob, fileName);
   return fileName;
 }
 

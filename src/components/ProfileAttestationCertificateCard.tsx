@@ -26,6 +26,7 @@ import {
   resolveDefaultTrack,
   type GeneratedProfileCertificateResult,
 } from '../utils/profileCertificatePdf';
+import { downloadJsonFile } from '../utils/download';
 import { tracker } from '../utils/tracker';
 
 interface ProfileAttestationCertificateCardProps {
@@ -224,17 +225,8 @@ export const ProfileAttestationCertificateCard: React.FC<
         exportedAtIso: new Date().toISOString(),
         certificate: previewData,
       };
-      const json = JSON.stringify(payload, null, 2);
-      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
       const fileName = `Sertifikat_RCA_${previewData.certificateNumber}_${previewData.issuedAtIso}.json`;
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadJsonFile(payload, fileName, true);
       setStatusMessage(`JSON-данные сертификата сохранены: ${fileName}`);
       tracker.trackCustomInteraction(
         'Экспорт сертификата (JSON)',

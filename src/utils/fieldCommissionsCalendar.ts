@@ -1,6 +1,5 @@
 import {
   buildCalendarMonthCells,
-  buildIcsEventContent,
   downloadCalendarIcs,
   type AttestationCalendarEvent,
   type CalendarDayCell,
@@ -256,6 +255,5 @@ export function toCalendarExportEvent(ev: MarketFieldEvent): AttestationCalendar
 
 export function downloadMarketEventIcs(ev: MarketFieldEvent): string {
   const mapped = toCalendarExportEvent(ev);
-  buildIcsEventContent(mapped, 1440);
   return downloadCalendarIcs(mapped, 1440);
 }

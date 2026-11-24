@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { PUBLIC_SITEMAP_ROUTES } from './src/utils/seo.ts';
 import {
   CollectBehaviorUseCase,
   GetAnalyticsSummaryUseCase,
@@ -690,19 +691,11 @@ async function startServer() {
     );
   });
 
-  // Dynamic sitemap.xml
+  // Dynamic sitemap.xml (aligned with all public SECTION_SEO_MAP routes)
   app.get('/sitemap.xml', (req, res) => {
     const baseUrl = getBaseUrl(req);
     const today = new Date().toISOString().split('T')[0];
-    const sections = [
-      { slug: '', priority: '1.0', changefreq: 'weekly' },
-      { slug: '?tab=calculator', priority: '0.9', changefreq: 'monthly' },
-      { slug: '?tab=market', priority: '0.9', changefreq: 'monthly' },
-      { slug: '?tab=dissertation', priority: '0.8', changefreq: 'monthly' },
-      { slug: '?tab=presentations', priority: '0.8', changefreq: 'monthly' },
-      { slug: '?tab=analytics', priority: '0.6', changefreq: 'daily' },
-    ];
-    const urlsXml = sections
+    const urlsXml = PUBLIC_SITEMAP_ROUTES
       .map(
         (s) => `  <url>
     <loc>${baseUrl}/${s.slug}</loc>
@@ -790,7 +783,7 @@ async function startServer() {
       sitemapUrl: `${baseUrl}/sitemap.xml`,
       robotsConfigured: true,
       sitemapConfigured: true,
-      indexedRoutes: 6,
+      indexedRoutes: PUBLIC_SITEMAP_ROUTES.length,
     });
   });
 

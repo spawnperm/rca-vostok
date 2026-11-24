@@ -90,3 +90,36 @@ export function formatDuration(totalSeconds: number): string {
   const rest = minutes % 60;
   return rest === 0 ? `${hours} ч` : `${hours} ч ${rest} мин`;
 }
+
+/** "03 мин 09 с" — stopwatch-precision duration for behavioral analytics KPIs. */
+export function formatDurationClock(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '0 мин 00 с';
+  const rounded = Math.max(0, Math.round(totalSeconds));
+  const m = Math.floor(rounded / 60);
+  const s = rounded % 60;
+  return `${m} мин ${String(s).padStart(2, '0')} с`;
+}
+
+/** Parses YYYY-MM-DD strictly as UTC midnight without local timezone shifts. */
+export function parseIsoDateUtc(isoDate: string, fallbackYear = 2026): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate.trim());
+  if (!match) {
+    return new Date(Date.UTC(fallbackYear, 0, 1));
+  }
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+}
+
+/** Formats a UTC Date as "DD.MM.YYYY". */
+export function formatDateRuUtc(dt: Date): string {
+  const d = String(dt.getUTCDate()).padStart(2, '0');
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  return `${d}.${m}.${dt.getUTCFullYear()}`;
+}
+
+/** Formats a UTC Date as "YYYY-MM-DD". */
+export function formatDateIsoUtc(dt: Date): string {
+  const d = String(dt.getUTCDate()).padStart(2, '0');
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  return `${dt.getUTCFullYear()}-${m}-${d}`;
+}
+

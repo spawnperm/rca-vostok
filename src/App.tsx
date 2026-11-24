@@ -27,7 +27,14 @@ import {
   LearningSection,
 } from './components/landing/LandingSections';
 import { RoutesAndNewsWorkspace } from './components/landing/NewsAndRoutes';
-import { applySectionSeo, SECTION_SEO_MAP, type SiteTabId } from './utils/seo';
+import {
+  applySectionSeo,
+  buildRouteUrl,
+  parseRouteFromSearch,
+  SECTION_SEO_MAP,
+  type NavigateOptions,
+  type SiteTabId,
+} from './utils/seo';
 import { tracker } from './utils/tracker';
 
 function lazyWithReload<T>(
@@ -142,21 +149,11 @@ function isTopNavActive(item: (typeof TOP_NAV)[number], activeTab: SiteTabId): b
   return activeTab === item.id;
 }
 
-function getInitialTab(): SiteTabId {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const t = params.get('tab') as SiteTabId | null;
-    if (t && t in SECTION_SEO_MAP) {
-      return t;
-    }
-  } catch {
-    // fallback
-  }
-  return 'home';
-}
-
 export default function App() {
-  const [activeTab, setActiveTab] = useState<SiteTabId>(getInitialTab);
+  const [route, setRoute] = useState<{ tab: SiteTabId; subTab?: string }>(() =>
+    parseRouteFromSearch(window.location.search)
+  );
+  const activeTab = route.tab;
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
@@ -183,29 +180,55 @@ export default function App() {
 
   useEffect(() => {
     const onPopState = () => {
-      const next = getInitialTab();
-      setActiveTab(next);
-      tracker.trackTabChange(next, SECTION_SEO_MAP[next].name);
+      const next = parseRouteFromSearch(window.location.search);
+      setRoute(next);
+      tracker.trackTabChange(next.tab, SECTION_SEO_MAP[next.tab].name);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const navigateTo = (tab: SiteTabId) => {
-    setActiveTab(tab);
+  const navigateTo = (tab: SiteTabId, options?: NavigateOptions) => {
+    const nextSubTab = options?.subTab;
+    setRoute({ tab, subTab: nextSubTab });
     setMobileSidebarOpen(false);
     tracker.trackTabChange(tab, SECTION_SEO_MAP[tab].name);
 
-    const nextUrl =
-      tab === 'home' ? window.location.pathname : `${window.location.pathname}?tab=${tab}`;
-    window.history.pushState({ tab }, '', nextUrl);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const nextUrl = buildRouteUrl(window.location.pathname, tab, nextSubTab);
+    window.history.pushState({ tab, subTab: nextSubTab }, '', nextUrl);
+
+    if (options?.anchor) {
+      const targetId = options.anchor;
+      let attempts = 0;
+      const tryScroll = () => {
+        const el = document.getElementById(targetId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+        attempts += 1;
+        if (attempts < 10) {
+          window.setTimeout(tryScroll, 70);
+        }
+      };
+      window.setTimeout(tryScroll, 50);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleSubTabChange = (subTab: string) => {
+    setRoute((prev) => {
+      const nextUrl = buildRouteUrl(window.location.pathname, prev.tab, subTab);
+      window.history.replaceState({ tab: prev.tab, subTab }, '', nextUrl);
+      return { ...prev, subTab };
+    });
   };
 
   /** Jumps to an anchor inside the landing hub. */
   const scrollToSection = (id: string) => {
     if (activeTab !== 'home') {
-      setActiveTab('home');
+      setRoute({ tab: 'home' });
       window.history.pushState({ tab: 'home' }, '', window.location.pathname);
     }
     window.setTimeout(() => {
@@ -344,7 +367,7 @@ export default function App() {
                   <div className="flex justify-end">
                     <button
                       type="button"
-                      onClick={() => navigateTo('learning')}
+                      onClick={() => navigateTo('learning', { subTab: 'exam' })}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800 hover:text-teal-950 whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       <span>Открыть тренажёр экзамена ФСТР, библиотеку и глоссарий</span>
@@ -354,11 +377,11 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <CertificationSection compact />
+                  <CertificationSection compact onNavigateTab={navigateTo} />
                   <div className="flex justify-end">
                     <button
                       type="button"
-                      onClick={() => navigateTo('certification')}
+                      onClick={() => navigateTo('certification', { subTab: 'calendars' })}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800 hover:text-teal-950 whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       <span>Календарь комиссий ДФО, карта площадок и реестр ФСТР</span>
@@ -419,33 +442,95 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'learning' && <LearningSection onNavigateTab={navigateTo} />}
-            {activeTab === 'preparation' && (
-              <LearningSection initialSubTab="exam" onNavigateTab={navigateTo} />
+            {activeTab === 'learning' && (
+              <LearningSection
+                initialSubTab={route.subTab}
+                onNavigateTab={navigateTo}
+                onSubTabChange={handleSubTabChange}
+              />
             )}
-            {activeTab === 'certification' && <CertificationSection onNavigateTab={navigateTo} />}
-            {activeTab === 'routes' && <RoutesAndNewsWorkspace initialSubTab="routes" />}
-            {activeTab === 'news' && <RoutesAndNewsWorkspace initialSubTab="news" />}
+            {activeTab === 'preparation' && (
+              <LearningSection
+                initialSubTab={route.subTab || 'exam'}
+                onNavigateTab={navigateTo}
+                onSubTabChange={handleSubTabChange}
+              />
+            )}
+            {activeTab === 'certification' && (
+              <CertificationSection
+                initialSubTab={route.subTab}
+                onNavigateTab={navigateTo}
+                onSubTabChange={handleSubTabChange}
+              />
+            )}
+            {activeTab === 'routes' && (
+              <RoutesAndNewsWorkspace
+                initialSubTab={route.subTab || 'routes'}
+                onSubTabChange={handleSubTabChange}
+              />
+            )}
+            {activeTab === 'news' && (
+              <RoutesAndNewsWorkspace
+                initialSubTab={route.subTab || 'news'}
+                onSubTabChange={handleSubTabChange}
+              />
+            )}
             {activeTab === 'faq' && (
-              <HelpAndContactsWorkspace initialSubTab="faq" onNavigateTab={navigateTo} />
+              <HelpAndContactsWorkspace
+                initialSubTab={route.subTab || 'faq'}
+                onNavigateTab={navigateTo}
+                onSubTabChange={handleSubTabChange}
+              />
             )}
             {activeTab === 'consulting' && (
-              <HelpAndContactsWorkspace initialSubTab="consulting" onNavigateTab={navigateTo} />
+              <HelpAndContactsWorkspace
+                initialSubTab={route.subTab || 'consulting'}
+                onNavigateTab={navigateTo}
+                onSubTabChange={handleSubTabChange}
+              />
             )}
             {activeTab === 'contacts' && (
-              <HelpAndContactsWorkspace initialSubTab="contacts" onNavigateTab={navigateTo} />
+              <HelpAndContactsWorkspace
+                initialSubTab={route.subTab || 'contacts'}
+                onNavigateTab={navigateTo}
+                onSubTabChange={handleSubTabChange}
+              />
             )}
 
             {/* Lazy analytical platform sections */}
             <Suspense fallback={<SectionFallback label={SECTION_SEO_MAP[activeTab].name} />}>
-              {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
-              {activeTab === 'calculator' && <CalculatorSection />}
-              {activeTab === 'market' && <MarketSection onNavigate={navigateTo} />}
+              {activeTab === 'overview' && (
+                <OverviewSection
+                  initialSubTab={route.subTab}
+                  onSubTabChange={handleSubTabChange}
+                  onNavigate={navigateTo}
+                />
+              )}
+              {activeTab === 'calculator' && (
+                <CalculatorSection
+                  initialSubTab={route.subTab}
+                  onSubTabChange={handleSubTabChange}
+                />
+              )}
+              {activeTab === 'market' && (
+                <MarketSection
+                  initialSubTab={route.subTab}
+                  onSubTabChange={handleSubTabChange}
+                  onNavigate={navigateTo}
+                />
+              )}
               {activeTab === 'dissertation' && <DissertationSection />}
               {activeTab === 'presentations' && <PresentationsSection />}
-              {activeTab === 'analytics' && <AnalyticsSection />}
+              {activeTab === 'analytics' && (
+                <AnalyticsSection
+                  initialSubTab={route.subTab}
+                  onSubTabChange={handleSubTabChange}
+                />
+              )}
               {activeTab === 'account' && (
                 <AccountSection
+                  initialSubTab={route.subTab}
+                  onSubTabChange={handleSubTabChange}
                   onNavigate={navigateTo}
                   onOpenGitSync={() => setGitSyncOpen(true)}
                 />

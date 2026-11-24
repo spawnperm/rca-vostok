@@ -41,11 +41,12 @@ import {
   downloadCalendarIcs,
 } from '../../utils/attestationCalendar';
 import { tracker } from '../../utils/tracker';
-import type { SiteTabId } from '../../utils/seo';
+import type { NavigateOptions, SiteTabId } from '../../utils/seo';
 import { AttestationLocationsLeafletMap } from './AttestationLocationsLeafletMap';
 import { CertificationCalendarHub } from '../CertificationCalendarHub';
 import { CertifiedGuidesRegistryTable } from '../CertifiedGuidesRegistryTable';
 import { GuideLearningRoadmapGraph } from '../GuideLearningRoadmapGraph';
+import { InstructorCompetencyGraphD3 } from '../InstructorCompetencyGraphD3';
 import { InteractiveGlossary } from '../InteractiveGlossary';
 import { OverviewDemoCertificateSection } from '../OverviewDemoCertificateSection';
 import { PlatformFeedbackForm } from '../PlatformFeedbackForm';
@@ -135,7 +136,7 @@ export function LandingHero({
   onNavigateTab,
 }: {
   onNavigate: (id: string) => void;
-  onNavigateTab?: (tab: SiteTabId) => void;
+  onNavigateTab?: (tab: SiteTabId, options?: NavigateOptions) => void;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
 
@@ -240,22 +241,46 @@ export function LandingHero({
  * «Обучение и подготовка» — программы ДПО, этапы практики,
  * объединённый тренажёр экзамена/диагностики, библиотека и глоссарий.
  */
+type LearningSubTabId = 'programmes' | 'competencies' | 'glossary' | 'exam' | 'library';
+
+const VALID_LEARNING_SUBTABS = new Set<LearningSubTabId>([
+  'programmes',
+  'competencies',
+  'glossary',
+  'exam',
+  'library',
+]);
+
+function resolveLearningSubTab(sub?: string): LearningSubTabId {
+  if (sub && VALID_LEARNING_SUBTABS.has(sub as LearningSubTabId)) {
+    return sub as LearningSubTabId;
+  }
+  return 'programmes';
+}
+
 export function LearningSection({
   initialSubTab = 'programmes',
   compact = false,
   onNavigateTab,
+  onSubTabChange,
 }: {
-  initialSubTab?: 'programmes' | 'glossary' | 'exam' | 'library';
+  initialSubTab?: string;
   compact?: boolean;
-  onNavigateTab?: (tab: SiteTabId) => void;
+  onNavigateTab?: (tab: SiteTabId, options?: NavigateOptions) => void;
+  onSubTabChange?: (subTab: string) => void;
 }) {
-  const [subTab, setSubTab] = useState<'programmes' | 'glossary' | 'exam' | 'library'>(
-    initialSubTab
+  const [subTab, setSubTab] = useState<LearningSubTabId>(() =>
+    resolveLearningSubTab(initialSubTab)
   );
 
   useEffect(() => {
-    setSubTab(initialSubTab);
+    setSubTab(resolveLearningSubTab(initialSubTab));
   }, [initialSubTab]);
+
+  const selectSubTab = (next: LearningSubTabId) => {
+    setSubTab(next);
+    onSubTabChange?.(next);
+  };
 
   return (
     <section className="space-y-6">
@@ -263,8 +288,8 @@ export function LearningSection({
         <SectionHeading
           id="learning"
           eyebrow="Обучение и подготовка"
-          title="Программы ДПО, практика и тренажёр аттестации"
-          lead="Профессиональная подготовка в ВВГУ, пошаговая практика по пешеходному туризму, тренировка экзаменационных билетов ФСТР, глоссарий и литература."
+          title="Программы ДПО, компетенции и тренажёр аттестации"
+          lead="Профессиональная подготовка в ВВГУ, интерактивная карта связей компетенций (D3.js), траектория обучения, тренировка экзаменационных билетов ФСТР, глоссарий и литература."
         />
 
         {!compact && (
@@ -276,6 +301,7 @@ export function LearningSection({
             {(
               [
                 { id: 'programmes', label: 'Программы и граф обучения' },
+                { id: 'competencies', label: 'Связи компетенций' },
                 { id: 'glossary', label: 'Глоссарий ФСТР' },
                 { id: 'exam', label: 'Тренажёр и диагностика' },
                 { id: 'library', label: 'Литература' },
@@ -289,7 +315,7 @@ export function LearningSection({
                   role="tab"
                   aria-selected={active}
                   onClick={() => {
-                    setSubTab(tab.id);
+                    selectSubTab(tab.id);
                     tracker.trackCustomInteraction(`Обучение · ${tab.label}`, 'learning');
                   }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
@@ -340,23 +366,77 @@ export function LearningSection({
             })}
           </div>
 
-          <GuideLearningRoadmapGraph
-            onOpenExam={() => {
-              if (compact && onNavigateTab) {
-                onNavigateTab('preparation');
-                return;
-              }
-              setSubTab('exam');
-            }}
-            onOpenLibrary={() => {
-              if (compact && onNavigateTab) {
-                onNavigateTab('learning');
-                return;
-              }
-              setSubTab('library');
-            }}
-            onNavigateTab={onNavigateTab}
-          />
+          {!compact ? (
+            <GuideLearningRoadmapGraph
+              onOpenExam={() => selectSubTab('exam')}
+              onOpenLibrary={() => selectSubTab('library')}
+              onNavigateTab={onNavigateTab}
+            />
+          ) : (
+            <div className="bg-white border border-slate-200 rounded-xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+              <div className="space-y-1.5 max-w-2xl">
+                <p className="text-xs font-medium text-teal-700">
+                  4 программы ДПО · 16 компетенций в графе D3 · Тренажёр ФСТР · 50+ терминов
+                </p>
+                <h3 className="text-base font-bold text-slate-900">
+                  Интерактивная среда обучения, граф компетенций (D3.js) и тренажёр ФСТР
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Откройте полный рабочий контур раздела «Обучение», чтобы изучить связи
+                  компетенций, пройти тренировочные билеты, проверить категорию сложности и
+                  воспользоваться библиотекой.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigateTab
+                      ? onNavigateTab('learning', { subTab: 'competencies' })
+                      : selectSubTab('competencies')
+                  }
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <span>Граф компетенций (D3)</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigateTab
+                      ? onNavigateTab('learning', { subTab: 'exam' })
+                      : selectSubTab('exam')
+                  }
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <span>Тренажёр экзамена</span>
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigateTab
+                      ? onNavigateTab('learning', { subTab: 'library' })
+                      : selectSubTab('library')
+                  }
+                  className="px-3 py-2 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  Библиотека
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigateTab
+                      ? onNavigateTab('learning', { subTab: 'glossary' })
+                      : selectSubTab('glossary')
+                  }
+                  className="px-3 py-2 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  Глоссарий
+                </button>
+              </div>
+            </div>
+          )}
 
           {compact && (
             <div className="space-y-3 pt-1">
@@ -392,14 +472,50 @@ export function LearningSection({
         </div>
       )}
 
+      {!compact && subTab === 'competencies' && (
+        <InstructorCompetencyGraphD3
+          onOpenExam={() => selectSubTab('exam')}
+          onOpenGlossary={() => selectSubTab('glossary')}
+          onOpenLibrary={() => selectSubTab('library')}
+        />
+      )}
+
       {!compact && subTab === 'glossary' && <InteractiveGlossary />}
 
       {!compact && subTab === 'exam' && <TrainingAndAssessmentHub onNavigateTab={onNavigateTab} />}
 
       {!compact && subTab === 'library' && (
-        <div className="space-y-8">
+        <div className="space-y-6">
           <RecommendedLiteratureSection />
-          <InteractiveGlossary />
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-slate-900">
+                Нужно уточнить нормативный термин из пособия?
+              </p>
+              <p className="text-xs text-slate-600">
+                Откройте глоссарий ФСТР с поиском по определениям ПП № 1003, 1893 и категорийным
+                нормативам или перейдите к тренировочным билетам.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => selectSubTab('glossary')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <span>Открыть глоссарий ФСТР</span>
+                <ArrowRight className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => selectSubTab('exam')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <span>Тренажёр экзамена</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>
@@ -415,24 +531,45 @@ export function PreparationSection() {
  * «Аттестация» — график 2027 + .ics, единый календарь комиссий и вебинаров ДФО,
  * карта площадок, реестр аттестованных проводников и демо-удостоверение.
  */
+type CertSubTabId = 'schedule' | 'calendars' | 'locations' | 'registry';
+
+const VALID_CERT_SUBTABS = new Set<CertSubTabId>([
+  'schedule',
+  'calendars',
+  'locations',
+  'registry',
+]);
+
+function resolveCertSubTab(sub?: string): CertSubTabId {
+  if (sub && VALID_CERT_SUBTABS.has(sub as CertSubTabId)) {
+    return sub as CertSubTabId;
+  }
+  return 'schedule';
+}
+
 export function CertificationSection({
   compact = false,
   initialSubTab = 'schedule',
   onNavigateTab,
+  onSubTabChange,
 }: {
   compact?: boolean;
-  initialSubTab?: 'schedule' | 'calendars' | 'locations' | 'registry';
-  onNavigateTab?: (tab: SiteTabId) => void;
+  initialSubTab?: string;
+  onNavigateTab?: (tab: SiteTabId, options?: NavigateOptions) => void;
+  onSubTabChange?: (subTab: string) => void;
 }) {
   const [selectedSlotIdx, setSelectedSlotIdx] = useState<number>(0);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
-  const [certTab, setCertTab] = useState<'schedule' | 'calendars' | 'locations' | 'registry'>(
-    initialSubTab
-  );
+  const [certTab, setCertTab] = useState<CertSubTabId>(() => resolveCertSubTab(initialSubTab));
 
   useEffect(() => {
-    setCertTab(initialSubTab);
+    setCertTab(resolveCertSubTab(initialSubTab));
   }, [initialSubTab]);
+
+  const selectCertTab = (next: CertSubTabId) => {
+    setCertTab(next);
+    onSubTabChange?.(next);
+  };
 
   const activeSlot = CERTIFICATION_SCHEDULE[selectedSlotIdx] ?? CERTIFICATION_SCHEDULE[0];
   const activeEvent = buildScheduleSlotCalendarEvent(activeSlot, selectedSlotIdx);
@@ -482,7 +619,7 @@ export function CertificationSection({
                   role="tab"
                   aria-selected={active}
                   onClick={() => {
-                    setCertTab(tab.id);
+                    selectCertTab(tab.id);
                     tracker.trackCustomInteraction(`Аттестация · ${tab.label}`, 'certification');
                   }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
@@ -666,7 +803,7 @@ export function CertificationSection({
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => setCertTab('locations')}
+              onClick={() => selectCertTab('locations')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <MapPin className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
@@ -674,7 +811,7 @@ export function CertificationSection({
             </button>
             <button
               type="button"
-              onClick={() => setCertTab('calendars')}
+              onClick={() => selectCertTab('calendars')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <CalendarDays className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
@@ -683,7 +820,7 @@ export function CertificationSection({
             {onNavigateTab && (
               <button
                 type="button"
-                onClick={() => onNavigateTab('account')}
+                onClick={() => onNavigateTab('account', { subTab: 'preparation' })}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
                 <span>Запись в личном кабинете</span>
@@ -694,7 +831,21 @@ export function CertificationSection({
         </div>
       )}
 
-      {!compact && certTab === 'calendars' && <CertificationCalendarHub />}
+      {!compact && certTab === 'calendars' && (
+        <CertificationCalendarHub
+          onNavigateTab={onNavigateTab}
+          onApplyForSession={() =>
+            onNavigateTab
+              ? onNavigateTab('overview', { subTab: 'summary', anchor: 'inquiry-section' })
+              : undefined
+          }
+          onContactCurator={() =>
+            onNavigateTab
+              ? onNavigateTab('contacts', { subTab: 'contacts' })
+              : undefined
+          }
+        />
+      )}
 
       {!compact && certTab === 'locations' && <AttestationLocationsLeafletMap />}
 
@@ -716,7 +867,7 @@ export function CertificationSection({
               {onNavigateTab && (
                 <button
                   type="button"
-                  onClick={() => onNavigateTab('overview')}
+                  onClick={() => onNavigateTab('overview', { subTab: 'monitoring' })}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <span>Опросы и статистика центра</span>
@@ -842,18 +993,36 @@ export function ContactsSection() {
  * Объединённый раздел «FAQ, консалтинг и связь» для верхнего меню «FAQ и связь».
  * Сводит частые вопросы, методический консалтинг (форма 760), контакты центра и форму обратной связи.
  */
+type HelpSubTabId = 'faq' | 'consulting' | 'contacts';
+
+const VALID_HELP_SUBTABS = new Set<HelpSubTabId>(['faq', 'consulting', 'contacts']);
+
+function resolveHelpSubTab(sub?: string): HelpSubTabId {
+  if (sub && VALID_HELP_SUBTABS.has(sub as HelpSubTabId)) {
+    return sub as HelpSubTabId;
+  }
+  return 'faq';
+}
+
 export function HelpAndContactsWorkspace({
   initialSubTab = 'faq',
   onNavigateTab,
+  onSubTabChange,
 }: {
-  initialSubTab?: 'faq' | 'consulting' | 'contacts';
-  onNavigateTab?: (tab: SiteTabId) => void;
+  initialSubTab?: string;
+  onNavigateTab?: (tab: SiteTabId, options?: NavigateOptions) => void;
+  onSubTabChange?: (subTab: string) => void;
 }) {
-  const [subTab, setSubTab] = useState<'faq' | 'consulting' | 'contacts'>(initialSubTab);
+  const [subTab, setSubTab] = useState<HelpSubTabId>(() => resolveHelpSubTab(initialSubTab));
 
   useEffect(() => {
-    setSubTab(initialSubTab);
+    setSubTab(resolveHelpSubTab(initialSubTab));
   }, [initialSubTab]);
+
+  const selectSubTab = (next: HelpSubTabId) => {
+    setSubTab(next);
+    onSubTabChange?.(next);
+  };
 
   const handleOpenAttestationAssistant = (customPrompt?: string) => {
     const prompt = customPrompt ?? FAQ_ATTESTATION_ASSISTANT_PROMPT;
@@ -894,7 +1063,7 @@ export function HelpAndContactsWorkspace({
                   role="tab"
                   aria-selected={active}
                   onClick={() => {
-                    setSubTab(tab.id);
+                    selectSubTab(tab.id);
                     tracker.trackCustomInteraction(`FAQ и связь · ${tab.label}`, 'faq');
                   }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
@@ -922,9 +1091,9 @@ export function HelpAndContactsWorkspace({
 
       {subTab === 'faq' && (
         <FAQSection
-          onNavigateToContacts={() => setSubTab('contacts')}
+          onNavigateToContacts={() => selectSubTab('contacts')}
           onNavigateToCertification={
-            onNavigateTab ? () => onNavigateTab('certification') : undefined
+            onNavigateTab ? () => onNavigateTab('certification', { subTab: 'schedule' }) : undefined
           }
           onOpenAssistant={handleOpenAttestationAssistant}
         />

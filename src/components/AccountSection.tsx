@@ -84,23 +84,74 @@ import {
   type GeneratedFinalCertificateResult,
 } from '../utils/attestationFinalCertificatePdf';
 import { collectAndDownloadFullAccountBackup } from '../utils/accountBackupExport';
-import type { SiteTabId } from '../utils/seo';
+import type { NavigateOptions, SiteTabId } from '../utils/seo';
+
+type PrepSubTabId = 'track' | 'diagnostics' | 'knowledge';
+type DocSubTabId = 'dossier' | 'expeditions';
+
+const VALID_CABINET_TABS = new Set<CabinetTab>([
+  'profile',
+  'preparation',
+  'documents',
+  'community',
+]);
+
+function resolveCabinetTab(sub?: string): CabinetTab {
+  if (sub && VALID_CABINET_TABS.has(sub as CabinetTab)) {
+    return sub as CabinetTab;
+  }
+  return 'profile';
+}
+
+const PREP_SUBTAB_BY_ELEMENT: Record<string, PrepSubTabId> = {
+  'attestation-path-widget': 'track',
+  'attestation-progress-widget': 'track',
+  'attestation-progress-details': 'track',
+  'personal-roadmap-widget': 'track',
+  'attestation-sessions-calendar': 'track',
+  'qualification-self-check': 'diagnostics',
+  'competency-assessment-quiz': 'diagnostics',
+  'attestation-self-diagnostics': 'diagnostics',
+  'personal-learning-plan': 'diagnostics',
+  'account-knowledge-base': 'knowledge',
+  'favorite-literature-cabinet': 'knowledge',
+};
+
+const DOC_SUBTAB_BY_ELEMENT: Record<string, DocSubTabId> = {
+  'instructor-digital-passport': 'dossier',
+  'profile-attestation-certificate': 'dossier',
+  'preparation-checklist-pdf': 'dossier',
+  'instructor-resume-generator': 'dossier',
+  'qualification-certificates-json-export': 'dossier',
+  'professional-experience-log': 'expeditions',
+  'hike-schedule-export': 'expeditions',
+  'experience-routes-leaflet-map': 'expeditions',
+  'route-complexity-pie': 'expeditions',
+  'route-complexity-forecast': 'expeditions',
+  'gear-checklist-generator': 'expeditions',
+};
 
 function hasPermission(user: SessionUser | null, permission: string): boolean {
   return Boolean(user?.permissions?.includes(permission));
 }
 
 export function AccountSection({
+  initialSubTab,
+  onSubTabChange,
   onNavigate,
   onOpenGitSync,
 }: {
-  onNavigate?: (tab: SiteTabId) => void;
+  initialSubTab?: string;
+  onSubTabChange?: (subTab: string) => void;
+  onNavigate?: (tab: SiteTabId, options?: NavigateOptions) => void;
   onOpenGitSync?: () => void;
 } = {}) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [cabinetTab, setCabinetTab] = useState<CabinetTab>('profile');
+  const [cabinetTab, setCabinetTab] = useState<CabinetTab>(() => resolveCabinetTab(initialSubTab));
+  const [prepSubTab, setPrepSubTab] = useState<PrepSubTabId>('track');
+  const [docSubTab, setDocSubTab] = useState<DocSubTabId>('dossier');
   const [guestPreviewTab, setGuestPreviewTab] = useState<'analytics' | 'kb'>('analytics');
 
   /** Password recovery views: null = normal auth, 'forgot' = request, string = reset token. */
@@ -185,6 +236,12 @@ export function AccountSection({
   const openAiAssistant = useCallback((prompt?: string) => {
     dispatchOpenRcaAssistant({ prompt, mode: 'rag' });
   }, []);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setCabinetTab(resolveCabinetTab(initialSubTab));
+    }
+  }, [initialSubTab]);
 
   useEffect(() => {
     try {
@@ -329,9 +386,19 @@ export function AccountSection({
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const selectCabinetTab = (next: CabinetTab) => {
+    setCabinetTab(next);
+    onSubTabChange?.(next);
+  };
+
   const navigateCabinetTarget = (targetTab: CabinetTab, elementId: string) => {
-    setCabinetTab(targetTab);
-    window.setTimeout(() => scrollToElementById(elementId), 60);
+    selectCabinetTab(targetTab);
+    if (targetTab === 'preparation' && elementId in PREP_SUBTAB_BY_ELEMENT) {
+      setPrepSubTab(PREP_SUBTAB_BY_ELEMENT[elementId]);
+    } else if (targetTab === 'documents' && elementId in DOC_SUBTAB_BY_ELEMENT) {
+      setDocSubTab(DOC_SUBTAB_BY_ELEMENT[elementId]);
+    }
+    window.setTimeout(() => scrollToElementById(elementId), 80);
   };
 
   const jumpToKnowledgeBaseWithQuery = (query?: string) => {
@@ -498,14 +565,11 @@ export function AccountSection({
                 userId={null}
                 onOpenOverviewLibrary={
                   onNavigate
-                    ? () => {
-                        onNavigate('learning');
-                        window.setTimeout(() => {
-                          document
-                            .getElementById('recommended-literature')
-                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }, 240);
-                      }
+                    ? () =>
+                        onNavigate('learning', {
+                          subTab: 'library',
+                          anchor: 'recommended-literature',
+                        })
                     : undefined
                 }
               />
@@ -585,7 +649,7 @@ export function AccountSection({
         user={user}
         cabinetTab={cabinetTab}
         onSelectCabinetTab={(tab) => {
-          setCabinetTab(tab);
+          selectCabinetTab(tab);
           tracker.trackCustomInteraction(`Личный кабинет · ${tab}`, 'account');
         }}
         achievementsSummary={achievementsSummary}
@@ -743,7 +807,9 @@ export function AccountSection({
             onRefreshInquiries={
               hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
             }
-            onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
+            onOpenOverview={
+              onNavigate ? () => onNavigate('overview', { subTab: 'summary' }) : undefined
+            }
             onNavigateAction={(target: UpdateFeedActionTarget, prompt?: string) => {
               switch (target) {
                 case 'calendar':
@@ -837,196 +903,305 @@ export function AccountSection({
       {/* TAB 2: PREPARATION, PATH, CALENDAR, DIAGNOSTICS & KNOWLEDGE BASE */}
       {cabinetTab === 'preparation' && (
         <div className="space-y-6">
-          <AttestationPathWidget
-            user={user}
-            summary={effectiveProgressSummary}
-            inquiries={inquiries}
-            examDateIso={selectedExamDate}
-            contour={selectedContour}
-            onSelectStageInChecklist={(stageId) => {
-              setExternalSelectedStage((prev) => ({
-                stageId,
-                nonce: (prev?.nonce ?? 0) + 1,
-              }));
-              scrollToElementById('attestation-progress-details');
-            }}
-            onOpenApplication={() => scrollToElementById('attestation-sessions-calendar')}
-            onJumpToRoadmap={() => scrollToElementById('personal-roadmap-widget')}
-            onJumpToPassport={() =>
-              navigateCabinetTarget('documents', 'instructor-digital-passport')
-            }
-          />
+          <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-teal-700">
+                Готовность: {effectiveProgressSummary.percent}% · Этапов:{' '}
+                {effectiveProgressSummary.completedStages} · Заявок: {inquiries.length}
+              </p>
+              <h2 className="text-base font-bold text-slate-900">
+                Персональный контур подготовки и аттестации
+              </h2>
+            </div>
 
-          <AttestationProgressWidget
-            user={user}
-            inquiries={inquiries}
-            inquiriesLoading={inquiriesLoading}
-            selectedExamDate={selectedExamDate}
-            externalSelectedStage={externalSelectedStage}
-            onSummaryChange={setLiveProgressSummary}
-            onRefreshInquiries={
-              hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
-            }
-            onOpenApplication={onNavigate ? () => onNavigate('overview') : undefined}
-          />
+            <div
+              role="tablist"
+              aria-label="Подразделы подготовки соискателя"
+              className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start lg:self-auto"
+            >
+              {(
+                [
+                  { id: 'track', label: 'Трек, календарь и план' },
+                  { id: 'diagnostics', label: 'Самопроверка и тесты' },
+                  { id: 'knowledge', label: 'База знаний и литература' },
+                ] as const
+              ).map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={prepSubTab === sub.id}
+                  onClick={() => setPrepSubTab(sub.id)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    prepSubTab === sub.id
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <PersonalRoadmapWidget
-            user={user}
-            summary={effectiveProgressSummary}
-            onExamDateChange={setSelectedExamDate}
-            onContourChange={setSelectedContour}
-          />
+          {prepSubTab === 'track' && (
+            <div className="space-y-6">
+              <AttestationPathWidget
+                user={user}
+                summary={effectiveProgressSummary}
+                inquiries={inquiries}
+                examDateIso={selectedExamDate}
+                contour={selectedContour}
+                onSelectStageInChecklist={(stageId) => {
+                  setExternalSelectedStage((prev) => ({
+                    stageId,
+                    nonce: (prev?.nonce ?? 0) + 1,
+                  }));
+                  scrollToElementById('attestation-progress-details');
+                }}
+                onOpenApplication={() => scrollToElementById('attestation-sessions-calendar')}
+                onJumpToRoadmap={() => scrollToElementById('personal-roadmap-widget')}
+                onJumpToPassport={() =>
+                  navigateCabinetTarget('documents', 'instructor-digital-passport')
+                }
+              />
 
-          <AttestationSessionsCalendarWidget
-            user={user}
-            inquiries={inquiries}
-            selectedExamDate={selectedExamDate}
-            linkedAccounts={linkedAccounts}
-            autofill={examAutofill}
-            externalReattestationPrefill={reattestationPrefill}
-            onSelectAutofillSource={(provider) => void handleSelectAutofillSource(provider)}
-            onJumpToLinkedAccounts={() =>
-              navigateCabinetTarget('profile', 'account-linked-profiles')
-            }
-            onSelectExamDate={setSelectedExamDate}
-            onSessionBooked={(sessionDateIso) => {
-              setSelectedExamDate(sessionDateIso);
-              if (hasPermission(user, 'inquiries:view_own')) {
-                void loadInquiries();
-              }
-            }}
-            onJumpToInquiries={() =>
-              navigateCabinetTarget('profile', 'my-inquiries-status-table')
-            }
-          />
+              <AttestationProgressWidget
+                user={user}
+                inquiries={inquiries}
+                inquiriesLoading={inquiriesLoading}
+                selectedExamDate={selectedExamDate}
+                externalSelectedStage={externalSelectedStage}
+                onSummaryChange={setLiveProgressSummary}
+                onRefreshInquiries={
+                  hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
+                }
+                onOpenApplication={
+                  onNavigate
+                    ? () =>
+                        onNavigate('overview', {
+                          subTab: 'summary',
+                          anchor: 'inquiry-section',
+                        })
+                    : undefined
+                }
+              />
 
-          <QualificationSelfCheckWidget
-            user={user}
-            onChange={() => setSelfCheckRevision((n) => n + 1)}
-            onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
-            onJumpToConsultant={() =>
-              openAiAssistant('Помогите разобраться с пробелами по итогам самопроверки.')
-            }
-          />
+              <PersonalRoadmapWidget
+                user={user}
+                summary={effectiveProgressSummary}
+                onExamDateChange={setSelectedExamDate}
+                onContourChange={setSelectedContour}
+              />
 
-          <CompetencyAssessmentQuizCard
-            user={user}
-            onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
-            onUpdated={() => setCompetencyRevision((n) => n + 1)}
-          />
-
-          <AttestationSelfDiagnosticsWidget
-            user={user}
-            onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
-            onJumpToConsultant={(prompt) => openAiAssistant(prompt)}
-            onJumpToSelfCheck={() => scrollToElementById('qualification-self-check')}
-            onJumpToCalendar={() => scrollToElementById('attestation-sessions-calendar')}
-          />
-
-          <PersonalLearningPlanWidget
-            user={user}
-            selfCheckRevision={selfCheckRevision}
-            selectedContour={selectedContour}
-            onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
-          />
-
-          <AccountKnowledgeBaseWidget
-            user={user}
-            externalSearch={kbExternalSearch}
-            onNavigate={onNavigate}
-            onJumpToChecklist={() => scrollToElementById('qualification-self-check')}
-            onJumpToConsultant={() => openAiAssistant()}
-          />
-
-          <FavoriteLiteratureCabinetWidget
-            userId={user.id}
-            onOpenOverviewLibrary={
-              onNavigate
-                ? () => {
-                    onNavigate('learning');
-                    window.setTimeout(() => {
-                      document
-                        .getElementById('recommended-literature')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }, 240);
+              <AttestationSessionsCalendarWidget
+                user={user}
+                inquiries={inquiries}
+                selectedExamDate={selectedExamDate}
+                linkedAccounts={linkedAccounts}
+                autofill={examAutofill}
+                externalReattestationPrefill={reattestationPrefill}
+                onSelectAutofillSource={(provider) => void handleSelectAutofillSource(provider)}
+                onJumpToLinkedAccounts={() =>
+                  navigateCabinetTarget('profile', 'account-linked-profiles')
+                }
+                onSelectExamDate={setSelectedExamDate}
+                onSessionBooked={(sessionDateIso) => {
+                  setSelectedExamDate(sessionDateIso);
+                  if (hasPermission(user, 'inquiries:view_own')) {
+                    void loadInquiries();
                   }
-                : undefined
-            }
-          />
+                }}
+                onJumpToInquiries={() =>
+                  navigateCabinetTarget('profile', 'my-inquiries-status-table')
+                }
+              />
+            </div>
+          )}
+
+          {prepSubTab === 'diagnostics' && (
+            <div className="space-y-6">
+              <QualificationSelfCheckWidget
+                user={user}
+                onChange={() => setSelfCheckRevision((n) => n + 1)}
+                onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
+                onJumpToConsultant={() =>
+                  openAiAssistant('Помогите разобраться с пробелами по итогам самопроверки.')
+                }
+              />
+
+              <CompetencyAssessmentQuizCard
+                user={user}
+                onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
+                onUpdated={() => setCompetencyRevision((n) => n + 1)}
+              />
+
+              <AttestationSelfDiagnosticsWidget
+                user={user}
+                onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
+                onJumpToConsultant={(prompt) => openAiAssistant(prompt)}
+                onJumpToSelfCheck={() => scrollToElementById('qualification-self-check')}
+                onJumpToCalendar={() =>
+                  navigateCabinetTarget('preparation', 'attestation-sessions-calendar')
+                }
+              />
+
+              <PersonalLearningPlanWidget
+                user={user}
+                selfCheckRevision={selfCheckRevision}
+                selectedContour={selectedContour}
+                onJumpToDiagnostics={() => scrollToElementById('attestation-self-diagnostics')}
+              />
+            </div>
+          )}
+
+          {prepSubTab === 'knowledge' && (
+            <div className="space-y-6">
+              <AccountKnowledgeBaseWidget
+                user={user}
+                externalSearch={kbExternalSearch}
+                onNavigate={onNavigate}
+                onJumpToChecklist={() =>
+                  navigateCabinetTarget('preparation', 'qualification-self-check')
+                }
+                onJumpToConsultant={() => openAiAssistant()}
+              />
+
+              <FavoriteLiteratureCabinetWidget
+                userId={user.id}
+                onOpenOverviewLibrary={
+                  onNavigate
+                    ? () =>
+                        onNavigate('learning', {
+                          subTab: 'library',
+                          anchor: 'recommended-literature',
+                        })
+                    : undefined
+                }
+              />
+            </div>
+          )}
         </div>
       )}
 
       {/* TAB 3: EXPERIENCE JOURNAL & OFFICIAL DOCUMENTS */}
       {cabinetTab === 'documents' && (
         <div className="space-y-6">
-          <InstructorPassportCard
-            user={user}
-            summary={effectiveProgressSummary}
-            inquiries={inquiries}
-            selfCheckRevision={selfCheckRevision}
-          />
+          <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-teal-700">
+                Паспорт инструктора · Сертификаты PDF/JSON · Полевой стаж и маршруты
+              </p>
+              <h2 className="text-base font-bold text-slate-900">
+                Документы соискателя и журнал экспедиционного опыта
+              </h2>
+            </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ProfileAttestationCertificateCard
-              user={user}
-              summary={effectiveProgressSummary}
-              inquiries={inquiries}
-              selectedExamDate={selectedExamDate}
-              selectedContour={selectedContour}
-              onJumpToProfile={() => navigateCabinetTarget('profile', 'account-profile-card')}
-            />
-            <PreparationChecklistPdfCard
-              user={user}
-              summary={effectiveProgressSummary}
-              inquiries={inquiries}
-              selectedContour={selectedContour}
-            />
+            <div
+              role="tablist"
+              aria-label="Подразделы документов и стажа"
+              className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg self-start lg:self-auto"
+            >
+              {(
+                [
+                  { id: 'dossier', label: 'Паспорт, сертификаты и резюме' },
+                  { id: 'expeditions', label: 'Журнал стажа, маршруты и снаряжение' },
+                ] as const
+              ).map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={docSubTab === sub.id}
+                  onClick={() => setDocSubTab(sub.id)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    docSubTab === sub.id
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <InstructorResumeGeneratorCard
-            user={user}
-            summary={effectiveProgressSummary}
-            inquiries={inquiries}
-            selfCheckRevision={selfCheckRevision}
-            selectedContour={selectedContour}
-            onJumpToProfile={() => navigateCabinetTarget('profile', 'account-profile-card')}
-            onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
-          />
+          {docSubTab === 'dossier' && (
+            <div className="space-y-6">
+              <InstructorPassportCard
+                user={user}
+                summary={effectiveProgressSummary}
+                inquiries={inquiries}
+                selfCheckRevision={selfCheckRevision}
+              />
 
-          <QualificationCertificatesJsonExportCard
-            user={user}
-            summary={effectiveProgressSummary}
-            inquiries={inquiries}
-            linkedAccounts={linkedAccounts}
-            selectedExamDate={selectedExamDate}
-            selectedContour={selectedContour}
-            selfCheckRevision={selfCheckRevision}
-          />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <ProfileAttestationCertificateCard
+                  user={user}
+                  summary={effectiveProgressSummary}
+                  inquiries={inquiries}
+                  selectedExamDate={selectedExamDate}
+                  selectedContour={selectedContour}
+                  onJumpToProfile={() => navigateCabinetTarget('profile', 'account-profile-card')}
+                />
+                <PreparationChecklistPdfCard
+                  user={user}
+                  summary={effectiveProgressSummary}
+                  inquiries={inquiries}
+                  selectedContour={selectedContour}
+                />
+              </div>
 
-          <ProfessionalExperienceLogCard user={user} />
+              <InstructorResumeGeneratorCard
+                user={user}
+                summary={effectiveProgressSummary}
+                inquiries={inquiries}
+                selfCheckRevision={selfCheckRevision}
+                selectedContour={selectedContour}
+                onJumpToProfile={() => navigateCabinetTarget('profile', 'account-profile-card')}
+                onJumpToPassport={() => scrollToElementById('instructor-digital-passport')}
+              />
 
-          <HikeScheduleExportCard user={user} />
+              <QualificationCertificatesJsonExportCard
+                user={user}
+                summary={effectiveProgressSummary}
+                inquiries={inquiries}
+                linkedAccounts={linkedAccounts}
+                selectedExamDate={selectedExamDate}
+                selectedContour={selectedContour}
+                selfCheckRevision={selfCheckRevision}
+              />
+            </div>
+          )}
 
-          <ExperienceRoutesLeafletMapCard
-            user={user}
-            onJumpToJournal={() => scrollToElementById('professional-experience-log')}
-          />
+          {docSubTab === 'expeditions' && (
+            <div className="space-y-6">
+              <ProfessionalExperienceLogCard user={user} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <RouteComplexityPieWidget
-              user={user}
-              onJumpToJournal={() => scrollToElementById('professional-experience-log')}
-            />
-            <RouteComplexityForecastCard
-              user={user}
-              onJumpToJournal={() => scrollToElementById('professional-experience-log')}
-            />
-          </div>
+              <HikeScheduleExportCard user={user} />
 
-          <GearChecklistGeneratorCard
-            user={user}
-            onJumpToJournal={() => scrollToElementById('professional-experience-log')}
-          />
+              <ExperienceRoutesLeafletMapCard
+                user={user}
+                onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+              />
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <RouteComplexityPieWidget
+                  user={user}
+                  onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+                />
+                <RouteComplexityForecastCard
+                  user={user}
+                  onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+                />
+              </div>
+
+              <GearChecklistGeneratorCard
+                user={user}
+                onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+              />
+            </div>
+          )}
         </div>
       )}
 

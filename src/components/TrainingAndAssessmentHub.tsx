@@ -3,7 +3,7 @@ import { ArrowRight, BookOpenCheck, Compass, Scale } from 'lucide-react';
 import { PreparationExamSimulator } from './landing/PreparationExamSimulator';
 import { InstructorLevelMiniQuiz } from './InstructorLevelMiniQuiz';
 import { RegulatoryKnowledgeMiniTest } from './RegulatoryKnowledgeMiniTest';
-import type { SiteTabId } from '../utils/seo';
+import { buildRouteUrl, type NavigateOptions, type SiteTabId } from '../utils/seo';
 import { tracker } from '../utils/tracker';
 
 type AssessmentModeId = 'exam' | 'level' | 'regulatory';
@@ -37,7 +37,7 @@ const ASSESSMENT_MODES: {
 export interface TrainingAndAssessmentHubProps {
   onApplyForSession?: (regionName: string, trackName: string) => void;
   onContactCurator?: (sourceLabel: string) => void;
-  onNavigateTab?: (tab: SiteTabId) => void;
+  onNavigateTab?: (tab: SiteTabId, options?: NavigateOptions) => void;
 }
 
 export const TrainingAndAssessmentHub: React.FC<TrainingAndAssessmentHubProps> = ({
@@ -53,9 +53,12 @@ export const TrainingAndAssessmentHub: React.FC<TrainingAndAssessmentHubProps> =
       onApplyForSession(regionName, trackName);
       return;
     }
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', 'overview');
-    window.history.pushState({ tab: 'overview' }, '', url.toString());
+    if (onNavigateTab) {
+      onNavigateTab('overview', { subTab: 'summary', anchor: 'inquiry-section' });
+      return;
+    }
+    const nextUrl = buildRouteUrl(window.location.pathname, 'overview', 'summary');
+    window.history.pushState({ tab: 'overview', subTab: 'summary' }, '', nextUrl);
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
@@ -64,9 +67,12 @@ export const TrainingAndAssessmentHub: React.FC<TrainingAndAssessmentHubProps> =
       onContactCurator(sourceLabel);
       return;
     }
-    const url = new URL(window.location.href);
-    url.searchParams.set('tab', 'faq');
-    window.history.pushState({ tab: 'faq' }, '', url.toString());
+    if (onNavigateTab) {
+      onNavigateTab('contacts', { subTab: 'contacts' });
+      return;
+    }
+    const nextUrl = buildRouteUrl(window.location.pathname, 'contacts', 'contacts');
+    window.history.pushState({ tab: 'contacts', subTab: 'contacts' }, '', nextUrl);
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
@@ -142,7 +148,7 @@ export const TrainingAndAssessmentHub: React.FC<TrainingAndAssessmentHubProps> =
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => onNavigateTab('certification')}
+              onClick={() => onNavigateTab('certification', { subTab: 'registry' })}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <span>График и реестр аттестаций</span>
@@ -150,7 +156,7 @@ export const TrainingAndAssessmentHub: React.FC<TrainingAndAssessmentHubProps> =
             </button>
             <button
               type="button"
-              onClick={() => onNavigateTab('account')}
+              onClick={() => onNavigateTab('account', { subTab: 'preparation' })}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <span>Личный кабинет и план</span>

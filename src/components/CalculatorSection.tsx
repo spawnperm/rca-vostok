@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Award, Calculator, FileDown, RotateCcw, TrendingUp } from 'lucide-react';
 import { DEMAND_PRESETS, DemandPreset } from '../data/researchData';
 import { DemandForecastService } from '../domain/certification/DemandForecastService.ts';
@@ -20,8 +20,37 @@ import { ExpertRatingCalculatorWidget } from './ExpertRatingCalculatorWidget';
 
 type CalculatorWorkspaceTab = 'demand_2030' | 'costs_budget' | 'expert_rating';
 
-export const CalculatorSection: React.FC = () => {
-  const [workspaceTab, setWorkspaceTab] = useState<CalculatorWorkspaceTab>('demand_2030');
+const VALID_CALC_TABS = new Set<CalculatorWorkspaceTab>([
+  'demand_2030',
+  'costs_budget',
+  'expert_rating',
+]);
+
+function resolveCalcTab(sub?: string): CalculatorWorkspaceTab {
+  if (sub && VALID_CALC_TABS.has(sub as CalculatorWorkspaceTab)) {
+    return sub as CalculatorWorkspaceTab;
+  }
+  return 'demand_2030';
+}
+
+interface CalculatorSectionProps {
+  initialSubTab?: string;
+  onSubTabChange?: (subTab: string) => void;
+}
+
+export const CalculatorSection: React.FC<CalculatorSectionProps> = ({
+  initialSubTab,
+  onSubTabChange,
+}) => {
+  const [workspaceTab, setWorkspaceTab] = useState<CalculatorWorkspaceTab>(() =>
+    resolveCalcTab(initialSubTab)
+  );
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setWorkspaceTab(resolveCalcTab(initialSubTab));
+    }
+  }, [initialSubTab]);
   const [activePresetId, setActivePresetId] = useState<string>(DEMAND_PRESETS[0].id);
   const [forecastScenario2030, setForecastScenario2030] =
     useState<CalculatorForecastScenario>('baseline');
@@ -186,6 +215,7 @@ export const CalculatorSection: React.FC = () => {
                 aria-selected={active}
                 onClick={() => {
                   setWorkspaceTab(id);
+                  onSubTabChange?.(id);
                   tracker.trackCustomInteraction(`Калькулятор · вкладка ${label}`, 'calculator');
                 }}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${

@@ -33,6 +33,7 @@ import {
   type GearRouteProfile,
   type GearSeasonMode,
 } from '../utils/gearChecklistGenerator';
+import { downloadTextFile } from '../utils/download';
 import type { SessionUser } from '../utils/identityApi';
 import { tracker } from '../utils/tracker';
 
@@ -204,15 +205,7 @@ export const GearChecklistGeneratorCard: React.FC<GearChecklistGeneratorCardProp
 
   const handleDownloadTxt = () => {
     const text = formatGearChecklistText(checklist, checkedSet);
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `rca-gear-${regionId}-${complexity.replace(/\s+/g, '')}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    downloadTextFile(text, `rca-gear-${regionId}-${complexity.replace(/\s+/g, '')}.txt`);
     tracker.trackCustomInteraction(
       'Личный кабинет · Скачать чек-лист снаряжения (.txt)',
       `${regionId}:${complexity}`

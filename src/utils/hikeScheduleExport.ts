@@ -4,6 +4,13 @@ import {
   type ExperienceLogEntry,
   type ExpeditionComplexity,
 } from '../domain/experience/ExperienceEntry.ts';
+import {
+  escapeIcsText,
+  formatIcsUtcTimestamp,
+} from './attestationCalendar.ts';
+import { downloadTextFile } from './download.ts';
+
+export { escapeIcsText, formatIcsUtcTimestamp };
 
 export type HikeDisciplineId = 'hiking' | 'water' | 'mountain' | 'ski' | 'combined';
 
@@ -249,24 +256,6 @@ export function convertExperienceEntryToPlannedHike(
   };
 }
 
-export function escapeIcsText(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/\r?\n/g, '\\n')
-    .replace(/,/g, '\\,')
-    .replace(/;/g, '\\;');
-}
-
-export function formatIcsUtcTimestamp(date: Date): string {
-  const y = date.getUTCFullYear();
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(date.getUTCDate()).padStart(2, '0');
-  const hh = String(date.getUTCHours()).padStart(2, '0');
-  const mm = String(date.getUTCMinutes()).padStart(2, '0');
-  const ss = String(date.getUTCSeconds()).padStart(2, '0');
-  return `${y}${m}${d}T${hh}${mm}${ss}Z`;
-}
-
 export function computeHikeUtcWindow(hike: PlannedHikeEntry): { startUtc: Date; endUtc: Date } {
   const [sy, sm, sd] = hike.startDateIso.split('-').map(Number);
   const [hhRaw, mmRaw] = (hike.startTimeLocal || '08:00').split(':').map(Number);
@@ -399,16 +388,7 @@ export function downloadHikesScheduleIcs(
   const dateStamp = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
   const fileName = `RCA_Vostok_Hikes_Schedule_${dateStamp}.ics`;
 
-  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadTextFile(icsContent, fileName, 'text/calendar;charset=utf-8');
 
   return { fileName, eventCount: hikes.length, icsContent };
 }

@@ -3,6 +3,7 @@ import {
   DFO_REGIONS_DISTRIBUTION,
   type DfoRegionDistribution,
 } from '../data/researchData.ts';
+import { downloadBlobFile } from './download.ts';
 import { drawRoundedRect } from './pdfCanvasHelpers.ts';
 
 export interface DfoReportAnalyticsSnapshot {
@@ -61,17 +62,6 @@ function csvEscape(value: string | number): string {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
-}
-
-function triggerBlobDownload(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function buildDfoAnalyticsCsvContent(options: DfoReportExportOptions): string {
@@ -219,7 +209,7 @@ export function exportDfoAnalyticsCsv(options: DfoReportExportOptions): void {
   const csv = buildDfoAnalyticsCsvContent(options);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const suffix = options.regionFilterId === 'all' ? 'dfo' : options.regionFilterId;
-  triggerBlobDownload(
+  downloadBlobFile(
     blob,
     `rca-vostok-report-${suffix}-${new Date().toISOString().slice(0, 10)}.csv`
   );
@@ -739,7 +729,7 @@ export async function exportDfoAnalyticsPdf(
   pdfCopy.set(pdfBytes);
   const pdfBlob = new Blob([pdfCopy.buffer], { type: 'application/pdf' });
   const suffix = options.regionFilterId === 'all' ? 'dfo' : options.regionFilterId;
-  triggerBlobDownload(
+  downloadBlobFile(
     pdfBlob,
     `rca-vostok-report-${suffix}-${new Date().toISOString().slice(0, 10)}.pdf`
   );

@@ -36,6 +36,7 @@ import {
   type AcademicWorkCategory,
   type AcademicWorkDocument,
 } from '../utils/dissertationPdfLibrary';
+import { downloadBlobFile } from '../utils/download';
 import { tracker } from '../utils/tracker';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -451,14 +452,7 @@ export const DissertationPdfReader: React.FC = () => {
     const copy = new Uint8Array(activeBytes.byteLength);
     copy.set(activeBytes);
     const blob = new Blob([copy.buffer], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = selectedWork.fileName;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadBlobFile(blob, selectedWork.fileName);
 
     tracker.trackCustomInteraction(
       'Диссертация: скачивание PDF из ридера',
