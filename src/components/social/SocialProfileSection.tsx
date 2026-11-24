@@ -1,7 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link2, MapPin, Save, UserPlus, UserCheck, Building2, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  Building2,
+  Link2,
+  MapPin,
+  Save,
+  Sparkles,
+  UserCheck,
+  UserPlus,
+} from 'lucide-react';
 import {
   SocialApiError,
+  mediaApi,
   socialApi,
   type ActivityItem,
   type SocialProfileData,
@@ -10,10 +20,10 @@ import { FeedSection } from './FeedSection';
 import { ChatSection } from './ChatSection';
 import { MediaLibrarySection } from '../media/MediaLibrarySection';
 
-type SocialTab = 'feed' | 'chat' | 'media' | 'about';
+export type SocialTab = 'feed' | 'chat' | 'media' | 'about';
 
 const TABS: { id: SocialTab; label: string }[] = [
-  { id: 'feed', label: 'Лента и блог' },
+  { id: 'feed', label: 'Лента, блог и CMS' },
   { id: 'chat', label: 'Чат' },
   { id: 'media', label: 'Медиатека' },
   { id: 'about', label: 'О себе' },
@@ -30,29 +40,50 @@ const ROLE_LABEL: Record<string, string> = {
 export function SocialProfileSection({
   userId,
   currentUserId,
+  userAvatarUrl,
   permissions,
+  initialTab = 'feed',
 }: {
   userId: string;
   currentUserId: string | null;
+  userAvatarUrl?: string | null;
   permissions: string[];
+  initialTab?: SocialTab;
 }) {
+  const [viewedUserId, setViewedUserId] = useState<string>(userId);
   const [profile, setProfile] = useState<SocialProfileData | null>(null);
+  const [albumCount, setAlbumCount] = useState<number>(0);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [tab, setTab] = useState<SocialTab>('feed');
+  const [tab, setTab] = useState<SocialTab>(initialTab);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<boolean>(false);
 
-  const isOwn = userId === currentUserId;
+  useEffect(() => {
+    setViewedUserId(userId);
+  }, [userId]);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [userAvatarUrl, viewedUserId]);
+
+  const isOwn = viewedUserId === currentUserId;
   const can = (permission: string) => permissions.includes(permission);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await socialApi.profile(userId);
+      const [data, albumsRes] = await Promise.all([
+        socialApi.profile(viewedUserId),
+        mediaApi.albums({ ownerId: viewedUserId }).catch(() => ({ albums: [], total: 0 })),
+      ]);
       setProfile(data);
+      setAlbumCount(albumsRes.total);
       if (isOwn) {
         const res = await socialApi.activity(12);
         setActivity(res.activity);
+      } else {
+        setActivity([]);
       }
       setError(null);
     } catch (err) {
@@ -60,11 +91,33 @@ export function SocialProfileSection({
     } finally {
       setLoading(false);
     }
-  }, [userId, isOwn]);
+  }, [viewedUserId, isOwn]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const refreshCounts = useCallback(async () => {
+    try {
+      const [data, albumsRes] = await Promise.all([
+        socialApi.profile(viewedUserId),
+        mediaApi.albums({ ownerId: viewedUserId }).catch(() => ({ albums: [], total: 0 })),
+      ]);
+      setProfile(data);
+      setAlbumCount(albumsRes.total);
+      if (isOwn) {
+        const res = await socialApi.activity(12);
+        setActivity(res.activity);
+      }
+    } catch {
+      // Keep UI responsive if background count refresh fails.
+    }
+  }, [viewedUserId, isOwn]);
+
+  const openAuthorProfile = (authorId: string) => {
+    setViewedUserId(authorId);
+    setTab('feed');
+  };
 
   const follow = async () => {
     if (!profile) return;
@@ -80,7 +133,7 @@ export function SocialProfileSection({
     }
   };
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <section className="bg-white border border-slate-200 rounded-xl p-8">
         <p className="text-sm text-slate-500">Загружаем профиль…</p>
@@ -96,17 +149,45 @@ export function SocialProfileSection({
     );
   }
 
+  const showPhotoAvatar = Boolean(isOwn && userAvatarUrl && !avatarError);
+
   return (
     <div className="space-y-5">
+      {!isOwn && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-medium text-slate-700">
+            Просмотр профиля участника: <span className="font-bold text-slate-900">{profile.displayName}</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => setViewedUserId(userId)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800 hover:text-teal-950 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+            Вернуться в свой профиль
+          </button>
+        </div>
+      )}
+
       {/* Profile header */}
       <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="h-24 bg-gradient-to-r from-teal-700 to-slate-700" aria-hidden="true" />
         <div className="px-6 pb-5">
           <div className="flex flex-wrap items-end justify-between gap-4 -mt-10">
             <div className="flex items-end gap-4">
-              <div className="w-20 h-20 rounded-xl bg-white border-4 border-white shadow flex items-center justify-center text-2xl font-bold text-teal-700">
-                {profile.displayName.slice(0, 1).toUpperCase()}
-              </div>
+              {showPhotoAvatar ? (
+                <img
+                  src={userAvatarUrl!}
+                  alt={`Аватар ${profile.displayName}`}
+                  referrerPolicy="no-referrer"
+                  onError={() => setAvatarError(true)}
+                  className="w-20 h-20 rounded-xl object-cover bg-white border-4 border-white shadow shrink-0"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-xl bg-white border-4 border-white shadow flex items-center justify-center text-2xl font-bold text-teal-700 shrink-0">
+                  {profile.displayName.slice(0, 1).toUpperCase()}
+                </div>
+              )}
               <div className="pb-1 space-y-1">
                 <h2 className="text-lg font-bold text-slate-900">{profile.displayName}</h2>
                 <p className="text-sm text-slate-600">
@@ -119,7 +200,7 @@ export function SocialProfileSection({
               <button
                 type="button"
                 onClick={follow}
-                className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                className={`inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   profile.isFollowedByMe
                     ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                     : 'bg-slate-900 text-white hover:bg-slate-800'
@@ -164,6 +245,7 @@ export function SocialProfileSection({
           <div className="flex flex-wrap gap-6 mt-4 pt-4 border-t border-slate-100">
             {[
               { label: 'публикаций', value: profile.postCount },
+              { label: 'альбомов', value: albumCount },
               { label: 'подписчиков', value: profile.followerCount },
               { label: 'подписок', value: profile.followingCount },
             ].map((stat) => (
@@ -183,7 +265,7 @@ export function SocialProfileSection({
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors cursor-pointer ${
+            className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               tab === t.id
                 ? 'text-teal-800 border-teal-700'
                 : 'text-slate-600 border-transparent hover:text-slate-900'
@@ -204,6 +286,10 @@ export function SocialProfileSection({
         <FeedSection
           canInteract={Boolean(currentUserId)}
           canPublishNews={can('social:moderate')}
+          currentUserId={currentUserId}
+          authorFilterUserId={!isOwn ? viewedUserId : undefined}
+          onSelectAuthor={openAuthorProfile}
+          onContentMutated={() => void refreshCounts()}
         />
       )}
 
@@ -211,11 +297,21 @@ export function SocialProfileSection({
         <ChatSection
           canUseChat={can('chat:use')}
           canCreateChannel={can('chat:create_channel')}
+          currentUserId={currentUserId}
+          canModerate={can('chat:moderate')}
+          onSelectAuthor={openAuthorProfile}
         />
       )}
 
       {tab === 'media' && (
-        <MediaLibrarySection canUpload={can('media:upload')} currentUserId={currentUserId} />
+        <MediaLibrarySection
+          canUpload={can('media:upload')}
+          canCreateAlbum={can('media:create_album')}
+          canModerate={can('media:moderate')}
+          currentUserId={currentUserId}
+          ownerFilterUserId={!isOwn ? viewedUserId : undefined}
+          onChanged={() => void refreshCounts()}
+        />
       )}
 
       {tab === 'about' && (

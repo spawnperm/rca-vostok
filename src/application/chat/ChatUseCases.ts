@@ -185,10 +185,14 @@ export class SendMessageUseCase {
     if (!channel) throw new NotFoundError('Канал не найден.');
 
     if (!(await this.chat.isMember(channelId, actor.id))) {
-      throw new ValidationError(
-        'Сначала присоединитесь к каналу.',
-        'NOT_A_MEMBER'
-      );
+      if (channel.type === 'public') {
+        await this.chat.addMember(channelId, actor.id, actor.fullName.value);
+      } else {
+        throw new ValidationError(
+          'Сначала присоединитесь к каналу.',
+          'NOT_A_MEMBER'
+        );
+      }
     }
 
     const input = parseOrThrow(sendMessageSchema, rawInput);

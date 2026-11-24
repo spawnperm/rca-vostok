@@ -1211,6 +1211,7 @@ export function AccountSection({
           <SocialProfileSection
             userId={user.id}
             currentUserId={user.id}
+            userAvatarUrl={user.avatarUrl}
             permissions={user.permissions}
           />
 

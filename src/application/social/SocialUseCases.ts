@@ -32,6 +32,7 @@ export const updatePostSchema = z.object({
   title: z.string().max(200).optional(),
   body: z.string().min(1).max(60000).optional(),
   tags: z.array(z.string().max(32)).max(8).optional(),
+  publish: z.boolean().optional(),
 });
 
 export const feedQuerySchema = z.object({
@@ -207,7 +208,9 @@ export class CreatePostUseCase {
         summary:
           post.kind === 'article'
             ? `Опубликована статья «${post.title}»`
-            : 'Опубликована запись в ленте',
+            : post.kind === 'news'
+              ? `Опубликована новость «${post.title}»`
+              : 'Опубликована запись в ленте',
         targetId: post.id,
         createdAt: post.createdAt,
       });
@@ -253,6 +256,24 @@ export class UpdatePostUseCase {
     const input = parseOrThrow(updatePostSchema, rawInput);
     const updated = post.edit(input);
     await this.social.savePost(updated);
+
+    if (post.status === 'draft' && updated.status === 'published') {
+      await this.social.recordActivity({
+        id: `act-${updated.id}`,
+        type: 'post',
+        actorId: actor.id,
+        actorName: actor.fullName.value,
+        summary:
+          updated.kind === 'article'
+            ? `Опубликована статья «${updated.title}»`
+            : updated.kind === 'news'
+              ? `Опубликована новость «${updated.title}»`
+              : 'Опубликована запись в ленте',
+        targetId: updated.id,
+        createdAt: updated.publishedAt ?? updated.updatedAt,
+      });
+    }
+
     return updated.toDTO();
   }
 }
@@ -320,12 +341,22 @@ export class GetPostUseCase {
     this.social = social;
   }
 
-  async execute(postId: string): Promise<{
+  async execute(
+    postId: string,
+    viewer: User | null = null
+  ): Promise<{
     post: ReturnType<Post['toDTO']>;
     comments: ReturnType<Comment['toDTO']>[];
   }> {
     const post = await this.social.findPost(postId);
     if (!post || post.status === 'removed') {
+      throw new NotFoundError('Запись не найдена.');
+    }
+    if (
+      post.status === 'draft' &&
+      post.authorId !== viewer?.id &&
+      !viewer?.can(PERMISSIONS.MODERATE_CONTENT)
+    ) {
       throw new NotFoundError('Запись не найдена.');
     }
 

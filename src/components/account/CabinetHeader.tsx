@@ -25,25 +25,25 @@ export const CABINET_TABS: readonly {
   {
     id: 'profile',
     label: 'Профиль и заявки',
-    description: 'Заявки, уведомления, OAuth, профиль и безопасность',
+    description: 'Заявки и CRM куратора, уведомления, OAuth, профиль и безопасность',
     icon: UserRound,
   },
   {
     id: 'preparation',
-    label: 'Подготовка и путь',
-    description: 'Маршрут 5 этапов, календарь комиссий, план и база знаний',
+    label: 'Подготовка и LMS',
+    description: 'LMS-трек 5 этапов, тесты компетенций, календарь комиссий и база знаний',
     icon: Compass,
   },
   {
     id: 'documents',
-    label: 'Опыт и документы',
-    description: 'Журнал походов, цифровой паспорт, резюме и выгрузки',
+    label: 'Документооборот и стаж',
+    description: 'Паспорт инструктора, PDF-сертификаты, резюме и журнал походов',
     icon: FileBadge2,
   },
   {
     id: 'community',
-    label: 'Сообщество и рейтинг',
-    description: 'Лента, чат, достижения, рейтинг ДФО и отзывы',
+    label: 'Соцсеть, блог и медиа',
+    description: 'Профили, новостной блог и CMS, чат, медиатека, ачивки и рейтинг',
     icon: Users,
   },
 ];

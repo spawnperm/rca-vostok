@@ -254,7 +254,7 @@ export class Post {
     }
   }
 
-  edit(input: { title?: unknown; body?: unknown; tags?: unknown }): Post {
+  edit(input: { title?: unknown; body?: unknown; tags?: unknown; publish?: unknown }): Post {
     if (this.status === 'removed') {
       throw new InvariantViolationError('Запись удалена и не может быть изменена.');
     }
@@ -290,6 +290,17 @@ export class Post {
       );
     }
 
+    const now = new Date().toISOString();
+    let status: 'draft' | 'published' | 'removed' = this.status;
+    let publishedAt = this.publishedAt;
+    if (input.publish === true) {
+      status = 'published';
+      publishedAt = this.publishedAt ?? now;
+    } else if (input.publish === false) {
+      status = 'draft';
+      publishedAt = null;
+    }
+
     return new Post({
       id: this.id,
       authorId: this.authorId,
@@ -301,12 +312,12 @@ export class Post {
       coverAssetId: this.coverAssetId,
       tags: input.tags === undefined ? this.tags : Post.normalizeTags(input.tags),
       visibility: this.visibility,
-      status: this.status,
+      status,
       likeCount: this.likeCount,
       commentCount: this.commentCount,
       createdAt: this.createdAt,
-      updatedAt: new Date().toISOString(),
-      publishedAt: this.publishedAt,
+      updatedAt: now,
+      publishedAt,
     });
   }
 

@@ -93,7 +93,7 @@ export function createSocialRouter(deps: SocialRouterDeps): express.Router {
 
   router.get('/api/social/posts/:postId', async (req, res) => {
     try {
-      res.json(await deps.getPost.execute(req.params.postId));
+      res.json(await deps.getPost.execute(req.params.postId, req.authUser ?? null));
     } catch (err) {
       sendDomainError(err, res);
     }

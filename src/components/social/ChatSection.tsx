@@ -1,5 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Hash, Plus, Send, MessageSquare, X, Smile } from 'lucide-react';
+import {
+  Check,
+  Hash,
+  MessageSquare,
+  Pencil,
+  Plus,
+  Send,
+  Smile,
+  Trash2,
+  X,
+} from 'lucide-react';
 import {
   SocialApiError,
   chatApi,
@@ -20,17 +30,22 @@ function ChannelList({
   channels: ChatChannel[];
   activeId: string | null;
   onSelect: (channel: ChatChannel) => void;
-  onCreate: (name: string) => Promise<void>;
+  onCreate: (input: { displayName: string; purpose?: string }) => Promise<void>;
   canCreate: boolean;
 }) {
   const [creating, setCreating] = useState<boolean>(false);
   const [name, setName] = useState<string>('');
+  const [purpose, setPurpose] = useState<string>('');
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (name.trim().length < 2) return;
-    await onCreate(name.trim());
+    await onCreate({
+      displayName: name.trim(),
+      purpose: purpose.trim() || undefined,
+    });
     setName('');
+    setPurpose('');
     setCreating(false);
   };
 
@@ -53,14 +68,40 @@ function ChannelList({
       </div>
 
       {creating && (
-        <form onSubmit={submit} className="px-1">
+        <form onSubmit={submit} className="px-1 space-y-1.5 pb-1">
           <input
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="название канала"
-            className="w-full px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none"
+            placeholder="Название канала"
+            className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none"
           />
+          <input
+            value={purpose}
+            onChange={(e) => setPurpose(e.target.value)}
+            placeholder="Тема обсуждения (необязательно)"
+            className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg focus:border-teal-600 focus:outline-none"
+          />
+          <div className="flex items-center gap-1.5">
+            <button
+              type="submit"
+              disabled={name.trim().length < 2}
+              className="flex-1 px-2.5 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+            >
+              Создать
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCreating(false);
+                setName('');
+                setPurpose('');
+              }}
+              className="px-2.5 py-1.5 border border-slate-300 text-slate-700 text-xs font-medium rounded-lg hover:bg-slate-50 cursor-pointer"
+            >
+              Отмена
+            </button>
+          </div>
         </form>
       )}
 
@@ -98,28 +139,61 @@ function MessageBubble({
   message,
   isMine,
   canModerate,
+  allowThread = true,
   onReact,
+  onEdit,
+  onDelete,
   onOpenThread,
+  onSelectAuthor,
 }: {
   message: ChatMessageData;
   isMine: boolean;
   canModerate: boolean;
+  allowThread?: boolean;
   onReact: (messageId: string, emoji: string) => void;
+  onEdit: (messageId: string, body: string) => Promise<void>;
+  onDelete: (messageId: string) => Promise<void>;
   onOpenThread: (message: ChatMessageData) => void;
+  onSelectAuthor?: (userId: string) => void;
 }) {
   const [showEmoji, setShowEmoji] = useState<boolean>(false);
+  const [editing, setEditing] = useState<boolean>(false);
+  const [editDraft, setEditDraft] = useState<string>(message.body);
+  const [busy, setBusy] = useState<boolean>(false);
   const palette = ['👍', '❤️', '🔥', '🎉', '👏', '🙏'];
 
+  const saveEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editDraft.trim() || busy) return;
+    setBusy(true);
+    try {
+      await onEdit(message.id, editDraft.trim());
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <li className={`flex gap-3 px-3 py-2 rounded-lg ${isMine ? 'bg-teal-50/40' : ''}`}>
+    <li className={`flex gap-3 px-3 py-2 rounded-lg ${isMine ? 'bg-teal-50/45' : ''}`}>
       <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
         {message.authorName.slice(0, 1).toUpperCase()}
       </div>
 
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-xs font-semibold text-slate-900">{message.authorName}</span>
-          <span className="text-[10px] text-slate-400">
+          {onSelectAuthor ? (
+            <button
+              type="button"
+              onClick={() => onSelectAuthor(message.authorId)}
+              className="text-xs font-semibold text-slate-900 hover:text-teal-700 cursor-pointer"
+            >
+              {message.authorName}
+            </button>
+          ) : (
+            <span className="text-xs font-semibold text-slate-900">{message.authorName}</span>
+          )}
+          <span className="text-[10px] text-slate-400 tabular-nums">
             {new Date(message.createdAt).toLocaleTimeString('ru-RU', {
               hour: '2-digit',
               minute: '2-digit',
@@ -128,80 +202,149 @@ function MessageBubble({
           {message.editedAt && <span className="text-[10px] text-slate-400">изменено</span>}
         </div>
 
-        {message.body ? (
+        {editing ? (
+          <form onSubmit={saveEdit} className="flex items-center gap-1.5 pt-0.5">
+            <input
+              autoFocus
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value)}
+              className="flex-1 px-2.5 py-1 text-sm border border-teal-400 rounded-lg focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={busy || editDraft.trim().length === 0}
+              aria-label="Сохранить изменения"
+              className="p-1.5 bg-teal-700 text-white rounded-lg hover:bg-teal-800 disabled:opacity-50 cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                setEditDraft(message.body);
+              }}
+              aria-label="Отменить редактирование"
+              className="p-1.5 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </form>
+        ) : message.body ? (
           <p className="text-sm text-slate-800 whitespace-pre-line break-words">{message.body}</p>
         ) : (
           <p className="text-xs italic text-slate-400">сообщение удалено</p>
         )}
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {message.reactions.map((r) => (
-            <button
-              key={r.emoji}
-              type="button"
-              onClick={() => onReact(message.id, r.emoji)}
-              className={`px-1.5 py-0.5 rounded text-[11px] border transition-colors cursor-pointer ${
-                r.mine
-                  ? 'bg-teal-50 border-teal-300 text-teal-800'
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {r.emoji} {r.count}
-            </button>
-          ))}
+        {message.body && !editing && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {message.reactions.map((r) => (
+              <button
+                key={r.emoji}
+                type="button"
+                onClick={() => onReact(message.id, r.emoji)}
+                className={`px-1.5 py-0.5 rounded text-[11px] border transition-colors cursor-pointer ${
+                  r.mine
+                    ? 'bg-teal-50 border-teal-300 text-teal-800'
+                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {r.emoji} {r.count}
+              </button>
+            ))}
 
-          <button
-            type="button"
-            onClick={() => setShowEmoji((v) => !v)}
-            aria-label="Добавить реакцию"
-            className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
-          >
-            <Smile className="w-3.5 h-3.5" />
-          </button>
-
-          {showEmoji && (
-            <span className="inline-flex gap-0.5 bg-white border border-slate-200 rounded-lg px-1 py-0.5 shadow-sm">
-              {palette.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => {
-                    onReact(message.id, emoji);
-                    setShowEmoji(false);
-                  }}
-                  className="px-1 hover:bg-slate-100 rounded cursor-pointer"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </span>
-          )}
-
-          {message.replyCount > 0 && (
             <button
               type="button"
-              onClick={() => onOpenThread(message)}
-              className="inline-flex items-center gap-1 text-[11px] text-teal-700 hover:text-teal-900 font-medium cursor-pointer"
+              onClick={() => setShowEmoji((v) => !v)}
+              aria-label="Добавить реакцию"
+              className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
             >
-              <MessageSquare className="w-3 h-3" aria-hidden="true" />
-              {message.replyCount} в треде
+              <Smile className="w-3.5 h-3.5" />
             </button>
-          )}
 
-          <button
-            type="button"
-            onClick={() => onOpenThread(message)}
-            className="text-[11px] text-slate-500 hover:text-slate-800 cursor-pointer"
-          >
-            Ответить
-          </button>
-        </div>
+            {showEmoji && (
+              <span className="inline-flex gap-0.5 bg-white border border-slate-200 rounded-lg px-1 py-0.5 shadow-sm">
+                {palette.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => {
+                      onReact(message.id, emoji);
+                      setShowEmoji(false);
+                    }}
+                    className="px-1 hover:bg-slate-100 rounded cursor-pointer"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </span>
+            )}
+
+            {allowThread && message.replyCount > 0 && (
+              <button
+                type="button"
+                onClick={() => onOpenThread(message)}
+                className="inline-flex items-center gap-1 text-[11px] text-teal-700 hover:text-teal-900 font-medium cursor-pointer"
+              >
+                <MessageSquare className="w-3 h-3" aria-hidden="true" />
+                {message.replyCount} в треде
+              </button>
+            )}
+
+            {allowThread && (
+              <button
+                type="button"
+                onClick={() => onOpenThread(message)}
+                className="text-[11px] text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                Ответить
+              </button>
+            )}
+
+            {isMine && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditDraft(message.body);
+                  setEditing(true);
+                }}
+                aria-label="Редактировать сообщение"
+                className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                <Pencil className="w-3 h-3" aria-hidden="true" />
+              </button>
+            )}
+
+            {(isMine || canModerate) && (
+              <button
+                type="button"
+                onClick={() => void onDelete(message.id)}
+                aria-label="Удалить сообщение"
+                className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-red-700 cursor-pointer"
+              >
+                <Trash2 className="w-3 h-3" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </li>
   );
 }
 
-export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: boolean; canCreateChannel: boolean }) {
+export function ChatSection({
+  canUseChat,
+  canCreateChannel,
+  currentUserId = null,
+  canModerate = false,
+  onSelectAuthor,
+}: {
+  canUseChat: boolean;
+  canCreateChannel: boolean;
+  currentUserId?: string | null;
+  canModerate?: boolean;
+  onSelectAuthor?: (userId: string) => void;
+}) {
   const [channels, setChannels] = useState<ChatChannel[]>([]);
   const [active, setActive] = useState<ChatChannel | null>(null);
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
@@ -211,12 +354,31 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
   const [threadDraft, setThreadDraft] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const joinedChannelIdsRef = useRef<Set<string>>(new Set());
+  const prevChannelIdRef = useRef<string | null>(null);
+  const shouldStickToBottomRef = useRef<boolean>(true);
+
+  const ensureJoinedPublic = useCallback(async (channel: ChatChannel) => {
+    if (channel.type !== 'public') return;
+    if (joinedChannelIdsRef.current.has(channel.id)) return;
+    try {
+      await chatApi.join(channel.id);
+      joinedChannelIdsRef.current.add(channel.id);
+    } catch {
+      // If join fails transiently, send() also falls back cleanly.
+    }
+  }, []);
 
   const loadChannels = useCallback(async () => {
     try {
       const res = await chatApi.channels();
       setChannels(res.channels);
-      setActive((current) => current ?? res.channels[0] ?? null);
+      setActive((current) => {
+        if (current) {
+          return res.channels.find((c) => c.id === current.id) ?? res.channels[0] ?? null;
+        }
+        return res.channels[0] ?? null;
+      });
     } catch (err) {
       setError(err instanceof SocialApiError ? err.message : 'Не удалось загрузить каналы.');
     }
@@ -227,38 +389,71 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
     void loadChannels();
   }, [canUseChat, loadChannels]);
 
-  const loadMessages = useCallback(async (channel: ChatChannel) => {
+  const loadMessages = useCallback(
+    async (channel: ChatChannel) => {
+      try {
+        const res = await chatApi.messages(channel.id);
+        setMessages(res.messages);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof SocialApiError ? err.message : 'Не удалось загрузить сообщения.');
+      }
+    },
+    []
+  );
+
+  const refreshActiveThread = useCallback(async () => {
+    if (!active || !threadRoot) return;
     try {
-      const res = await chatApi.messages(channel.id);
-      setMessages(res.messages);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof SocialApiError ? err.message : 'Не удалось загрузить сообщения.');
+      const res = await chatApi.messages(active.id, threadRoot.id);
+      setThreadMessages(res.messages);
+    } catch {
+      // Keep current thread messages on transient poll error.
     }
-  }, []);
+  }, [active, threadRoot]);
 
   useEffect(() => {
     if (!active) return;
-    void loadMessages(active);
+    const switched = prevChannelIdRef.current !== active.id;
+    prevChannelIdRef.current = active.id;
+    if (switched) {
+      shouldStickToBottomRef.current = true;
+    }
 
-    // Polling keeps the view current without a WebSocket server.
-    const timer = setInterval(() => void loadMessages(active), POLL_MS);
+    void ensureJoinedPublic(active).then(() => loadMessages(active));
+
+    const timer = setInterval(() => {
+      void loadMessages(active);
+      void refreshActiveThread();
+    }, POLL_MS);
     return () => clearInterval(timer);
-  }, [active, loadMessages]);
+  }, [active, ensureJoinedPublic, loadMessages, refreshActiveThread]);
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && shouldStickToBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldStickToBottomRef.current = distanceToBottom < 48;
+  };
 
   const send = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!active || draft.trim().length === 0) return;
     const body = draft.trim();
     setDraft('');
+    shouldStickToBottomRef.current = true;
     try {
+      await ensureJoinedPublic(active);
       const msg = await chatApi.send(active.id, body);
       setMessages((prev) => [...prev, msg]);
+      setError(null);
     } catch (err) {
       setError(err instanceof SocialApiError ? err.message : 'Не удалось отправить сообщение.');
       setDraft(body);
@@ -271,6 +466,7 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
     const body = threadDraft.trim();
     setThreadDraft('');
     try {
+      await ensureJoinedPublic(active);
       const msg = await chatApi.send(active.id, body, threadRoot.id);
       setThreadMessages((prev) => [...prev, msg]);
       setMessages((prev) =>
@@ -280,6 +476,7 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
       );
     } catch (err) {
       setError(err instanceof SocialApiError ? err.message : 'Не удалось ответить в тред.');
+      setThreadDraft(body);
     }
   };
 
@@ -298,16 +495,45 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
     try {
       await chatApi.react(messageId, emoji);
       if (active) await loadMessages(active);
+      await refreshActiveThread();
     } catch {
-      // Reactions are non-critical; ignore failures silently.
+      // Reactions are non-critical.
     }
   };
 
-  const createChannel = async (displayName: string) => {
+  const editMessage = async (messageId: string, body: string) => {
     try {
-      const channel = await chatApi.createChannel({ displayName });
+      const updated = await chatApi.edit(messageId, body);
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+      setThreadMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof SocialApiError ? err.message : 'Не удалось изменить сообщение.');
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    try {
+      await chatApi.remove(messageId);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, body: '' } : m))
+      );
+      setThreadMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, body: '' } : m))
+      );
+      setError(null);
+    } catch (err) {
+      setError(err instanceof SocialApiError ? err.message : 'Не удалось удалить сообщение.');
+    }
+  };
+
+  const createChannel = async (input: { displayName: string; purpose?: string }) => {
+    try {
+      const channel = await chatApi.createChannel(input);
+      joinedChannelIdsRef.current.add(channel.id);
       setChannels((prev) => [...prev, channel]);
       setActive(channel);
+      setError(null);
     } catch (err) {
       setError(err instanceof SocialApiError ? err.message : 'Не удалось создать канал.');
     }
@@ -328,7 +554,7 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
           <ChannelList
             channels={channels}
             activeId={active?.id ?? null}
-            onSelect={setActive}
+            onSelect={(ch) => setActive(ch)}
             onCreate={createChannel}
             canCreate={canCreateChannel}
           />
@@ -338,16 +564,25 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
           {active ? (
             <>
               <div className="px-4 py-3 border-b border-slate-200">
-                <h3 className="text-sm font-bold text-slate-900 inline-flex items-center gap-1.5">
-                  <Hash className="w-4 h-4 text-slate-400" aria-hidden="true" />
-                  {active.displayName}
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 inline-flex items-center gap-1.5">
+                    <Hash className="w-4 h-4 text-slate-400" aria-hidden="true" />
+                    {active.displayName}
+                  </h3>
+                  <span className="text-[11px] text-slate-400 tabular-nums">
+                    участников: {active.memberCount}
+                  </span>
+                </div>
                 {active.purpose && (
                   <p className="text-xs text-slate-500 mt-0.5">{active.purpose}</p>
                 )}
               </div>
 
-              <div ref={scrollRef} className="flex-1 overflow-y-auto py-2 max-h-[420px]">
+              <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto py-2 max-h-[420px]"
+              >
                 {messages.length === 0 ? (
                   <p className="text-sm text-slate-500 text-center py-10">
                     Сообщений пока нет. Напишите первым.
@@ -358,10 +593,13 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
                       <MessageBubble
                         key={m.id}
                         message={m}
-                        isMine={false}
-                        canModerate={false}
+                        isMine={Boolean(currentUserId) && m.authorId === currentUserId}
+                        canModerate={canModerate}
                         onReact={react}
+                        onEdit={editMessage}
+                        onDelete={deleteMessage}
                         onOpenThread={openThread}
+                        onSelectAuthor={onSelectAuthor}
                       />
                     ))}
                   </ul>
@@ -378,6 +616,7 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
                 <button
                   type="submit"
                   disabled={draft.trim().length === 0}
+                  aria-label="Отправить сообщение"
                   className="px-3 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
                 >
                   <Send className="w-4 h-4" aria-hidden="true" />
@@ -426,10 +665,14 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
                   <MessageBubble
                     key={m.id}
                     message={m}
-                    isMine={false}
-                    canModerate={false}
+                    isMine={Boolean(currentUserId) && m.authorId === currentUserId}
+                    canModerate={canModerate}
+                    allowThread={false}
                     onReact={react}
+                    onEdit={editMessage}
+                    onDelete={deleteMessage}
                     onOpenThread={() => undefined}
+                    onSelectAuthor={onSelectAuthor}
                   />
                 ))}
               </ul>
@@ -448,6 +691,7 @@ export function ChatSection({ canUseChat, canCreateChannel }: { canUseChat: bool
               <button
                 type="submit"
                 disabled={threadDraft.trim().length === 0}
+                aria-label="Ответить в тред"
                 className="px-3 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
               >
                 <Send className="w-4 h-4" aria-hidden="true" />

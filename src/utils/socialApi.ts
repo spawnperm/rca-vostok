@@ -191,6 +191,25 @@ export const socialApi = {
       body: JSON.stringify(input),
     }),
 
+  updatePost: (
+    postId: string,
+    input: {
+      title?: string;
+      body?: string;
+      tags?: string[];
+      publish?: boolean;
+    }
+  ) =>
+    request<FeedPost>(`/api/social/posts/${postId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+
+  deletePost: (postId: string) =>
+    request<{ ok: true }>(`/api/social/posts/${postId}`, {
+      method: 'DELETE',
+    }),
+
   getPost: (postId: string) =>
     request<{ post: FeedPost; comments: PostComment[] }>(`/api/social/posts/${postId}`),
 
@@ -249,6 +268,17 @@ export const chatApi = {
       body: JSON.stringify({ body, rootId }),
     }),
 
+  edit: (messageId: string, body: string) =>
+    request<ChatMessageData>(`/api/chat/messages/${messageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body }),
+    }),
+
+  remove: (messageId: string) =>
+    request<{ ok: true }>(`/api/chat/messages/${messageId}`, {
+      method: 'DELETE',
+    }),
+
   react: (messageId: string, emoji: string) =>
     request<{ emoji: string; active: boolean }>(
       `/api/chat/messages/${messageId}/reactions`,
@@ -286,8 +316,9 @@ export const mediaApi = {
    * against the domain rules before storing anything.
    */
   async upload(file: File, options: { albumId?: string; title?: string } = {}) {
+    const mimeType = inferUploadMimeType(file);
     const qs = new URLSearchParams({
-      mimeType: file.type,
+      mimeType,
       sizeBytes: String(file.size),
     });
     if (options.albumId) qs.set('albumId', options.albumId);
@@ -296,7 +327,7 @@ export const mediaApi = {
     const res = await fetch(`/api/media/assets?${qs}`, {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'Content-Type': file.type },
+      headers: { 'Content-Type': mimeType },
       body: file,
     });
 
@@ -315,3 +346,25 @@ export const mediaApi = {
   deleteAlbum: (albumId: string) =>
     request<{ ok: true }>(`/api/media/albums/${albumId}`, { method: 'DELETE' }),
 };
+
+function inferUploadMimeType(file: File): string {
+  if (file.type && file.type.includes('/')) return file.type;
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  const map: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    avif: 'image/avif',
+    gif: 'image/gif',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    mov: 'video/quicktime',
+    ogv: 'video/ogg',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
+    ogg: 'audio/ogg',
+    wav: 'audio/wav',
+  };
+  return map[ext] ?? 'application/octet-stream';
+}

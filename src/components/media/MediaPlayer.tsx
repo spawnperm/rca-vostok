@@ -223,10 +223,9 @@ export function MediaPlayer({
               {formatTime(current)} / {formatTime(duration)}
             </p>
           </div>
+          <audio ref={mediaRef as React.RefObject<HTMLAudioElement>} src={src} preload="metadata" />
         </div>
       )}
-
-      <audio ref={mediaRef as React.RefObject<HTMLAudioElement>} src={src} preload="metadata" />
 
       {/* Transport */}
       <div className="px-4 py-3 space-y-2 bg-slate-900">
