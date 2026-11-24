@@ -5,6 +5,8 @@ import { appLogger } from '../logging/Logger.ts';
 import type {
   AssignRoleUseCase,
   ChangePasswordUseCase,
+  ClaimAdminAccessUseCase,
+  GetAdminBootstrapStatusUseCase,
   GetProfileUseCase,
   ListUsersUseCase,
   LoginUseCase,
@@ -42,6 +44,8 @@ export interface IdentityRouterDeps {
   forgotRateLimit?: express.RequestHandler;
   forgotPassword?: ForgotPasswordUseCase;
   resetPassword?: ResetPasswordUseCase;
+  getAdminBootstrap?: GetAdminBootstrapStatusUseCase;
+  claimAdmin?: ClaimAdminAccessUseCase;
 }
 
 const identityLog = appLogger.child('identity');
@@ -239,6 +243,31 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
       sendError(err, res);
     }
   });
+
+  if (deps.getAdminBootstrap) {
+    router.get('/api/account/admin-bootstrap', requireAuth(), async (_req, res) => {
+      try {
+        res.setHeader('Cache-Control', 'no-store');
+        res.json(await deps.getAdminBootstrap!.execute());
+      } catch (err) {
+        sendError(err, res);
+      }
+    });
+  }
+
+  if (deps.claimAdmin) {
+    router.post('/api/account/claim-admin', requireAuth(), async (req, res) => {
+      try {
+        const body = (req.body || {}) as Record<string, unknown>;
+        const user = await deps.claimAdmin!.execute(req.authUser!, {
+          setupKey: body.setupKey,
+        });
+        res.json({ ok: true, user });
+      } catch (err) {
+        sendError(err, res);
+      }
+    });
+  }
 
   // ── Admin: user management (RBAC-gated) ───────────────────────────────────
   router.get('/api/admin/users', requireAuth(), requirePermission(PERMISSIONS.MANAGE_USERS), async (req, res) => {

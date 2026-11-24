@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'crypto';
 import { ValidationError, type DomainEventBus } from '../../domain/shared/DomainError.ts';
 import {
   ForbiddenError,
@@ -377,6 +378,88 @@ export class SetUserActiveUseCase {
 
     const updated = target.setActive(input.isActive);
     await this.users.save(updated);
+    return updated.toDTO();
+  }
+}
+
+export interface AdminBootstrapStatus {
+  hasAdmin: boolean;
+  setupKeyConfigured: boolean;
+  canClaimFirstAdmin: boolean;
+  canClaimWithSetupKey: boolean;
+}
+
+function constantTimeSecretMatches(provided: string, expected: string): boolean {
+  const a = createHash('sha256').update(provided, 'utf8').digest();
+  const b = createHash('sha256').update(expected, 'utf8').digest();
+  return timingSafeEqual(a, b);
+}
+
+/** Reports whether the local/initial admin bootstrap flow is still open. */
+export class GetAdminBootstrapStatusUseCase {
+  private readonly users: UserRepository;
+
+  constructor(users: UserRepository) {
+    this.users = users;
+  }
+
+  async execute(): Promise<AdminBootstrapStatus> {
+    const all = await this.users.listAll();
+    const hasAdmin = all.some((u) => u.role === ROLES.ADMIN && u.isActive);
+    const setupKeyConfigured = Boolean((process.env.RCA_ADMIN_SETUP_KEY ?? '').trim());
+    return {
+      hasAdmin,
+      setupKeyConfigured,
+      canClaimFirstAdmin: !hasAdmin && !setupKeyConfigured,
+      canClaimWithSetupKey: setupKeyConfigured,
+    };
+  }
+}
+
+/**
+ * Promotes the authenticated account to `admin` either:
+ * 1) in local mode when no active admin exists yet (`RCA_ADMIN_SETUP_KEY` unset), OR
+ * 2) when the caller supplies the server-side `RCA_ADMIN_SETUP_KEY` env secret.
+ */
+export class ClaimAdminAccessUseCase {
+  private readonly users: UserRepository;
+  private readonly eventBus: DomainEventBus;
+
+  constructor(users: UserRepository, eventBus: DomainEventBus) {
+    this.users = users;
+    this.eventBus = eventBus;
+  }
+
+  async execute(actor: User, input: { setupKey?: unknown } = {}): Promise<UserDTO> {
+    if (!actor.isActive) {
+      throw new ForbiddenError('users:manage');
+    }
+
+    const configuredKey = (process.env.RCA_ADMIN_SETUP_KEY ?? '').trim();
+    if (configuredKey) {
+      const provided = typeof input.setupKey === 'string' ? input.setupKey.trim() : '';
+      if (!provided || !constantTimeSecretMatches(provided, configuredKey)) {
+        throw new ValidationError('Неверный ключ активации администратора.', 'INVALID_CREDENTIALS');
+      }
+    } else {
+      const all = await this.users.listAll();
+      const hasAdmin = all.some((u) => u.role === ROLES.ADMIN && u.isActive);
+      if (hasAdmin && actor.role !== ROLES.ADMIN) {
+        throw new ForbiddenError('users:manage');
+      }
+    }
+
+    const updated = actor.role === ROLES.ADMIN ? actor : actor.changeRole(ROLES.ADMIN);
+    if (actor.role !== ROLES.ADMIN) {
+      await this.users.save(updated);
+      this.eventBus.publish({
+        eventName: 'identity.role_assigned',
+        occurredAt: new Date().toISOString(),
+        boundedContext: 'identity',
+        payload: { userId: updated.id, role: ROLES.ADMIN, assignedBy: 'bootstrap' },
+      });
+    }
+
     return updated.toDTO();
   }
 }

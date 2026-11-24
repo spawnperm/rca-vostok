@@ -25,6 +25,7 @@ import type { SessionUser } from '../utils/identityApi';
 import {
   DIAGNOSTIC_QUESTIONS,
   DIAGNOSTIC_SECTIONS,
+  DIAGNOSTICS_UPDATED_EVENT,
   createEmptyDiagnosticsState,
   evaluateAttestationDiagnostics,
   readStoredDiagnosticsState,
@@ -40,6 +41,7 @@ import {
   isEligibleForDemoCertificate,
 } from '../utils/demoCertificateCanvas';
 import { DemoCertificateModal } from './DemoCertificateModal';
+import { lmsProgressApi } from '../utils/lmsProgressApi';
 import { tracker } from '../utils/tracker';
 
 interface AttestationSelfDiagnosticsWidgetProps {
@@ -144,6 +146,20 @@ export const AttestationSelfDiagnosticsWidget: React.FC<
 
   useEffect(() => {
     setState(readStoredDiagnosticsState(userId));
+    if (!userId) return;
+    void lmsProgressApi.syncForUser(userId).then((res) => {
+      if (res) {
+        setState(readStoredDiagnosticsState(userId));
+      }
+    });
+    const onExternalUpdate = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ userId?: string | null }>).detail;
+      if (!detail || detail.userId === userId) {
+        setState(readStoredDiagnosticsState(userId));
+      }
+    };
+    window.addEventListener(DIAGNOSTICS_UPDATED_EVENT, onExternalUpdate);
+    return () => window.removeEventListener(DIAGNOSTICS_UPDATED_EVENT, onExternalUpdate);
   }, [userId]);
 
   const evaluation = useMemo(
@@ -156,6 +172,11 @@ export const AttestationSelfDiagnosticsWidget: React.FC<
   const persistState = (next: StoredDiagnosticsState) => {
     setState(next);
     writeStoredDiagnosticsState(userId, next);
+    if (userId) {
+      void lmsProgressApi.patch({ diagnostics: next }).catch(() => {
+        // local cache retains progress cleanly when offline
+      });
+    }
   };
 
   const currentSectionMeta =

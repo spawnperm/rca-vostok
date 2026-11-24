@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { KeyRound, ShieldAlert, ShieldCheck, Users } from 'lucide-react';
+import { KeyRound, ShieldAlert, ShieldCheck, ShieldPlus, Users } from 'lucide-react';
 import {
   ApiError,
   ROLE_LABELS,
   identityApi,
+  type AdminBootstrapStatus,
   type Role,
   type SessionUser,
 } from '../../utils/identityApi';
@@ -266,6 +267,122 @@ export function UserAdminCard({ currentUserId }: { currentUserId: string }) {
             );
           })}
         </ul>
+      )}
+    </section>
+  );
+}
+
+export function AdminBootstrapCard({
+  user,
+  onPromoted,
+}: {
+  user: SessionUser;
+  onPromoted: (nextUser: SessionUser) => void;
+}) {
+  const [status, setStatus] = useState<AdminBootstrapStatus | null>(null);
+  const [setupKey, setSetupKey] = useState<string>('');
+  const [busy, setBusy] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user.role === 'admin') {
+      setStatus(null);
+      return;
+    }
+    let cancelled = false;
+    identityApi
+      .adminBootstrapStatus()
+      .then((res) => {
+        if (!cancelled) setStatus(res);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id, user.role]);
+
+  if (user.role === 'admin' || !status) return null;
+  if (!status.canClaimFirstAdmin && !status.canClaimWithSetupKey) return null;
+
+  const handleClaim = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await identityApi.claimAdmin(status.setupKeyConfigured ? setupKey : undefined);
+      setSetupKey('');
+      tracker.trackCustomInteraction('Первичная активация роли администратора', 'account');
+      onPromoted(res.user);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Не удалось активировать права администратора.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section
+      id="local-admin-bootstrap"
+      className="bg-teal-50/60 border border-teal-200 rounded-xl p-6 space-y-4"
+    >
+      <div className="space-y-1">
+        <h3 className="text-base font-bold text-slate-900 inline-flex items-center gap-2">
+          <ShieldPlus className="w-4 h-4 text-teal-700" aria-hidden="true" />
+          <span>Назначение прав администратора и куратора (локальный режим)</span>
+        </h3>
+        <p className="text-xs sm:text-sm text-slate-700 leading-relaxed">
+          {status.setupKeyConfigured
+            ? 'На сервере задан ключ активации администратора (RCA_ADMIN_SETUP_KEY). Введите его, чтобы получить права администратора, управлять ролями (включая «Куратор РЦА») и работать с CRM-очередью заявок.'
+            : 'В локальной базе ещё не назначен ни один администратор. Вы можете активировать права первого администратора для текущей учётной записи — откроется CRM-очередь заявок и панель назначения ролей («Куратор РЦА», «Администратор»). После первой активации кнопка автоматически заблокируется для остальных аккаунтов.'}
+        </p>
+      </div>
+
+      {status.setupKeyConfigured ? (
+        <form onSubmit={(e) => void handleClaim(e)} className="space-y-3">
+          <Field label="Ключ активации администратора" htmlFor="admin-setup-key">
+            <input
+              id="admin-setup-key"
+              type="password"
+              value={setupKey}
+              onChange={(e) => setSetupKey(e.target.value)}
+              placeholder="Введите RCA_ADMIN_SETUP_KEY"
+              autoComplete="off"
+              className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none"
+            />
+          </Field>
+          {error && (
+            <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={busy || !setupKey.trim()}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            <ShieldPlus className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{busy ? 'Активация…' : 'Получить права администратора'}</span>
+          </button>
+        </form>
+      ) : (
+        <div className="space-y-3">
+          {error && (
+            <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void handleClaim()}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-800 disabled:opacity-50 transition-colors cursor-pointer"
+          >
+            <ShieldPlus className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{busy ? 'Активация…' : 'Активировать права первого администратора'}</span>
+          </button>
+        </div>
       )}
     </section>
   );

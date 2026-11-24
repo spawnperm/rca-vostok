@@ -14,6 +14,7 @@ import {
   ANSWER_LEVEL_OPTIONS,
   QUALIFICATION_TRACKS,
   SELF_CHECK_QUESTIONS,
+  SELF_CHECK_UPDATED_EVENT,
   createEmptySelfCheckState,
   evaluateSelfCheck,
   readStoredSelfCheck,
@@ -23,6 +24,7 @@ import {
   type QualificationTrackId,
   type StoredSelfCheckState,
 } from '../utils/qualificationSelfCheck';
+import { lmsProgressApi } from '../utils/lmsProgressApi';
 import { tracker } from '../utils/tracker';
 
 type PieViewMode = 'status' | 'domains';
@@ -78,6 +80,19 @@ export const QualificationSelfCheckWidget: React.FC<QualificationSelfCheckWidget
 
   useEffect(() => {
     setState(readStoredSelfCheck(user.id));
+    void lmsProgressApi.syncForUser(user.id).then((res) => {
+      if (res) {
+        setState(readStoredSelfCheck(user.id));
+      }
+    });
+    const onExternalUpdate = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ userId?: string | null }>).detail;
+      if (!detail || detail.userId === user.id) {
+        setState(readStoredSelfCheck(user.id));
+      }
+    };
+    window.addEventListener(SELF_CHECK_UPDATED_EVENT, onExternalUpdate);
+    return () => window.removeEventListener(SELF_CHECK_UPDATED_EVENT, onExternalUpdate);
   }, [user.id]);
 
   const evaluation = useMemo(
@@ -104,6 +119,9 @@ export const QualificationSelfCheckWidget: React.FC<QualificationSelfCheckWidget
   const updateState = (next: StoredSelfCheckState) => {
     setState(next);
     writeStoredSelfCheck(user.id, next);
+    void lmsProgressApi.patch({ selfCheck: next }).catch(() => {
+      // local cache retains progress cleanly when offline
+    });
     onChange?.();
   };
 

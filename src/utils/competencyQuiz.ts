@@ -377,6 +377,8 @@ export function readStoredCompetencyQuizState(
   }
 }
 
+export const COMPETENCY_QUIZ_UPDATED_EVENT = 'rca-competency-quiz-updated';
+
 export function writeStoredCompetencyQuizState(
   userId: string | null | undefined,
   state: StoredCompetencyQuizState
@@ -384,6 +386,11 @@ export function writeStoredCompetencyQuizState(
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(getStorageKey(userId), JSON.stringify(state));
+    window.dispatchEvent(
+      new CustomEvent(COMPETENCY_QUIZ_UPDATED_EVENT, {
+        detail: { userId: userId ?? null },
+      })
+    );
   } catch {
     // ignore storage errors
   }

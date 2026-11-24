@@ -24,6 +24,13 @@ import {
   type GeneratedLearningPlanPdf,
   type LearningPrepLevelId,
 } from '../utils/learningPlanPdf';
+import {
+  LEARNING_PLAN_UPDATED_EVENT,
+  lmsProgressApi,
+  readStoredLearningPlan,
+  writeStoredLearningPlan,
+  type StoredLearningPlanState,
+} from '../utils/lmsProgressApi';
 import { buildRegionSelectOptions, DFO_REGIONS } from '../data/dfoRegions';
 import { tracker } from '../utils/tracker';
 
@@ -40,21 +47,40 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
   selectedContour = 'contour_b',
   onJumpToDiagnostics,
 }) => {
+  const initialPlan = readStoredLearningPlan(user?.id, selectedContour);
   const [candidateName, setCandidateName] = useState<string>(
     user?.fullName ?? 'Соискатель РЦА «Русский Восток»'
   );
   const [region, setRegion] = useState<string>(user?.region ?? DFO_REGIONS[0]);
-  const [levelId, setLevelId] = useState<LearningPrepLevelId>('intermediate');
-  const [contour, setContour] = useState<PreparationContour>(selectedContour);
-  const [gapDomainIds, setGapDomainIds] = useState<DiagnosticSectionId[]>([
-    'routing',
-    'first_aid',
-  ]);
+  const [levelId, setLevelId] = useState<LearningPrepLevelId>(initialPlan.levelId);
+  const [contour, setContour] = useState<PreparationContour>(
+    initialPlan.updatedAt ? initialPlan.contour : selectedContour
+  );
+  const [gapDomainIds, setGapDomainIds] = useState<DiagnosticSectionId[]>(
+    initialPlan.gapDomainIds
+  );
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [busyPdf, setBusyPdf] = useState<boolean>(false);
   const [pdfResult, setPdfResult] = useState<GeneratedLearningPlanPdf | null>(null);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const persistLearningPlan = (next: {
+    levelId: LearningPrepLevelId;
+    contour: PreparationContour;
+    gapDomainIds: DiagnosticSectionId[];
+  }) => {
+    const stamped: StoredLearningPlanState = {
+      ...next,
+      updatedAt: new Date().toISOString(),
+    };
+    writeStoredLearningPlan(user?.id, stamped);
+    if (user?.id) {
+      void lmsProgressApi.patch({ learningPlan: stamped }).catch(() => {
+        // localStorage retains fallback
+      });
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -64,8 +90,37 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
   }, [user]);
 
   useEffect(() => {
-    setContour(selectedContour);
-  }, [selectedContour]);
+    const stored = readStoredLearningPlan(user?.id, selectedContour);
+    setLevelId(stored.levelId);
+    setContour(stored.updatedAt ? stored.contour : selectedContour);
+    setGapDomainIds(stored.gapDomainIds);
+
+    if (!user?.id) return;
+    void lmsProgressApi.syncForUser(user.id).then((res) => {
+      if (res) {
+        const synced = readStoredLearningPlan(user.id, selectedContour);
+        if (synced.updatedAt) {
+          setLevelId(synced.levelId);
+          setContour(synced.contour);
+          setGapDomainIds(synced.gapDomainIds);
+        }
+      }
+    });
+
+    const onExternalUpdate = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ userId?: string | null }>).detail;
+      if (!detail || detail.userId === user.id) {
+        const synced = readStoredLearningPlan(user.id, selectedContour);
+        if (synced.updatedAt) {
+          setLevelId(synced.levelId);
+          setContour(synced.contour);
+          setGapDomainIds(synced.gapDomainIds);
+        }
+      }
+    };
+    window.addEventListener(LEARNING_PLAN_UPDATED_EVENT, onExternalUpdate);
+    return () => window.removeEventListener(LEARNING_PLAN_UPDATED_EVENT, onExternalUpdate);
+  }, [user?.id, selectedContour]);
 
   const syncFromDiagnostics = (silent = false) => {
     const stored = readStoredDiagnosticsState(user?.id);
@@ -82,15 +137,18 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
     const detectedGaps = evalRes.sections
       .filter((sec) => sec.status !== 'strong')
       .map((sec) => sec.id);
-    setGapDomainIds(detectedGaps.length > 0 ? detectedGaps : ['routing']);
-    if (evalRes.overallPercent >= 80) {
-      setLevelId('advanced');
-    } else if (evalRes.overallPercent >= 50) {
-      setLevelId('intermediate');
-    } else {
-      setLevelId('initial');
-    }
+    const nextGaps: DiagnosticSectionId[] = detectedGaps.length > 0 ? detectedGaps : ['routing'];
+    const nextLevel: LearningPrepLevelId =
+      evalRes.overallPercent >= 80
+        ? 'advanced'
+        : evalRes.overallPercent >= 50
+          ? 'intermediate'
+          : 'initial';
+
+    setGapDomainIds(nextGaps);
+    setLevelId(nextLevel);
     if (!silent) {
+      persistLearningPlan({ levelId: nextLevel, contour, gapDomainIds: nextGaps });
       setSyncNotice(
         `Синхронизировано с самодиагностикой: результат ${evalRes.overallPercent}%, выявлено приоритетных тем: ${detectedGaps.length}.`
       );
@@ -99,9 +157,11 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
   };
 
   useEffect(() => {
-    syncFromDiagnostics(true);
+    if (selfCheckRevision > 0) {
+      syncFromDiagnostics(true);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, selfCheckRevision]);
+  }, [selfCheckRevision]);
 
   useEffect(() => {
     const url = pdfResult?.pdfBlobUrl;
@@ -131,11 +191,23 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
     [candidateName, region, levelId, gapDomainIds, contour]
   );
 
+  const handleSelectLevel = (nextLevel: LearningPrepLevelId) => {
+    setLevelId(nextLevel);
+    persistLearningPlan({ levelId: nextLevel, contour, gapDomainIds });
+  };
+
+  const handleSelectContour = (nextContour: PreparationContour) => {
+    setContour(nextContour);
+    persistLearningPlan({ levelId, contour: nextContour, gapDomainIds });
+  };
+
   const toggleGap = (id: DiagnosticSectionId) => {
     setSyncNotice(null);
-    setGapDomainIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+    const nextGaps = gapDomainIds.includes(id)
+      ? gapDomainIds.filter((item) => item !== id)
+      : [...gapDomainIds, id];
+    setGapDomainIds(nextGaps);
+    persistLearningPlan({ levelId, contour, gapDomainIds: nextGaps });
   };
 
   const handleGeneratePdf = () => {
@@ -277,7 +349,7 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
                         name="learning-prep-level"
                         value={lvl.id}
                         checked={selected}
-                        onChange={() => setLevelId(lvl.id)}
+                        onChange={() => handleSelectLevel(lvl.id)}
                         className="mt-0.5 accent-teal-700 cursor-pointer shrink-0"
                       />
                       <div className="space-y-0.5">
@@ -298,7 +370,7 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
             <select
               id="lp-contour"
               value={contour}
-              onChange={(e) => setContour(e.target.value as PreparationContour)}
+              onChange={(e) => handleSelectContour(e.target.value as PreparationContour)}
               className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-teal-700"
             >
               <option value="contour_a">Контур А (зачёт подтверждённого стажа)</option>

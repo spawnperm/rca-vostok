@@ -105,9 +105,10 @@ import { PostgresGuideLeaderboardRepository } from './src/infrastructure/persist
 import { PostgresUserRepository } from './src/infrastructure/persistence/pg/PostgresUserRepository.ts';
 import { PostgresSessionRepository } from './src/infrastructure/persistence/pg/PostgresSessionRepository.ts';
 import {
-  InMemorySessionRepository,
-  InMemoryUserRepository,
-} from './src/infrastructure/persistence/InMemoryIdentityRepositories.ts';
+  JsonFilePasswordResetRepository,
+  JsonFileSessionRepository,
+  JsonFileUserRepository,
+} from './src/infrastructure/persistence/JsonFileIdentityRepositories.ts';
 import type {
   SessionRepository,
   UserRepository,
@@ -119,6 +120,8 @@ import {
 import {
   AssignRoleUseCase,
   ChangePasswordUseCase,
+  ClaimAdminAccessUseCase,
+  GetAdminBootstrapStatusUseCase,
   GetProfileUseCase,
   ListUsersUseCase,
   LoginUseCase,
@@ -149,7 +152,6 @@ import {
   ResetPasswordUseCase,
 } from './src/application/identity/PasswordResetUseCases.ts';
 import { PostgresPasswordResetRepository } from './src/infrastructure/persistence/pg/PostgresPasswordResetRepository.ts';
-import { InMemoryPasswordResetRepository } from './src/infrastructure/persistence/pg/PostgresPasswordResetRepository.ts';
 import type { PasswordResetRepository } from './src/domain/identity/PasswordReset.ts';
 import {
   LoggingMailer,
@@ -173,6 +175,14 @@ import {
 } from './src/application/experience/ExperienceJournalUseCases.ts';
 import { JsonFileExperienceJournalRepository } from './src/infrastructure/persistence/JsonFileExperienceJournalRepository.ts';
 import { createExperienceJournalRouter } from './src/infrastructure/http/ExperienceJournalRouter.ts';
+import type { LmsProgressRepository } from './src/domain/lms/LmsProgress.ts';
+import { JsonFileLmsProgressRepository } from './src/infrastructure/persistence/JsonFileLmsProgressRepository.ts';
+import { PostgresLmsProgressRepository } from './src/infrastructure/persistence/pg/PostgresLmsProgressRepository.ts';
+import {
+  GetLmsProgressUseCase,
+  UpdateLmsProgressUseCase,
+} from './src/application/lms/LmsProgressUseCases.ts';
+import { createLmsProgressRouter } from './src/infrastructure/http/LmsProgressRouter.ts';
 import {
   GetLiveInstructorMarketStatsUseCase,
   LiveMarketEventBuffer,
@@ -326,13 +336,13 @@ async function startServer() {
   const satisfactionSurveyRepo = new JsonFileSatisfactionSurveyRepository(DATA_DIR);
   const experienceJournalRepo = new JsonFileExperienceJournalRepository(DATA_DIR);
 
-  // Identity bounded context: PostgreSQL in production, in-memory for local dev.
+  // Identity bounded context: PostgreSQL in production, atomic JSON files locally.
   const userRepo: UserRepository = pool
     ? new PostgresUserRepository(pool)
-    : new InMemoryUserRepository();
+    : new JsonFileUserRepository(DATA_DIR);
   const sessionRepo: SessionRepository = pool
     ? new PostgresSessionRepository(pool)
-    : new InMemorySessionRepository();
+    : new JsonFileSessionRepository(DATA_DIR);
   const linkedAccountsRepo: LinkedAccountsRepository = pool
     ? new PostgresLinkedAccountsRepository(pool)
     : new JsonFileLinkedAccountsRepository(DATA_DIR);
@@ -471,7 +481,7 @@ async function startServer() {
 
   const resetTokenRepo: PasswordResetRepository = pool
     ? new PostgresPasswordResetRepository(pool)
-    : new InMemoryPasswordResetRepository();
+    : new JsonFilePasswordResetRepository(DATA_DIR);
 
   const forgotPassword = new ForgotPasswordUseCase(
     userRepo,
@@ -490,7 +500,8 @@ async function startServer() {
 
   app.use(
     createIdentityRouter({
-      registerUser: new RegisterUserUseCase(userRepo, passwordHasher, eventBus),      login: new LoginUseCase(userRepo, sessionRepo, passwordHasher, sessionTokens, eventBus),
+      registerUser: new RegisterUserUseCase(userRepo, passwordHasher, eventBus),
+      login: new LoginUseCase(userRepo, sessionRepo, passwordHasher, sessionTokens, eventBus),
       logout: new LogoutUseCase(sessionRepo, sessionTokens),
       getProfile: new GetProfileUseCase(),
       updateProfile: new UpdateProfileUseCase(userRepo, eventBus),
@@ -498,6 +509,8 @@ async function startServer() {
       listUsers: new ListUsersUseCase(userRepo),
       assignRole: new AssignRoleUseCase(userRepo, eventBus),
       setUserActive: new SetUserActiveUseCase(userRepo),
+      getAdminBootstrap: new GetAdminBootstrapStatusUseCase(userRepo),
+      claimAdmin: new ClaimAdminAccessUseCase(userRepo, eventBus),
       loginRateLimit,
       forgotPassword,
       resetPassword,
@@ -591,6 +604,16 @@ async function startServer() {
       logExpeditionUseCase,
       removeExpeditionUseCase,
       resetJournalUseCase: resetExperienceJournalUseCase,
+    })
+  );
+
+  const lmsProgressRepo: LmsProgressRepository = pool
+    ? new PostgresLmsProgressRepository(pool)
+    : new JsonFileLmsProgressRepository(DATA_DIR);
+  app.use(
+    createLmsProgressRouter({
+      getLmsProgress: new GetLmsProgressUseCase(lmsProgressRepo),
+      updateLmsProgress: new UpdateLmsProgressUseCase(lmsProgressRepo, eventBus),
     })
   );
 

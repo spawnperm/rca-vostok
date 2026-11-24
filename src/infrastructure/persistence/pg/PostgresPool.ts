@@ -71,6 +71,7 @@ const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> 
   { version: '008_user_attestation_expiry', run: (p) => migrateUserAttestationExpiry(p) },
   { version: '009_user_contact_details', run: (p) => migrateUserContactDetails(p) },
   { version: '010_user_avatar_url', run: (p) => migrateUserAvatarUrl(p) },
+  { version: '011_lms_progress', run: (p) => migrateLmsProgress(p) },
 ];
 
 /**
@@ -795,4 +796,16 @@ async function migrateUserAvatarUrl(pool: pg.Pool): Promise<void> {
       ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT '';
   `);
 }
+
+/** Per-user LMS progress storage (self-check, competency quiz, learning plan, diagnostics). */
+async function migrateLmsProgress(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS lms_progress (
+      user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      state_json JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+}
+
 

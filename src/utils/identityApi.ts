@@ -70,6 +70,31 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload as T;
 }
 
+export interface AdminBootstrapStatus {
+  hasAdmin: boolean;
+  setupKeyConfigured: boolean;
+  canClaimFirstAdmin: boolean;
+  canClaimWithSetupKey: boolean;
+}
+
+export type InquiryStatus = 'new' | 'in_review' | 'needs_documents' | 'approved' | 'rejected';
+
+export interface AdminInquiryRecord {
+  id: string;
+  fullName: string;
+  email: string;
+  contactChannel: string;
+  region: string;
+  track: string;
+  experienceNote: string;
+  consentAccepted: boolean;
+  sessionDate?: string | null;
+  statusComment?: string;
+  userId: string | null;
+  status: InquiryStatus;
+  createdAt: string;
+}
+
 export const identityApi = {
   async session(): Promise<{ authenticated: boolean; user?: SessionUser }> {
     return request('/api/auth/session');
@@ -128,6 +153,17 @@ export const identityApi = {
     });
   },
 
+  async adminBootstrapStatus(): Promise<AdminBootstrapStatus> {
+    return request('/api/account/admin-bootstrap');
+  },
+
+  async claimAdmin(setupKey?: string): Promise<{ ok: true; user: SessionUser }> {
+    return request('/api/account/claim-admin', {
+      method: 'POST',
+      body: JSON.stringify(setupKey ? { setupKey } : {}),
+    });
+  },
+
   async listUsers(): Promise<{ users: SessionUser[] }> {
     return request('/api/admin/users');
   },
@@ -143,6 +179,20 @@ export const identityApi = {
     return request(`/api/admin/users/${encodeURIComponent(userId)}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ isActive }),
+    });
+  },
+
+  async listAllInquiries(): Promise<{ inquiries: AdminInquiryRecord[] }> {
+    return request('/api/admin/inquiries');
+  },
+
+  async updateInquiryStatus(
+    inquiryId: string,
+    input: { status: InquiryStatus; statusComment?: string }
+  ): Promise<AdminInquiryRecord> {
+    return request(`/api/admin/inquiries/${encodeURIComponent(inquiryId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
     });
   },
 };

@@ -62,12 +62,15 @@ import { ReviewStatsWidget } from './ReviewStatsWidget';
 import { AuthPanel, type AuthMode } from './account/AuthPanel';
 import { CABINET_TABS, CabinetHeader, type CabinetTab } from './account/CabinetHeader';
 import {
+  AdminBootstrapCard,
   PasswordCard,
   PermissionsCard,
   UserAdminCard,
 } from './account/SecurityAndAdminPanel';
+import { CuratorInquiriesCrmCard } from './account/CuratorInquiriesCrmCard';
 import { AccountNotificationsHub } from './account/AccountNotificationsHub';
 import { identityApi, type SessionUser } from '../utils/identityApi';
+import { lmsProgressApi, resetLmsProgressClientCache } from '../utils/lmsProgressApi';
 import {
   linkedAccountsApi,
   type ExamAutofillPayload,
@@ -267,6 +270,20 @@ export function AccountSection({
     }
   }, [user, loadLinkedAccounts]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    void lmsProgressApi.syncForUser(user.id).then((res) => {
+      if (!cancelled && res) {
+        setSelfCheckRevision((n) => n + 1);
+        setCompetencyRevision((n) => n + 1);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   const handleSelectAutofillSource = useCallback(async (provider: LinkedProviderId) => {
     try {
       const res = await linkedAccountsApi.setAutofillSource(provider, true);
@@ -286,6 +303,7 @@ export function AccountSection({
     try {
       await identityApi.logout();
     } finally {
+      resetLmsProgressClientCache();
       setUser(null);
       setInquiries([]);
       setLinkedAccounts([]);
@@ -713,6 +731,10 @@ export function AccountSection({
             }
           />
 
+          {hasPermission(user, 'inquiries:view_all') && (
+            <CuratorInquiriesCrmCard onInquiryUpdated={() => void loadInquiries()} />
+          )}
+
           <AccountNotificationsHub
             user={user}
             inquiries={inquiries}
@@ -767,6 +789,7 @@ export function AccountSection({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div className="lg:col-span-7 space-y-6">
+              <AdminBootstrapCard user={user} onPromoted={handleAuthenticated} />
               <PasswordCard onChanged={() => setUser(null)} />
               {hasPermission(user, 'users:manage') && <UserAdminCard currentUserId={user.id} />}
             </div>

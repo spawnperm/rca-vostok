@@ -15,6 +15,7 @@ import {
 import type { SessionUser } from '../utils/identityApi';
 import {
   COMPETENCY_QUESTIONS,
+  COMPETENCY_QUIZ_UPDATED_EVENT,
   buildShortCompetencyQuiz,
   evaluatePeriodicityStatus,
   gradeCompetencyAttempt,
@@ -25,6 +26,7 @@ import {
   type QuizIntervalDays,
   type StoredCompetencyQuizState,
 } from '../utils/competencyQuiz';
+import { lmsProgressApi } from '../utils/lmsProgressApi';
 import { tracker } from '../utils/tracker';
 
 interface CompetencyAssessmentQuizCardProps {
@@ -67,11 +69,31 @@ export const CompetencyPeriodicBanner: React.FC<{
   revision?: number;
   onStartQuiz: () => void;
 }> = ({ user, revision = 0, onStartQuiz }) => {
-  const evaluation = useMemo(() => {
-    void revision;
-    const state = readStoredCompetencyQuizState(user.id);
-    return evaluatePeriodicityStatus(state);
+  const [quizState, setQuizState] = useState<StoredCompetencyQuizState>(() =>
+    readStoredCompetencyQuizState(user.id)
+  );
+
+  useEffect(() => {
+    setQuizState(readStoredCompetencyQuizState(user.id));
+    void lmsProgressApi.syncForUser(user.id).then((res) => {
+      if (res) {
+        setQuizState(readStoredCompetencyQuizState(user.id));
+      }
+    });
+    const onExternalUpdate = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ userId?: string | null }>).detail;
+      if (!detail || detail.userId === user.id) {
+        setQuizState(readStoredCompetencyQuizState(user.id));
+      }
+    };
+    window.addEventListener(COMPETENCY_QUIZ_UPDATED_EVENT, onExternalUpdate);
+    return () => window.removeEventListener(COMPETENCY_QUIZ_UPDATED_EVENT, onExternalUpdate);
   }, [user.id, revision]);
+
+  const evaluation = useMemo(
+    () => evaluatePeriodicityStatus(quizState),
+    [quizState]
+  );
 
   if (evaluation.urgency === 'up_to_date') {
     return null;
@@ -124,11 +146,34 @@ export const CompetencyAssessmentQuizCard: React.FC<CompetencyAssessmentQuizCard
   useEffect(() => {
     setState(readStoredCompetencyQuizState(user.id));
     setCurrentIdx(0);
+    void lmsProgressApi.syncForUser(user.id).then((res) => {
+      if (res) {
+        setState(readStoredCompetencyQuizState(user.id));
+      }
+    });
+    const onExternalUpdate = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ userId?: string | null }>).detail;
+      if (!detail || detail.userId === user.id) {
+        setState(readStoredCompetencyQuizState(user.id));
+      }
+    };
+    window.addEventListener(COMPETENCY_QUIZ_UPDATED_EVENT, onExternalUpdate);
+    return () => window.removeEventListener(COMPETENCY_QUIZ_UPDATED_EVENT, onExternalUpdate);
   }, [user.id]);
 
   const persist = (next: StoredCompetencyQuizState) => {
     setState(next);
     writeStoredCompetencyQuizState(user.id, next);
+    void lmsProgressApi
+      .patch({
+        competencyQuiz: {
+          ...next,
+          updatedAt: new Date().toISOString(),
+        },
+      })
+      .catch(() => {
+        // local cache retains progress cleanly when offline
+      });
     onUpdated?.();
   };
 
