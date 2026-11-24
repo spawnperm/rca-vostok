@@ -6,16 +6,8 @@ import {
   renderOverviewDemoCertificateToCanvas,
   type GeneratedOverviewDemoCertificatePdf,
 } from '../utils/overviewDemoCertificatePdf';
+import { DFO_CORE_SIX_REGIONS } from '../data/dfoRegions';
 import { tracker } from '../utils/tracker';
-
-const DEMO_REGIONS = [
-  'Приморский край',
-  'Хабаровский край',
-  'Камчатский край',
-  'Сахалинская область',
-  'Амурская область',
-  'Республика Саха (Якутия)',
-] as const;
 
 const DEMO_TRACKS = [
   'Пешеходный туризм',
@@ -38,7 +30,7 @@ const DEMO_CONTOURS = [
 export const OverviewDemoCertificateSection: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [fullName, setFullName] = useState<string>('Соколов Алексей Владимирович');
-  const [region, setRegion] = useState<string>(DEMO_REGIONS[0]);
+  const [region, setRegion] = useState<string>(DFO_CORE_SIX_REGIONS[0]);
   const [track, setTrack] = useState<string>(DEMO_TRACKS[0]);
   const [category, setCategory] = useState<string>(DEMO_CATEGORIES[1]);
   const [contour, setContour] = useState<string>(DEMO_CONTOURS[0]);
@@ -182,7 +174,7 @@ export const OverviewDemoCertificateSection: React.FC = () => {
                 onChange={(e) => setRegion(e.target.value)}
                 className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-teal-700"
               >
-                {DEMO_REGIONS.map((item) => (
+                {DFO_CORE_SIX_REGIONS.map((item) => (
                   <option key={item} value={item}>
                     {item}
                   </option>

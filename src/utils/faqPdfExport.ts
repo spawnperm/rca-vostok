@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type { FaqItem } from '../data/researchData.ts';
 import { formatRussianDate } from './personalRoadmap.ts';
+import { wrapLines } from './pdfCanvasHelpers.ts';
 
 export interface FaqExportItem {
   id: string;
@@ -47,28 +48,6 @@ export function buildFaqExportPayload(
       answer: item.answer,
     })),
   };
-}
-
-function wrapLines(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      current = candidate;
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
 }
 
 interface MeasuredFaqBlock {

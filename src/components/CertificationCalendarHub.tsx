@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { CalendarDays, MapPin, Video } from 'lucide-react';
+import { CalendarDays, CalendarRange, MapPin, Video } from 'lucide-react';
 import { CertificationAttestationCalendar } from './CertificationAttestationCalendar';
 import { AttestationEventsCalendarWidget } from './AttestationEventsCalendarWidget';
+import { MarketFieldCommissionsCalendar } from './MarketFieldCommissionsCalendar';
 import { OverviewWebinarsSchedule } from './OverviewWebinarsSchedule';
 import { tracker } from '../utils/tracker';
 
-type CalendarTabId = 'dfo_sessions' | 'events_commissions' | 'webinars';
+type CalendarTabId = 'dfo_sessions' | 'events_commissions' | 'field_commissions' | 'webinars';
 
 const CALENDAR_TABS: {
   id: CalendarTabId;
@@ -24,6 +25,12 @@ const CALENDAR_TABS: {
     label: 'Календарь комиссий и напоминания',
     description: 'Выездные комиссии, вехи перехода и персональные напоминания по датам',
     Icon: MapPin,
+  },
+  {
+    id: 'field_commissions',
+    label: 'Выездные комиссии (сетка)',
+    description: 'Сетка очных и региональных комиссий по Приморью и субъектам ДФО с .ics-экспортом',
+    Icon: CalendarRange,
   },
   {
     id: 'webinars',
@@ -115,6 +122,8 @@ export const CertificationCalendarHub: React.FC<CertificationCalendarHubProps> =
           onContactCurator={handleCurator}
         />
       )}
+
+      {activeTab === 'field_commissions' && <MarketFieldCommissionsCalendar />}
 
       {activeTab === 'webinars' && (
         <OverviewWebinarsSchedule

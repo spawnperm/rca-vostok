@@ -41,6 +41,7 @@ import {
   downloadCalendarIcs,
 } from '../utils/attestationCalendar';
 import { tracker } from '../utils/tracker';
+import { buildRegionSelectOptions, DFO_REGIONS } from '../data/dfoRegions';
 import type { InquiryRecord } from './social/MyInquiriesSection';
 
 interface AttestationSessionsCalendarWidgetProps {
@@ -82,17 +83,6 @@ const DISCIPLINE_FILTERS: readonly { id: ExamDisciplineFilter; label: string }[]
   { id: 'водный', label: 'Водный' },
   { id: 'горный', label: 'Горный' },
   { id: 'спелеологический', label: 'Спелео' },
-];
-
-const DFO_REGIONS = [
-  'Приморский край',
-  'Камчатский край',
-  'Хабаровский край',
-  'Сахалинская область',
-  'Республика Саха (Якутия)',
-  'Амурская область',
-  'Магаданская область',
-  'Чукотский АО',
 ];
 
 export const AttestationSessionsCalendarWidget: React.FC<
@@ -1022,13 +1012,11 @@ export const AttestationSessionsCalendarWidget: React.FC<
                         onChange={(e) => setApplicantRegion(e.target.value)}
                         className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white text-slate-900 focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
                       >
-                        {[...new Set([applicantRegion, ...DFO_REGIONS])]
-                          .filter(Boolean)
-                          .map((r) => (
-                            <option key={r} value={r}>
-                              {r}
-                            </option>
-                          ))}
+                        {buildRegionSelectOptions(applicantRegion).map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
                       </select>
                     </div>
 

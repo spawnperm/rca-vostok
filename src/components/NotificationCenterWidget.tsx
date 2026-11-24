@@ -34,7 +34,10 @@ interface SystemNotification {
 
 const READ_STORAGE_PREFIX = 'rca_notifications_read_v1:';
 const SNAPSHOT_STORAGE_PREFIX = 'rca_inquiry_status_snapshot_v1:';
-const TODAY_ISO = '2026-11-22';
+
+function getTodayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const INQUIRY_STATUS_LABELS: Record<InquiryRecord['status'], string> = {
   new: 'Новая',
@@ -107,7 +110,7 @@ function formatDateRu(iso: string): string {
 
 function getDaysUntil(isoDate: string): number {
   const target = new Date(`${isoDate}T00:00:00Z`).getTime();
-  const today = new Date(`${TODAY_ISO}T00:00:00Z`).getTime();
+  const today = new Date(`${getTodayIso()}T00:00:00Z`).getTime();
   return Math.round((target - today) / (1000 * 60 * 60 * 24));
 }
 

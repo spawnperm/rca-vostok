@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type { AccreditationRegistryEntry } from '../data/dfoOverviewRegistryData.ts';
 import { formatRussianDate } from './personalRoadmap.ts';
+import { wrapLines } from './pdfCanvasHelpers.ts';
 
 export interface AccreditationExportPayload {
   docNumber: string;
@@ -41,28 +42,6 @@ export function buildAccreditationExportPayload(
     inProgressCount,
     entries,
   };
-}
-
-function wrapLines(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      current = candidate;
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
 }
 
 function renderRegistryPageCanvas(

@@ -349,7 +349,7 @@ export function buildQualificationUpdatesFeed(params: {
     journalEntries = [],
     regionalEvents = [],
     includeOtherLevels = false,
-    todayIso = '2026-11-24',
+    todayIso = new Date().toISOString().slice(0, 10),
   } = params;
 
   const items: UpdateFeedItem[] = [];

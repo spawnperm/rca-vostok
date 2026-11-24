@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   CalendarDays,
   ChevronDown,
@@ -428,6 +428,10 @@ export function RoutesAndNewsWorkspace({
   initialSubTab?: 'routes' | 'news';
 }) {
   const [subTab, setSubTab] = useState<'routes' | 'news'>(initialSubTab);
+
+  useEffect(() => {
+    setSubTab(initialSubTab);
+  }, [initialSubTab]);
 
   return (
     <div className="space-y-8">

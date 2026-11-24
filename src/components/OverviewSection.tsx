@@ -19,7 +19,6 @@ import { AccreditationRegistryTable } from './AccreditationRegistryTable';
 import { AccreditationRenewalLineChart } from './AccreditationRenewalLineChart';
 import { ActiveInquiriesDashboardWidget } from './ActiveInquiriesDashboardWidget';
 import { AttestationCommissionWidget } from './AttestationCommissionWidget';
-import { CertifiedGuidesRegistryTable } from './CertifiedGuidesRegistryTable';
 import { CertifiedInstructorsReviewsCarousel } from './CertifiedInstructorsReviewsCarousel';
 import { CourseSatisfactionSurvey } from './CourseSatisfactionSurvey';
 import { DfoHubsWeatherWidget } from './DfoHubsWeatherWidget';
@@ -27,9 +26,9 @@ import { ExpertProfileWidget } from './ExpertProfileWidget';
 import { InstructorReadinessSurvey } from './InstructorReadinessSurvey';
 import { OverviewAttestationStatusBar } from './OverviewAttestationStatusBar';
 import { PartnersAndCoOrganizersSection } from './PartnersAndCoOrganizersSection';
-import { PlatformFeedbackForm } from './PlatformFeedbackForm';
 import { SuccessStoriesSection } from './SuccessStoriesSection';
 import { generateOverviewDemoCertificatePdf } from '../utils/overviewDemoCertificatePdf';
+import { DFO_INQUIRY_REGIONS } from '../data/dfoRegions';
 import {
   ATTESTATION_TIMELINE_2025_2030,
   CENTER_ACCREDITATION_STATUS,
@@ -40,7 +39,17 @@ import { tracker } from '../utils/tracker';
 
 interface OverviewSectionProps {
   onNavigate: (
-    tab: 'calculator' | 'market' | 'dissertation' | 'presentations' | 'account' | 'certification'
+    tab:
+      | 'calculator'
+      | 'market'
+      | 'dissertation'
+      | 'presentations'
+      | 'account'
+      | 'certification'
+      | 'contacts'
+      | 'faq'
+      | 'learning'
+      | 'routes'
   ) => void;
 }
 
@@ -329,12 +338,20 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
         </div>
 
         {heroDemoCertNotice && (
-          <p
+          <div
             role="status"
-            className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3.5 py-2.5"
+            className="text-xs text-teal-900 bg-teal-50 border border-teal-200 rounded-lg px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2"
           >
-            {heroDemoCertNotice}
-          </p>
+            <span>{heroDemoCertNotice}</span>
+            <button
+              type="button"
+              onClick={() => onNavigate('certification')}
+              className="inline-flex items-center gap-1 font-semibold text-teal-800 hover:text-teal-950 underline underline-offset-4 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <span>Открыть конструктор в «Аттестации»</span>
+              <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
         )}
 
         {/* Workspace Sub-Navigation */}
@@ -661,13 +678,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
                       onChange={(e) => setRegion(e.target.value)}
                       className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-teal-700"
                     >
-                      <option value="Приморский край">Приморский край</option>
-                      <option value="Хабаровский край">Хабаровский край</option>
-                      <option value="Камчатский край">Камчатский край</option>
-                      <option value="Сахалинская область">Сахалинская область</option>
-                      <option value="Амурская область">Амурская область</option>
-                      <option value="Республика Саха (Якутия)">Республика Саха (Якутия)</option>
-                      <option value="Другой регион ДФО">Другой регион ДФО</option>
+                      {DFO_INQUIRY_REGIONS.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="space-y-1.5">
@@ -777,7 +792,27 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
           />
           <CourseSatisfactionSurvey />
           <DfoHubsWeatherWidget />
-          <PlatformFeedbackForm onOpenCuratorModal={openCuratorModal} />
+          <section className="bg-slate-50 border border-slate-200 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                Обратная связь и кураторская поддержка
+              </p>
+              <h3 className="text-base font-bold text-slate-900">
+                Форма отзывов о платформе, контакты приёмной комиссии и мессенджеры РЦА
+              </h3>
+              <p className="text-xs text-slate-600">
+                Все обращения и отзывы о качестве сервисов объединены в разделе «FAQ и связь».
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigate('contacts')}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <span>Перейти к контактам и отзыву</span>
+              <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </section>
         </div>
       )}
 
@@ -829,7 +864,28 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({ onNavigate }) 
 
           <AccreditationRegistryTable />
           <AccreditationRenewalLineChart />
-          <CertifiedGuidesRegistryTable />
+          <section className="bg-slate-50 border border-slate-200 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                Федеральный реестр проводников ДФО
+              </p>
+              <h3 className="text-base font-bold text-slate-900">
+                Поиск по действующим удостоверениям и конструктор образца документа
+              </h3>
+              <p className="text-xs text-slate-600">
+                Таблица аттестованных проводников с фильтрацией по субъектам и проверкой сроков
+                действия вынесена в раздел «Аттестация».
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onNavigate('certification')}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <span>Открыть реестр в «Аттестации»</span>
+              <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </section>
         </div>
       )}
 

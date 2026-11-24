@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { BookOpenCheck, Compass, Scale } from 'lucide-react';
+import { ArrowRight, BookOpenCheck, Compass, Scale } from 'lucide-react';
 import { PreparationExamSimulator } from './landing/PreparationExamSimulator';
 import { InstructorLevelMiniQuiz } from './InstructorLevelMiniQuiz';
 import { RegulatoryKnowledgeMiniTest } from './RegulatoryKnowledgeMiniTest';
+import type { SiteTabId } from '../utils/seo';
 import { tracker } from '../utils/tracker';
 
 type AssessmentModeId = 'exam' | 'level' | 'regulatory';
@@ -36,11 +37,13 @@ const ASSESSMENT_MODES: {
 export interface TrainingAndAssessmentHubProps {
   onApplyForSession?: (regionName: string, trackName: string) => void;
   onContactCurator?: (sourceLabel: string) => void;
+  onNavigateTab?: (tab: SiteTabId) => void;
 }
 
 export const TrainingAndAssessmentHub: React.FC<TrainingAndAssessmentHubProps> = ({
   onApplyForSession,
   onContactCurator,
+  onNavigateTab,
 }) => {
   const [mode, setMode] = useState<AssessmentModeId>('exam');
   const activeMeta = ASSESSMENT_MODES.find((m) => m.id === mode) ?? ASSESSMENT_MODES[0];
@@ -128,6 +131,33 @@ export const TrainingAndAssessmentHub: React.FC<TrainingAndAssessmentHubProps> =
           onApplyForSession={() => handleApplyFallback('Приморский край', 'Пешеходный туризм')}
           onContactCurator={handleCuratorFallback}
         />
+      )}
+
+      {onNavigateTab && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="text-xs text-slate-600">
+            После тренировки билетов выберите дату очной сессии в календаре ДФО или зафиксируйте
+            индивидуальный план обучения в личном кабинете.
+          </p>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('certification')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <span>График и реестр аттестаций</span>
+              <ArrowRight className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('account')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <span>Личный кабинет и план</span>
+              <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
       )}
     </section>
   );

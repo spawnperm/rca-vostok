@@ -3,6 +3,7 @@ import type { SessionUser } from './identityApi.ts';
 import type { UserAttestationSummary } from '../components/AttestationProgressWidget.tsx';
 import type { InquiryRecord } from '../components/social/MyInquiriesSection.tsx';
 import { formatRussianDate, type PreparationContour } from './personalRoadmap.ts';
+import { wrapLines } from './pdfCanvasHelpers.ts';
 
 export type HikeComplexityId = '1_ks' | '2_ks' | '3_ks' | '4_plus_ks';
 
@@ -446,28 +447,6 @@ export function buildPreparationChecklistData({
     readinessPercent,
     profileStagesNote,
   };
-}
-
-function wrapLines(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string[] {
-  const words = text.trim().split(/\s+/);
-  const lines: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const probe = current ? `${current} ${word}` : word;
-    if (ctx.measureText(probe).width <= maxWidth) {
-      current = probe;
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines.length > 0 ? lines : [''];
 }
 
 function createA4Canvas(pageNumber: number, totalPages: number, data: PreparationChecklistData) {

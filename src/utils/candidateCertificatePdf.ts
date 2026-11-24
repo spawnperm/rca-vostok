@@ -1,8 +1,12 @@
-import { jsPDF } from 'jspdf';
 import { ROLE_LABELS, type SessionUser } from './identityApi.ts';
 import type { UserAttestationSummary } from '../components/AttestationProgressWidget.tsx';
 import type { InquiryRecord } from '../components/social/MyInquiriesSection.tsx';
 import { formatRussianDate } from './personalRoadmap.ts';
+import {
+  exportCanvasAsA4PortraitPdf,
+  sanitizeFileSlug,
+  wrapLines,
+} from './pdfCanvasHelpers.ts';
 
 export interface CandidateCertificateStageRow {
   stepNumber: string;
@@ -113,28 +117,6 @@ export function buildCandidateCertificateData(
     statusConclusion,
     stages,
   };
-}
-
-function wrapLines(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      current = candidate;
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
 }
 
 function drawCurvedStampText(
@@ -562,15 +544,6 @@ function renderCertificateCanvas(data: CandidateCertificateData): HTMLCanvasElem
   return canvas;
 }
 
-function sanitizeFileSlug(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-zа-яё0-9]+/gi, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 40) || 'candidate';
-}
-
 export function generateCandidateCertificatePdf(
   user: SessionUser,
   summary: UserAttestationSummary,
@@ -579,23 +552,8 @@ export function generateCandidateCertificatePdf(
 ): GeneratedPdfResult {
   const data = buildCandidateCertificateData(user, summary, inquiries, examDateIso);
   const canvas = renderCertificateCanvas(data);
-  const previewDataUrl = canvas.toDataURL('image/png');
-
-  const pdf = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: true,
-  });
-
-  pdf.addImage(previewDataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
-
-  const fileName = `Spravka_RCA_${sanitizeFileSlug(user.fullName)}_${data.issuedAtIso}.pdf`;
-  const pdfBlob = pdf.output('blob');
-  const pdfBlobUrl = URL.createObjectURL(pdfBlob);
-
-  // Trigger download without window.open
-  pdf.save(fileName);
+  const fileName = `Spravka_RCA_${sanitizeFileSlug(user.fullName, 'candidate')}_${data.issuedAtIso}.pdf`;
+  const { previewDataUrl, pdfBlobUrl } = exportCanvasAsA4PortraitPdf(canvas, fileName);
 
   return {
     fileName,

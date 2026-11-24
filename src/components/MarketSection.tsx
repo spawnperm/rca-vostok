@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BarChart3, Compass, FileDown, Map, ShieldAlert } from 'lucide-react';
+import { ArrowRight, BarChart3, Compass, FileDown, Map, ShieldAlert } from 'lucide-react';
 import {
   BOTTLENECKS,
   HORIZON_STAGES,
@@ -7,6 +7,7 @@ import {
   RECOMMENDATIONS,
 } from '../data/researchData';
 import { exportMarketAnalyticsPdf } from '../utils/analyticsPdfReports';
+import type { SiteTabId } from '../utils/seo';
 import { tracker } from '../utils/tracker';
 import { DfoMultiRegionConcentrationChart } from './DfoMultiRegionConcentrationChart';
 import { DfoRegionComparisonChart } from './DfoRegionComparisonChart';
@@ -31,7 +32,11 @@ const MARKET_TABS: {
   { id: 'strategy', label: 'Сегменты, риски и 7 мер', Icon: ShieldAlert },
 ];
 
-export const MarketSection: React.FC = () => {
+interface MarketSectionProps {
+  onNavigate?: (tab: SiteTabId) => void;
+}
+
+export const MarketSection: React.FC<MarketSectionProps> = ({ onNavigate }) => {
   const [marketTab, setMarketTab] = useState<MarketTabId>('geo');
   const [geoLayer, setGeoLayer] = useState<GeoLayerId>('leaflet_dfo');
   const [demandChart, setDemandChart] = useState<DemandChartId>('concentration');
@@ -236,6 +241,23 @@ export const MarketSection: React.FC = () => {
           {demandChart === 'concentration' && <DfoMultiRegionConcentrationChart />}
           {demandChart === 'comparison' && <DfoRegionComparisonChart />}
           {demandChart === 'periods' && <DfoTwoPeriodDemandComparison />}
+
+          {onNavigate && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <p className="text-xs text-slate-600">
+                Рассчитайте индивидуальный прогноз закрытия дефицита кадров до 2030 года и смету
+                обучения ДПО ВВГУ в калькуляторе.
+              </p>
+              <button
+                type="button"
+                onClick={() => onNavigate('calculator')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <span>Открыть калькулятор 2030</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -488,6 +510,33 @@ export const MarketSection: React.FC = () => {
                 </div>
               ))}
             </div>
+
+            {onNavigate && (
+              <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <p className="text-xs text-slate-600">
+                  Ближайшие выездные и очные комиссии по 7 субъектам ДФО представлены в разделе
+                  аттестации.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('calculator')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <span>Калькулятор и смета</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('certification')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    <span>График аттестаций 2027</span>
+                    <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       )}

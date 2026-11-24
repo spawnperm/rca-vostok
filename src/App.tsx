@@ -416,9 +416,11 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'learning' && <LearningSection />}
-            {activeTab === 'preparation' && <LearningSection initialSubTab="exam" />}
-            {activeTab === 'certification' && <CertificationSection />}
+            {activeTab === 'learning' && <LearningSection onNavigateTab={navigateTo} />}
+            {activeTab === 'preparation' && (
+              <LearningSection initialSubTab="exam" onNavigateTab={navigateTo} />
+            )}
+            {activeTab === 'certification' && <CertificationSection onNavigateTab={navigateTo} />}
             {activeTab === 'routes' && <RoutesAndNewsWorkspace initialSubTab="routes" />}
             {activeTab === 'news' && <RoutesAndNewsWorkspace initialSubTab="news" />}
             {activeTab === 'faq' && (
@@ -435,7 +437,7 @@ export default function App() {
             <Suspense fallback={<SectionFallback label={SECTION_SEO_MAP[activeTab].name} />}>
               {activeTab === 'overview' && <OverviewSection onNavigate={navigateTo} />}
               {activeTab === 'calculator' && <CalculatorSection />}
-              {activeTab === 'market' && <MarketSection />}
+              {activeTab === 'market' && <MarketSection onNavigate={navigateTo} />}
               {activeTab === 'dissertation' && <DissertationSection />}
               {activeTab === 'presentations' && <PresentationsSection />}
               {activeTab === 'analytics' && <AnalyticsSection />}

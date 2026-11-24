@@ -7,6 +7,7 @@ import {
   Send,
 } from 'lucide-react';
 import { tracker } from '../utils/tracker';
+import { DFO_SURVEY_REGIONS } from '../data/dfoRegions';
 
 export interface ReadinessSurveyStats {
   totalResponses: number;
@@ -16,16 +17,6 @@ export interface ReadinessSurveyStats {
   topBarriers: { barrier: string; count: number }[];
   updatedAt: string;
 }
-
-const DFO_REGIONS = [
-  'Приморский край',
-  'Хабаровский край',
-  'Камчатский край',
-  'Сахалинская область',
-  'Амурская область',
-  'Республика Саха (Якутия)',
-  'Магаданская область / Чукотский АО',
-] as const;
 
 const TRACK_OPTIONS = [
   'Пешеходный туризм',
@@ -79,7 +70,7 @@ export const InstructorReadinessSurvey: React.FC<InstructorReadinessSurveyProps>
   onApplyForSession,
   onContactCurator,
 }) => {
-  const [region, setRegion] = useState<string>(DFO_REGIONS[0]);
+  const [region, setRegion] = useState<string>(DFO_SURVEY_REGIONS[0]);
   const [track, setTrack] = useState<string>(TRACK_OPTIONS[0]);
   const [experienceRange, setExperienceRange] = useState<string>(EXPERIENCE_OPTIONS[2]);
   const [preferredFormat, setPreferredFormat] = useState<string>(FORMAT_OPTIONS[0]);
@@ -278,7 +269,7 @@ export const InstructorReadinessSurvey: React.FC<InstructorReadinessSurveyProps>
                     onChange={(e) => setRegion(e.target.value)}
                     className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-teal-700"
                   >
-                    {DFO_REGIONS.map((item) => (
+                    {DFO_SURVEY_REGIONS.map((item) => (
                       <option key={item} value={item}>
                         {item}
                       </option>

@@ -1,7 +1,13 @@
-import { jsPDF } from 'jspdf';
 import { ROLE_LABELS, type SessionUser } from './identityApi.ts';
 import type { UserAttestationSummary } from '../components/AttestationProgressWidget.tsx';
 import type { InquiryRecord } from '../components/social/MyInquiriesSection.tsx';
+import {
+  deterministicHash,
+  drawVerificationMatrix,
+  exportCanvasAsA4PortraitPdf,
+  sanitizeFileSlug,
+  truncateTextToFit,
+} from './pdfCanvasHelpers.ts';
 import { formatRussianDate, type PreparationContour } from './personalRoadmap.ts';
 
 export const PROFILE_CERTIFICATE_TRACKS = [
@@ -98,22 +104,13 @@ export interface GeneratedProfileCertificateResult {
   pdfBlobUrl: string;
 }
 
-function buildDeterministicHash(seed: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash ^= seed.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
 export function buildProfileCertificateNumber(
   userId: string,
   track: string,
   now: Date
 ): string {
   const year = now.getUTCFullYear();
-  const num = String(10000 + (buildDeterministicHash(`${userId}:${track}`) % 90000)).padStart(
+  const num = String(10000 + (deterministicHash(`${userId}:${track}`) % 90000)).padStart(
     5,
     '0'
   );
@@ -125,7 +122,7 @@ export function buildVerificationCode(
   certificateNumber: string,
   examDateIso: string
 ): string {
-  const code = buildDeterministicHash(`${userId}|${certificateNumber}|${examDateIso}`)
+  const code = deterministicHash(`${userId}|${certificateNumber}|${examDateIso}`)
     .toString(36)
     .toUpperCase()
     .padStart(6, '0')
@@ -368,71 +365,7 @@ function drawOfficialSeal(
   ctx.restore();
 }
 
-function drawVerificationMatrix(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  size: number,
-  seed: string
-) {
-  const cells = 9;
-  const cellSize = size / cells;
-  let hash = buildDeterministicHash(seed);
 
-  ctx.save();
-  ctx.fillStyle = '#ffffff';
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.lineWidth = 1.5;
-  ctx.fillRect(x - 8, y - 8, size + 16, size + 16);
-  ctx.strokeRect(x - 8, y - 8, size + 16, size + 16);
-
-  ctx.fillStyle = '#0f172a';
-  for (let r = 0; r < cells; r += 1) {
-    for (let c = 0; c < cells; c += 1) {
-      const isCorner =
-        (r < 3 && c < 3) ||
-        (r < 3 && c >= cells - 3) ||
-        (r >= cells - 3 && c < 3);
-      let filled = false;
-      if (isCorner) {
-        const localR = r >= cells - 3 ? r - (cells - 3) : r;
-        const localC = c >= cells - 3 ? c - (cells - 3) : c;
-        filled =
-          localR === 0 ||
-          localR === 2 ||
-          localC === 0 ||
-          localC === 2 ||
-          (localR === 1 && localC === 1);
-      } else {
-        hash = (Math.imul(hash, 1664525) + 1013904223) >>> 0;
-        filled = (hash & 1) === 1;
-      }
-
-      if (filled) {
-        ctx.fillRect(
-          x + c * cellSize + 0.5,
-          y + r * cellSize + 0.5,
-          cellSize - 1,
-          cellSize - 1
-        );
-      }
-    }
-  }
-  ctx.restore();
-}
-
-function truncateTextToFit(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let cut = text;
-  while (cut.length > 4 && ctx.measureText(`${cut}…`).width > maxWidth) {
-    cut = cut.slice(0, -1);
-  }
-  return `${cut}…`;
-}
 
 function renderProfileCertificateCanvas(
   data: ProfileAttestationCertificateData
@@ -732,7 +665,8 @@ function renderProfileCertificateCanvas(
     W - marginX - 118,
     signBaseY - 10,
     108,
-    `${data.certificateNumber}:${data.verificationCode}:${data.holderEmail}`
+    `${data.certificateNumber}:${data.verificationCode}:${data.holderEmail}`,
+    { framedPadding: 8 }
   );
 
   ctx.fillStyle = '#475569';
@@ -761,41 +695,14 @@ function renderProfileCertificateCanvas(
   return canvas;
 }
 
-function sanitizeFileSlug(name: string): string {
-  return (
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-zа-яё0-9]+/gi, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 40) || 'instructor'
-  );
-}
-
 export function generateProfileCertificatePdf(
   input: ProfileCertificateBuildInput,
   options: { autoDownload?: boolean } = {}
 ): GeneratedProfileCertificateResult {
   const data = buildProfileAttestationCertificateData(input);
   const canvas = renderProfileCertificateCanvas(data);
-  const previewDataUrl = canvas.toDataURL('image/png');
-
-  const pdf = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: true,
-  });
-
-  pdf.addImage(previewDataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
-
-  const fileName = `Sertifikat_RCA_${sanitizeFileSlug(data.holderName)}_${data.issuedAtIso}.pdf`;
-  const pdfBlob = pdf.output('blob');
-  const pdfBlobUrl = URL.createObjectURL(pdfBlob);
-
-  if (options.autoDownload !== false) {
-    pdf.save(fileName);
-  }
+  const fileName = `Sertifikat_RCA_${sanitizeFileSlug(data.holderName, 'instructor', 40)}_${data.issuedAtIso}.pdf`;
+  const { previewDataUrl, pdfBlobUrl } = exportCanvasAsA4PortraitPdf(canvas, fileName, options);
 
   return {
     fileName,

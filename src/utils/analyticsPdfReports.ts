@@ -16,6 +16,7 @@ import {
 } from './calculatorScenario2030.ts';
 import { getRegionDemand2030 } from './dfoReportExport.ts';
 import { formatRussianDate } from './personalRoadmap.ts';
+import { wrapLines } from './pdfCanvasHelpers.ts';
 
 export interface CalculatorReportScenarioSummary {
   id: string;
@@ -241,23 +242,6 @@ export function buildMarketReportPayload(params: {
       expectedEffect: r.expectedEffect,
     })),
   };
-}
-
-function wrapTextLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = '';
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      current = candidate;
-    } else {
-      if (current) lines.push(current);
-      current = word;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
 }
 
 function createA4Canvas(
@@ -785,7 +769,7 @@ export function exportMarketAnalyticsPdf(params: {
   ctx1.fillStyle = '#334155';
   ctx1.font = '14px "DejaVu Sans", Arial, sans-serif';
   payload.activeHorizonDrivers.slice(0, 3).forEach((drv) => {
-    const lines = wrapTextLines(ctx1, `• ${drv}`, contentW - 48);
+    const lines = wrapLines(ctx1, `• ${drv}`, contentW - 48);
     lines.forEach((line) => {
       if (hy < y + 196) {
         ctx1.fillText(line, padX + 24, hy);
@@ -823,7 +807,7 @@ export function exportMarketAnalyticsPdf(params: {
 
     ctx2.fillStyle = '#0f766e';
     ctx2.font = '13px "DejaVu Sans", Arial, sans-serif';
-    const impactLines = wrapTextLines(ctx2, b.impact, contentW - 36);
+    const impactLines = wrapLines(ctx2, b.impact, contentW - 36);
     ctx2.fillText(impactLines[0] ?? '', padX + 18, y2 + 54);
 
     y2 += 86;
@@ -852,7 +836,7 @@ export function exportMarketAnalyticsPdf(params: {
 
     ctx2.fillStyle = '#475569';
     ctx2.font = '13px "DejaVu Sans", Arial, sans-serif';
-    const effLines = wrapTextLines(ctx2, `Эффект: ${rec.expectedEffect}`, contentW - 36);
+    const effLines = wrapLines(ctx2, `Эффект: ${rec.expectedEffect}`, contentW - 36);
     ctx2.fillText(effLines[0] ?? '', padX + 18, y2 + 72);
 
     y2 += 104;

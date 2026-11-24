@@ -20,6 +20,7 @@ import {
   type OAuthProviderStatusDTO,
 } from '../utils/linkedAccountsApi';
 import { LINKED_PROVIDER_META } from '../domain/identity/LinkedAccounts';
+import { buildRegionSelectOptions } from '../data/dfoRegions';
 import { tracker } from '../utils/tracker';
 
 interface LinkedAccountsCardProps {
@@ -32,17 +33,6 @@ interface LinkedAccountsCardProps {
   onRefreshAll: () => Promise<void>;
   onJumpToCalendar: () => void;
 }
-
-const REGIONS = [
-  'Приморский край',
-  'Камчатский край',
-  'Хабаровский край',
-  'Сахалинская область',
-  'Республика Саха (Якутия)',
-  'Амурская область',
-  'Магаданская область',
-  'Чукотский АО',
-];
 
 const TRACK_OPTIONS = [
   'Пешеходный туризм',
@@ -691,7 +681,7 @@ export const LinkedAccountsCard: React.FC<LinkedAccountsCardProps> = ({
                 onChange={(e) => setFormRegion(e.target.value)}
                 className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
               >
-                {[...new Set([formRegion, ...REGIONS])].filter(Boolean).map((r) => (
+                {buildRegionSelectOptions(formRegion).map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>

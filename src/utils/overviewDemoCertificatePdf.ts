@@ -1,4 +1,8 @@
-import { jsPDF } from 'jspdf';
+import {
+  exportCanvasAsA4PortraitPdf,
+  sanitizeFileSlug,
+  wrapLines,
+} from './pdfCanvasHelpers.ts';
 
 export interface OverviewDemoCertificateInput {
   fullName: string;
@@ -121,26 +125,7 @@ function drawCircularRcaSeal(
   ctx.restore();
 }
 
-function wrapTextLines(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = '';
-  for (const w of words) {
-    const candidate = line ? `${line} ${w}` : w;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      line = candidate;
-    } else {
-      if (line) lines.push(line);
-      line = w;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
+
 
 /**
  * Renders the landscape preview certificate mockup onto an HTMLCanvasElement.
@@ -266,7 +251,7 @@ export function renderOverviewDemoCertificateToCanvas(
   // Summary block
   ctx.fillStyle = '#1E293B';
   ctx.font = '19px "DejaVu Sans", "Liberation Sans", Arial, sans-serif';
-  const summaryLines = wrapTextLines(
+  const summaryLines = wrapLines(
     ctx,
     `успешно прошёл(а) предварительную проверку готовности к государственной аттестации по категории «${data.category}» (${data.contour}) с итоговым индексом готовности ${data.readinessPercent}%.`,
     1020
@@ -306,7 +291,7 @@ export function renderOverviewDemoCertificateToCanvas(
 
     ctx.fillStyle = idx === 3 ? '#0F766E' : '#0F172A';
     ctx.font = 'bold 16px "DejaVu Sans", "Liberation Sans", Arial, sans-serif';
-    const valLines = wrapTextLines(ctx, val, cardW - 32).slice(0, 2);
+    const valLines = wrapLines(ctx, val, cardW - 32).slice(0, 2);
     valLines.forEach((vl, lIdx) => {
       ctx.fillText(vl, x + 16, cardY + 62 + lIdx * 22);
     });
@@ -455,17 +440,6 @@ function renderPdfReportPageCanvas(
   return canvas;
 }
 
-function slugifyName(name: string): string {
-  return (
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-zа-яё0-9]+/gi, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 36) || 'candidate'
-  );
-}
-
 export function generateOverviewDemoCertificatePdf(
   input: OverviewDemoCertificateInput
 ): GeneratedOverviewDemoCertificatePdf {
@@ -475,22 +449,8 @@ export function generateOverviewDemoCertificatePdf(
   const previewDataUrl = certCanvas.toDataURL('image/png');
 
   const pageCanvas = renderPdfReportPageCanvas(data, certCanvas);
-  const pageDataUrl = pageCanvas.toDataURL('image/png');
-
-  const pdf = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: true,
-  });
-
-  pdf.addImage(pageDataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
-
-  const fileName = `Demo_Certificate_RCA_${slugifyName(data.fullName)}_${data.issuedAtIso}.pdf`;
-  const pdfBlob = pdf.output('blob');
-  const pdfBlobUrl = URL.createObjectURL(pdfBlob);
-
-  pdf.save(fileName);
+  const fileName = `Demo_Certificate_RCA_${sanitizeFileSlug(data.fullName, 'candidate', 36)}_${data.issuedAtIso}.pdf`;
+  const { pdfBlobUrl } = exportCanvasAsA4PortraitPdf(pageCanvas, fileName, { autoDownload: true });
 
   return {
     fileName,

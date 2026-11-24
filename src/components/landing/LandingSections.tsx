@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
   Award,
@@ -45,7 +45,6 @@ import type { SiteTabId } from '../../utils/seo';
 import { AttestationLocationsLeafletMap } from './AttestationLocationsLeafletMap';
 import { CertificationCalendarHub } from '../CertificationCalendarHub';
 import { CertifiedGuidesRegistryTable } from '../CertifiedGuidesRegistryTable';
-import { CourseSatisfactionSurvey } from '../CourseSatisfactionSurvey';
 import { InteractiveGlossary } from '../InteractiveGlossary';
 import { OverviewDemoCertificateSection } from '../OverviewDemoCertificateSection';
 import { PlatformFeedbackForm } from '../PlatformFeedbackForm';
@@ -243,11 +242,17 @@ export function LandingHero({
 export function LearningSection({
   initialSubTab = 'programmes',
   compact = false,
+  onNavigateTab,
 }: {
   initialSubTab?: 'programmes' | 'exam' | 'library';
   compact?: boolean;
+  onNavigateTab?: (tab: SiteTabId) => void;
 }) {
   const [subTab, setSubTab] = useState<'programmes' | 'exam' | 'library'>(initialSubTab);
+
+  useEffect(() => {
+    setSubTab(initialSubTab);
+  }, [initialSubTab]);
 
   return (
     <section className="space-y-6">
@@ -363,7 +368,7 @@ export function LearningSection({
         </div>
       )}
 
-      {!compact && subTab === 'exam' && <TrainingAndAssessmentHub />}
+      {!compact && subTab === 'exam' && <TrainingAndAssessmentHub onNavigateTab={onNavigateTab} />}
 
       {!compact && subTab === 'library' && (
         <div className="space-y-8">
@@ -384,12 +389,24 @@ export function PreparationSection() {
  * «Аттестация» — график 2027 + .ics, единый календарь комиссий и вебинаров ДФО,
  * карта площадок, реестр аттестованных проводников и демо-удостоверение.
  */
-export function CertificationSection({ compact = false }: { compact?: boolean }) {
+export function CertificationSection({
+  compact = false,
+  initialSubTab = 'schedule',
+  onNavigateTab,
+}: {
+  compact?: boolean;
+  initialSubTab?: 'schedule' | 'calendars' | 'locations' | 'registry';
+  onNavigateTab?: (tab: SiteTabId) => void;
+}) {
   const [selectedSlotIdx, setSelectedSlotIdx] = useState<number>(0);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [certTab, setCertTab] = useState<'schedule' | 'calendars' | 'locations' | 'registry'>(
-    'schedule'
+    initialSubTab
   );
+
+  useEffect(() => {
+    setCertTab(initialSubTab);
+  }, [initialSubTab]);
 
   const activeSlot = CERTIFICATION_SCHEDULE[selectedSlotIdx] ?? CERTIFICATION_SCHEDULE[0];
   const activeEvent = buildScheduleSlotCalendarEvent(activeSlot, selectedSlotIdx);
@@ -606,7 +623,50 @@ export function CertificationSection({ compact = false }: { compact?: boolean })
         </div>
       )}
 
-      {!compact && certTab === 'schedule' && <AttestationLocationsLeafletMap />}
+      {!compact && certTab === 'schedule' && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+              Маршрутизация по разделам аттестации
+            </p>
+            <p className="text-sm font-bold text-slate-900">
+              Адреса очных полигонов, календарь выездных комиссий и запись на экзамен
+            </p>
+            <p className="text-xs text-slate-600">
+              Откройте интерактивную карту площадок ДФО, выберите сессию в общем календаре или
+              перейдите к личному расчёту готовности.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setCertTab('locations')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <MapPin className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+              <span>Открыть карту площадок</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCertTab('calendars')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-300 hover:border-teal-500 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <CalendarDays className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+              <span>Календарь и вебинары</span>
+            </button>
+            {onNavigateTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateTab('account')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <span>Запись в личном кабинете</span>
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {!compact && certTab === 'calendars' && <CertificationCalendarHub />}
 
@@ -614,7 +674,7 @@ export function CertificationSection({ compact = false }: { compact?: boolean })
 
       {!compact && certTab === 'registry' && (
         <div className="space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <ShieldCheck className="w-5 h-5 text-teal-700 shrink-0" aria-hidden="true" />
               <div>
@@ -626,11 +686,22 @@ export function CertificationSection({ compact = false }: { compact?: boolean })
                 </p>
               </div>
             </div>
-            <Award className="w-5 h-5 text-slate-400 shrink-0" aria-hidden="true" />
+            <div className="flex items-center gap-2 shrink-0">
+              {onNavigateTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('overview')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <span>Опросы и статистика центра</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                </button>
+              )}
+              <Award className="w-5 h-5 text-slate-400 shrink-0" aria-hidden="true" />
+            </div>
           </div>
           <CertifiedGuidesRegistryTable />
           <OverviewDemoCertificateSection />
-          <CourseSatisfactionSurvey />
         </div>
       )}
     </section>
@@ -753,6 +824,10 @@ export function HelpAndContactsWorkspace({
   onNavigateTab?: (tab: SiteTabId) => void;
 }) {
   const [subTab, setSubTab] = useState<'faq' | 'consulting' | 'contacts'>(initialSubTab);
+
+  useEffect(() => {
+    setSubTab(initialSubTab);
+  }, [initialSubTab]);
 
   const handleOpenAttestationAssistant = (customPrompt?: string) => {
     const prompt = customPrompt ?? FAQ_ATTESTATION_ASSISTANT_PROMPT;

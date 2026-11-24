@@ -1,7 +1,15 @@
-import { jsPDF } from 'jspdf';
 import type { ExperienceLogEntry } from '../domain/experience/ExperienceEntry.ts';
 import { computeJournalMetrics } from '../domain/experience/ExperienceAnalyticsService.ts';
 import { ROLE_LABELS, type SessionUser } from './identityApi.ts';
+import {
+  deterministicHash,
+  drawRoundedRect,
+  drawVerificationMatrix,
+  exportCanvasAsA4PortraitPdf,
+  loadImageElement,
+  sanitizeFileSlug,
+  wrapLines,
+} from './pdfCanvasHelpers.ts';
 import { formatRussianDate } from './personalRoadmap.ts';
 import type { SelfCheckEvaluation } from './qualificationSelfCheck.ts';
 import type { UserQualificationProfile } from './updatesFeed.ts';
@@ -54,15 +62,6 @@ export interface GeneratedUserProfilePdfResult {
   data: UserProfileCommissionDossierData;
   previewDataUrl: string;
   pdfBlobUrl: string;
-}
-
-function deterministicHash(seed: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i += 1) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
 }
 
 export function buildUserProfileCommissionDossierData({
@@ -129,98 +128,7 @@ export function buildUserProfileCommissionDossierData({
   };
 }
 
-function wrapLines(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number
-): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return [];
-  const lines: string[] = [];
-  let current = words[0];
-  for (let i = 1; i < words.length; i += 1) {
-    const candidate = `${current} ${words[i]}`;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      current = candidate;
-    } else {
-      lines.push(current);
-      current = words[i];
-    }
-  }
-  lines.push(current);
-  return lines;
-}
 
-function loadImageElement(src: string): Promise<HTMLImageElement | null> {
-  if (!src || typeof Image === 'undefined') return Promise.resolve(null);
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
-}
-
-function drawVerificationMatrix(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  size: number,
-  seed: string
-) {
-  const cells = 9;
-  const cellSize = size / cells;
-  let hash = deterministicHash(seed);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(x, y, size, size);
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(x, y, size, size);
-
-  ctx.fillStyle = '#0f172a';
-  for (let r = 0; r < cells; r += 1) {
-    for (let c = 0; c < cells; c += 1) {
-      const corner =
-        (r < 3 && c < 3) || (r < 3 && c >= cells - 3) || (r >= cells - 3 && c < 3);
-      if (corner) {
-        const outer =
-          r === 0 || c === 0 || r === cells - 1 || c === cells - 1 || r === 2 || c === 2 || r === cells - 3 || c === cells - 3;
-        const center =
-          (r === 1 && c === 1) || (r === 1 && c === cells - 2) || (r === cells - 2 && c === 1);
-        if (outer || center) {
-          ctx.fillRect(x + c * cellSize + 1, y + r * cellSize + 1, cellSize - 2, cellSize - 2);
-        }
-      } else {
-        hash = (Math.imul(hash, 1664525) + 1013904223) >>> 0;
-        if ((hash & 3) !== 0) {
-          ctx.fillRect(x + c * cellSize + 1, y + r * cellSize + 1, cellSize - 2, cellSize - 2);
-        }
-      }
-    }
-  }
-}
-
-function drawRoundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
 
 export async function generateUserProfileCommissionPdf(
   input: UserProfileCommissionDossierInput,
@@ -542,29 +450,9 @@ export async function generateUserProfileCommissionPdf(
     H - 70
   );
 
-  const previewDataUrl = canvas.toDataURL('image/png');
-  const pdf = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: true,
-  });
-  pdf.addImage(previewDataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
-
-  const safeSlug =
-    data.fullName
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-zа-яё0-9]+/gi, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 36) || 'guide';
+  const safeSlug = sanitizeFileSlug(data.fullName, 'guide', 36);
   const fileName = `Profil_Komissiya_RCA_${safeSlug}_${data.issuedAtIso}.pdf`;
-  const pdfBlob = pdf.output('blob');
-  const pdfBlobUrl = URL.createObjectURL(pdfBlob);
-
-  if (options.autoDownload !== false) {
-    pdf.save(fileName);
-  }
+  const { previewDataUrl, pdfBlobUrl } = exportCanvasAsA4PortraitPdf(canvas, fileName, options);
 
   return {
     fileName,

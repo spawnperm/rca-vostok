@@ -24,6 +24,7 @@ import {
   type GeneratedLearningPlanPdf,
   type LearningPrepLevelId,
 } from '../utils/learningPlanPdf';
+import { buildRegionSelectOptions, DFO_REGIONS } from '../data/dfoRegions';
 import { tracker } from '../utils/tracker';
 
 interface PersonalLearningPlanWidgetProps {
@@ -32,15 +33,6 @@ interface PersonalLearningPlanWidgetProps {
   selectedContour?: PreparationContour;
   onJumpToDiagnostics?: () => void;
 }
-
-const REGIONS = [
-  'Приморский край',
-  'Хабаровский край',
-  'Камчатский край',
-  'Сахалинская область',
-  'Амурская область',
-  'Республика Саха (Якутия)',
-] as const;
 
 export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProps> = ({
   user,
@@ -51,7 +43,7 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
   const [candidateName, setCandidateName] = useState<string>(
     user?.fullName ?? 'Соискатель РЦА «Русский Восток»'
   );
-  const [region, setRegion] = useState<string>(user?.region ?? REGIONS[0]);
+  const [region, setRegion] = useState<string>(user?.region ?? DFO_REGIONS[0]);
   const [levelId, setLevelId] = useState<LearningPrepLevelId>('intermediate');
   const [contour, setContour] = useState<PreparationContour>(selectedContour);
   const [gapDomainIds, setGapDomainIds] = useState<DiagnosticSectionId[]>([
@@ -253,7 +245,7 @@ export const PersonalLearningPlanWidget: React.FC<PersonalLearningPlanWidgetProp
                   onChange={(e) => setRegion(e.target.value)}
                   className="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-teal-700"
                 >
-                  {REGIONS.map((r) => (
+                  {buildRegionSelectOptions(region).map((r) => (
                     <option key={r} value={r}>
                       {r}
                     </option>

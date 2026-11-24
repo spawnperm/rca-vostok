@@ -41,6 +41,9 @@ import {
   readStoredSelfCheck,
   type SelfCheckEvaluation,
 } from '../utils/qualificationSelfCheck';
+import { buildRegionSelectOptions } from '../data/dfoRegions';
+import type { InstructorAchievementsSummary } from '../utils/instructorAchievements';
+import { ProfileBadgesShowcase } from './InstructorAchievementsWidget';
 import { tracker } from '../utils/tracker';
 import {
   resolveUserQualificationProfile,
@@ -50,17 +53,6 @@ import {
   generateUserProfileCommissionPdf,
   type GeneratedUserProfilePdfResult,
 } from '../utils/userProfileCommissionPdf';
-
-const DFO_REGIONS = [
-  'Приморский край',
-  'Камчатский край',
-  'Хабаровский край',
-  'Сахалинская область',
-  'Республика Саха (Якутия)',
-  'Амурская область',
-  'Магаданская область',
-  'Чукотский АО',
-];
 
 export const GENERATED_GUIDE_AVATAR_PRESETS: readonly {
   id: string;
@@ -98,9 +90,11 @@ interface UserProfileCardProps {
   user: SessionUser;
   attestationPercent: number;
   selfCheckRevision?: number;
+  achievementsSummary?: InstructorAchievementsSummary;
   onUpdated: (user: SessionUser) => void;
   onJumpToPreparation?: () => void;
   onJumpToExperience?: () => void;
+  onJumpToAchievements?: () => void;
 }
 
 function getInitials(fullName: string): string {
@@ -183,9 +177,11 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
   user,
   attestationPercent,
   selfCheckRevision = 0,
+  achievementsSummary,
   onUpdated,
   onJumpToPreparation,
   onJumpToExperience,
+  onJumpToAchievements,
 }) => {
   const [journalEntries, setJournalEntries] = useState<ExperienceLogEntry[]>(() =>
     readStoredExperienceJournal(user.id, user.region)
@@ -195,12 +191,16 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
     return evaluateSelfCheck(stored.answers, stored.track);
   });
 
-  // Contacts edit state
+  // Profile & contacts edit state
   const [isEditingContacts, setIsEditingContacts] = useState<boolean>(false);
+  const [fullNameDraft, setFullNameDraft] = useState<string>(user.fullName);
   const [phoneDraft, setPhoneDraft] = useState<string>(user.phone ?? '');
   const [telegramDraft, setTelegramDraft] = useState<string>(user.telegram ?? '');
   const [regionDraft, setRegionDraft] = useState<string>(user.region);
   const [organisationDraft, setOrganisationDraft] = useState<string>(user.organisation ?? '');
+  const [attestationExpiresAtDraft, setAttestationExpiresAtDraft] = useState<string>(
+    user.attestationExpiresAt ?? ''
+  );
   const [saving, setSaving] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
@@ -208,6 +208,7 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
   // Avatar studio state
   const [avatarStudioOpen, setAvatarStudioOpen] = useState<boolean>(false);
   const [avatarDraftUrl, setAvatarDraftUrl] = useState<string>(user.avatarUrl ?? '');
+  const [avatarLoadError, setAvatarLoadError] = useState<boolean>(false);
   const [avatarBusy, setAvatarBusy] = useState<boolean>(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -221,12 +222,23 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
   const canEdit = user.permissions.includes('profile:edit_own');
 
   useEffect(() => {
+    setFullNameDraft(user.fullName);
     setPhoneDraft(user.phone ?? '');
     setTelegramDraft(user.telegram ?? '');
     setRegionDraft(user.region);
     setOrganisationDraft(user.organisation ?? '');
+    setAttestationExpiresAtDraft(user.attestationExpiresAt ?? '');
     setAvatarDraftUrl(user.avatarUrl ?? '');
-  }, [user.phone, user.telegram, user.region, user.organisation, user.avatarUrl]);
+    setAvatarLoadError(false);
+  }, [
+    user.fullName,
+    user.phone,
+    user.telegram,
+    user.region,
+    user.organisation,
+    user.attestationExpiresAt,
+    user.avatarUrl,
+  ]);
 
   useEffect(() => {
     const blobUrl = pdfResult?.pdfBlobUrl;
@@ -289,29 +301,45 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
   const levelStyles = getLevelBadgeStyles(qualification.level);
   const currentAvatarUrl = user.avatarUrl?.trim() || '';
 
+  const attestationExpiryAlert = useMemo(() => {
+    if (!user.attestationExpiresAt) return null;
+    const targetMs = new Date(`${user.attestationExpiresAt}T00:00:00Z`).getTime();
+    if (Number.isNaN(targetMs)) return null;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayMs = new Date(`${todayIso}T00:00:00Z`).getTime();
+    const diffDays = Math.round((targetMs - todayMs) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return { label: 'Срок истёк', tone: 'danger' as const };
+    if (diffDays <= 90) return { label: `Истекает через ${diffDays} дн.`, tone: 'warning' as const };
+    return null;
+  }, [user.attestationExpiresAt]);
+
   const showTransientNotice = (text: string) => {
     setSavedNotice(text);
     window.setTimeout(() => setSavedNotice(null), 4000);
   };
 
   const handleOpenEditContacts = () => {
+    setFullNameDraft(user.fullName);
     setPhoneDraft(user.phone ?? '');
     setTelegramDraft(user.telegram ?? '');
     setRegionDraft(user.region);
     setOrganisationDraft(user.organisation ?? '');
+    setAttestationExpiresAtDraft(user.attestationExpiresAt ?? '');
     setSaveError(null);
     setIsEditingContacts(true);
     tracker.trackCustomInteraction(
-      'Профиль пользователя · Открыть редактирование контактов',
+      'Профиль пользователя · Открыть редактирование профиля и контактов',
       'account'
     );
   };
 
   const handleCancelEdit = () => {
+    setFullNameDraft(user.fullName);
     setPhoneDraft(user.phone ?? '');
     setTelegramDraft(user.telegram ?? '');
     setRegionDraft(user.region);
     setOrganisationDraft(user.organisation ?? '');
+    setAttestationExpiresAtDraft(user.attestationExpiresAt ?? '');
     setSaveError(null);
     setIsEditingContacts(false);
   };
@@ -319,24 +347,31 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
   const handleSaveContacts = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaveError(null);
+    const trimmedName = fullNameDraft.trim();
+    if (trimmedName.length < 2) {
+      setSaveError('Укажите ФИО (не менее 2 символов).');
+      return;
+    }
     setSaving(true);
     try {
       const updated = await identityApi.updateProfile({
+        fullName: trimmedName,
         phone: phoneDraft.trim(),
         telegram: telegramDraft.trim(),
         region: regionDraft,
         organisation: organisationDraft.trim(),
+        attestationExpiresAt: attestationExpiresAtDraft.trim() || null,
       });
       onUpdated(updated);
       setIsEditingContacts(false);
-      showTransientNotice('Контактные данные успешно обновлены и сохранены в профиле.');
+      showTransientNotice('Профиль и контактные данные успешно обновлены.');
       tracker.trackCustomInteraction(
-        'Профиль пользователя · Контактные данные обновлены',
+        'Профиль пользователя · Данные профиля обновлены',
         'account'
       );
     } catch (err) {
       setSaveError(
-        err instanceof ApiError ? err.message : 'Не удалось сохранить контактные данные.'
+        err instanceof ApiError ? err.message : 'Не удалось сохранить данные профиля.'
       );
     } finally {
       setSaving(false);
@@ -445,15 +480,17 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
       aria-labelledby="user-profile-overview-heading"
       className="bg-white border border-slate-200 rounded-xl p-6 space-y-5 scroll-mt-24"
     >
+      <span id="account-profile-card" className="scroll-mt-24 block" aria-hidden="true" />
       {/* Top Row: Avatar + Full Name + Actions */}
       <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
         <div className="flex items-start gap-4">
           <div className="relative shrink-0">
-            {currentAvatarUrl ? (
+            {currentAvatarUrl && !avatarLoadError ? (
               <img
                 src={currentAvatarUrl}
                 alt={`Портрет проводника ${user.fullName}`}
                 referrerPolicy="no-referrer"
+                onError={() => setAvatarLoadError(true)}
                 className="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-xs bg-slate-100"
               />
             ) : (
@@ -542,7 +579,7 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
               className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
             >
               <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Редактировать контактные данные</span>
+              <span>Редактировать профиль и контакты</span>
             </button>
           )}
         </div>
@@ -782,9 +819,18 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
               </span>
             ))}
             {user.attestationExpiresAt && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/90 border border-slate-200 rounded text-[11px] font-mono text-slate-700">
-                <CalendarClock className="w-3 h-3 text-teal-700" aria-hidden="true" />
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 border rounded text-[11px] font-mono tabular-nums ${
+                  attestationExpiryAlert?.tone === 'danger'
+                    ? 'bg-red-50 border-red-200 text-red-800'
+                    : attestationExpiryAlert?.tone === 'warning'
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-white/90 border-slate-200 text-slate-700'
+                }`}
+              >
+                <CalendarClock className="w-3 h-3 shrink-0" aria-hidden="true" />
                 до {new Date(`${user.attestationExpiresAt}T00:00:00`).toLocaleDateString('ru-RU')}
+                {attestationExpiryAlert ? ` (${attestationExpiryAlert.label})` : ''}
               </span>
             )}
           </div>
@@ -872,7 +918,7 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
                 <dd className="font-semibold text-slate-900">{user.region}</dd>
               </div>
 
-              <div className="sm:col-span-2 p-2.5 bg-white border border-slate-200 rounded-lg space-y-0.5">
+              <div className="p-2.5 bg-white border border-slate-200 rounded-lg space-y-0.5">
                 <dt className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                   <Building2 className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
                   <span>Организация / турклуб</span>
@@ -885,10 +931,39 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
                   )}
                 </dd>
               </div>
+
+              <div className="p-2.5 bg-white border border-slate-200 rounded-lg space-y-0.5">
+                <dt className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                  <CalendarClock className="w-3.5 h-3.5 text-teal-700" aria-hidden="true" />
+                  <span>Окончание текущей аттестации</span>
+                </dt>
+                <dd className="font-semibold text-slate-900 font-mono tabular-nums">
+                  {user.attestationExpiresAt ? (
+                    new Date(`${user.attestationExpiresAt}T00:00:00`).toLocaleDateString('ru-RU')
+                  ) : (
+                    <span className="text-slate-400 font-sans font-normal">Не указана</span>
+                  )}
+                </dd>
+              </div>
             </dl>
           ) : (
             <form onSubmit={handleSaveContacts} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2 space-y-1">
+                  <label htmlFor="contact-edit-fullname" className="block text-[11px] font-semibold text-slate-700">
+                    ФИО участника
+                  </label>
+                  <input
+                    id="contact-edit-fullname"
+                    type="text"
+                    required
+                    value={fullNameDraft}
+                    onChange={(e) => setFullNameDraft(e.target.value)}
+                    placeholder="Иванов Сергей Алексеевич"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                  />
+                </div>
+
                 <div className="space-y-1">
                   <label htmlFor="contact-edit-phone" className="block text-[11px] font-semibold text-slate-700">
                     Телефон
@@ -927,7 +1002,7 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
                     onChange={(e) => setRegionDraft(e.target.value)}
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   >
-                    {[...new Set([regionDraft, ...DFO_REGIONS])].filter(Boolean).map((r) => (
+                    {buildRegionSelectOptions(regionDraft).map((r) => (
                       <option key={r} value={r}>
                         {r}
                       </option>
@@ -946,6 +1021,22 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
                     onChange={(e) => setOrganisationDraft(e.target.value)}
                     placeholder="Турклуб, ООПТ, туроператор"
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 space-y-1">
+                  <label
+                    htmlFor="contact-edit-attestation-expires"
+                    className="block text-[11px] font-semibold text-slate-700"
+                  >
+                    Дата окончания текущей аттестации (для мониторинга переаттестации за 90 дней)
+                  </label>
+                  <input
+                    id="contact-edit-attestation-expires"
+                    type="date"
+                    value={attestationExpiresAtDraft}
+                    onChange={(e) => setAttestationExpiresAtDraft(e.target.value)}
+                    className="w-full sm:max-w-xs px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
                   />
                 </div>
               </div>
@@ -971,7 +1062,7 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
                   className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-60 cursor-pointer"
                 >
                   <Save className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>{saving ? 'Сохраняем…' : 'Сохранить контакты'}</span>
+                  <span>{saving ? 'Сохраняем…' : 'Сохранить профиль'}</span>
                 </button>
                 <button
                   type="button"
@@ -986,6 +1077,13 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
           )}
         </div>
       </div>
+
+      {achievementsSummary && (
+        <ProfileBadgesShowcase
+          summary={achievementsSummary}
+          onJumpToAchievements={onJumpToAchievements}
+        />
+      )}
 
       {/* Commission PDF Preview Modal */}
       {pdfPreviewOpen && pdfResult && (

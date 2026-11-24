@@ -286,12 +286,13 @@ const REGION_FILTERS: { id: TimelineRegionFilter; label: string }[] = [
   { id: 'magadan-chukotka', label: 'Магадан / ЧАО' },
 ];
 
-// Reference calendar date used for relative status badges
-const TODAY_ISO = '2026-11-22';
+function getTodayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function getRelativeDayStatus(isoDate: string): { label: string; tone: 'past' | 'urgent' | 'upcoming' } {
   const target = new Date(`${isoDate}T00:00:00Z`).getTime();
-  const today = new Date(`${TODAY_ISO}T00:00:00Z`).getTime();
+  const today = new Date(`${getTodayIso()}T00:00:00Z`).getTime();
   const diffDays = Math.round((target - today) / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) {

@@ -28,6 +28,7 @@ import {
   type InstructorResumeInput,
 } from '../utils/instructorResumePdf';
 import type { PreparationContour } from '../utils/personalRoadmap';
+import { buildRegionSelectOptions } from '../data/dfoRegions';
 import { tracker } from '../utils/tracker';
 
 interface InstructorResumeGeneratorCardProps {
@@ -39,15 +40,6 @@ interface InstructorResumeGeneratorCardProps {
   onJumpToProfile?: () => void;
   onJumpToPassport?: () => void;
 }
-
-const REGIONS = [
-  'Приморский край',
-  'Хабаровский край',
-  'Камчатский край',
-  'Сахалинская область',
-  'Амурская область',
-  'Республика Саха (Якутия)',
-] as const;
 
 const CATEGORIES: readonly MaxRouteCategory[] = ['1 КС', '2 КС', '3 КС', '4 КС', 'Не указана'];
 
@@ -348,7 +340,7 @@ export const InstructorResumeGeneratorCard: React.FC<InstructorResumeGeneratorCa
                 onChange={(e) => setDraft((p) => ({ ...p, region: e.target.value }))}
                 className="w-full px-3 py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white text-slate-900 focus:border-teal-700 focus:outline-none"
               >
-                {Array.from(new Set([draft.region, ...REGIONS].filter(Boolean))).map((reg) => (
+                {buildRegionSelectOptions(draft.region).map((reg) => (
                   <option key={reg} value={reg}>
                     {reg}
                   </option>

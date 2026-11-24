@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import type { UserAttestationSummary } from '../components/AttestationProgressWidget.tsx';
 import type { InquiryRecord } from '../components/social/MyInquiriesSection.tsx';
 import {
@@ -14,6 +13,11 @@ import {
 } from './instructorPassportExport.ts';
 import { formatRussianDate, type PreparationContour } from './personalRoadmap.ts';
 import { readStoredSelfCheck, SELF_CHECK_QUESTIONS } from './qualificationSelfCheck.ts';
+import {
+  exportCanvasAsA4PortraitPdf,
+  sanitizeFileSlug,
+  wrapLines,
+} from './pdfCanvasHelpers.ts';
 
 export interface ResumeAchievementItem {
   id: string;
@@ -75,17 +79,6 @@ function buildResumeId(seed: string, now: Date): string {
   const mmdd =
     String(now.getUTCMonth() + 1).padStart(2, '0') + String(now.getUTCDate()).padStart(2, '0');
   return `РЦА-РЗ-${year}-${mmdd}-${suffix}`;
-}
-
-function sanitizeSlug(name: string): string {
-  return (
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-zа-яё0-9]+/gi, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 36) || 'instructor'
-  );
 }
 
 /**
@@ -317,23 +310,6 @@ export function buildInstructorResumeModel(
     issuedAtFormatted: formatRussianDate(issuedAtIso),
     contourLabel,
   };
-}
-
-function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = '';
-  for (const w of words) {
-    const candidate = line ? `${line} ${w}` : w;
-    if (ctx.measureText(candidate).width <= maxWidth) {
-      line = candidate;
-    } else {
-      if (line) lines.push(line);
-      line = w;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
 }
 
 function renderResumeA4Canvas(resume: InstructorResumeModel): HTMLCanvasElement {
@@ -592,24 +568,10 @@ export function generateInstructorResumePdf(
   const { autoDownload = true } = options;
   const resume = buildInstructorResumeModel(input);
   const canvas = renderResumeA4Canvas(resume);
-  const previewDataUrl = canvas.toDataURL('image/png');
-
-  const pdf = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: true,
+  const fileName = `Resume_Instructor_RCA_${sanitizeFileSlug(resume.fullName, 'instructor', 36)}_${resume.issuedAtIso}.pdf`;
+  const { previewDataUrl, pdfBlobUrl } = exportCanvasAsA4PortraitPdf(canvas, fileName, {
+    autoDownload,
   });
-
-  pdf.addImage(previewDataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
-
-  const fileName = `Resume_Instructor_RCA_${sanitizeSlug(resume.fullName)}_${resume.issuedAtIso}.pdf`;
-  const pdfBlob = pdf.output('blob');
-  const pdfBlobUrl = URL.createObjectURL(pdfBlob);
-
-  if (autoDownload) {
-    pdf.save(fileName);
-  }
 
   return {
     fileName,

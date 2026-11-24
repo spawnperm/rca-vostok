@@ -1,8 +1,8 @@
-import { jsPDF } from 'jspdf';
 import { ROLE_LABELS, type SessionUser } from './identityApi.ts';
 import type { UserAttestationSummary } from '../components/AttestationProgressWidget.tsx';
 import type { InquiryRecord } from '../components/social/MyInquiriesSection.tsx';
 import { formatRussianDate } from './personalRoadmap.ts';
+import { exportCanvasAsA4PortraitPdf, sanitizeFileSlug } from './pdfCanvasHelpers.ts';
 
 export interface FinalAttestationStageLine {
   stepNumber: string;
@@ -518,17 +518,6 @@ function renderFinalCertificateCanvas(
   return canvas;
 }
 
-function sanitizeFileSlug(name: string): string {
-  return (
-    name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-zа-яё0-9]+/gi, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 40) || 'guide'
-  );
-}
-
 export function generateAttestationFinalCertificatePdf(
   user: SessionUser,
   summary: UserAttestationSummary,
@@ -537,22 +526,8 @@ export function generateAttestationFinalCertificatePdf(
 ): GeneratedFinalCertificateResult {
   const data = buildFinalAttestationCertificateData(user, summary, inquiries, examDateIso);
   const canvas = renderFinalCertificateCanvas(data);
-  const previewDataUrl = canvas.toDataURL('image/png');
-
-  const pdf = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: true,
-  });
-
-  pdf.addImage(previewDataUrl, 'PNG', 0, 0, 210, 297, undefined, 'FAST');
-
-  const fileName = `Sertifikat_Attestacii_RCA_${sanitizeFileSlug(user.fullName)}_${data.issuedAtIso}.pdf`;
-  const pdfBlob = pdf.output('blob');
-  const pdfBlobUrl = URL.createObjectURL(pdfBlob);
-
-  pdf.save(fileName);
+  const fileName = `Sertifikat_Attestacii_RCA_${sanitizeFileSlug(user.fullName, 'guide')}_${data.issuedAtIso}.pdf`;
+  const { previewDataUrl, pdfBlobUrl } = exportCanvasAsA4PortraitPdf(canvas, fileName);
 
   return {
     fileName,
