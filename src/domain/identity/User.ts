@@ -21,6 +21,8 @@ export interface UserDTO {
   fullName: string;
   region: string;
   organisation: string;
+  phone: string;
+  telegram: string;
   role: Role;
   permissions: Permission[];
   isActive: boolean;
@@ -35,6 +37,8 @@ export interface CreateUserInput {
   fullName: unknown;
   region?: unknown;
   organisation?: unknown;
+  phone?: unknown;
+  telegram?: unknown;
   role?: unknown;
   attestationExpiresAt?: unknown;
 }
@@ -43,6 +47,8 @@ export interface UpdateProfileInput {
   fullName?: unknown;
   region?: unknown;
   organisation?: unknown;
+  phone?: unknown;
+  telegram?: unknown;
   attestationExpiresAt?: unknown;
 }
 
@@ -56,6 +62,8 @@ export class User {
   readonly fullName: SanitizedText;
   readonly region: string;
   readonly organisation: string;
+  readonly phone: string;
+  readonly telegram: string;
   readonly role: Role;
   readonly passwordHash: string;
   readonly passwordSalt: string;
@@ -70,6 +78,8 @@ export class User {
     fullName: SanitizedText;
     region: string;
     organisation: string;
+    phone: string;
+    telegram: string;
     role: Role;
     passwordHash: string;
     passwordSalt: string;
@@ -83,6 +93,8 @@ export class User {
     this.fullName = props.fullName;
     this.region = props.region;
     this.organisation = props.organisation;
+    this.phone = props.phone;
+    this.telegram = props.telegram;
     this.role = props.role;
     this.passwordHash = props.passwordHash;
     this.passwordSalt = props.passwordSalt;
@@ -124,6 +136,42 @@ export class User {
     return trimmed;
   }
 
+  static parsePhone(input: unknown): string {
+    if (input === null || input === undefined) return '';
+    if (typeof input !== 'string') {
+      throw new ValidationError('Некорректный формат контактного телефона.');
+    }
+    const clean = SanitizedText.sanitizeRaw(input, 32);
+    if (!clean) return '';
+    if (!/^[+\d\s()\-]+$/u.test(clean)) {
+      throw new ValidationError(
+        'Телефон может содержать только цифры, пробелы, скобки, дефисы и знак +.'
+      );
+    }
+    const digitsCount = clean.replace(/\D/g, '').length;
+    if (digitsCount < 6 || digitsCount > 15) {
+      throw new ValidationError('Укажите корректный номер телефона (от 6 до 15 цифр).');
+    }
+    return clean;
+  }
+
+  static parseTelegram(input: unknown): string {
+    if (input === null || input === undefined) return '';
+    if (typeof input !== 'string') {
+      throw new ValidationError('Некорректный формат Telegram-контакта.');
+    }
+    const trimmed = SanitizedText.sanitizeRaw(input, 64);
+    if (!trimmed) return '';
+    const withoutUrl = trimmed.replace(/^https?:\/\/t\.me\//i, '').replace(/^t\.me\//i, '');
+    const normalized = withoutUrl.startsWith('@') ? withoutUrl : `@${withoutUrl}`;
+    if (!/^@[a-zA-Z0-9_]{4,35}$/.test(normalized)) {
+      throw new ValidationError(
+        'Укажите корректный ник в Telegram (латиница, цифры или «_», от 4 до 35 символов).'
+      );
+    }
+    return normalized;
+  }
+
   /**
    * Validates registration input. The password itself is *not* stored here:
    * hashing is an infrastructure concern, so callers pass the derived material
@@ -140,6 +188,8 @@ export class User {
     const region =
       SanitizedText.sanitizeRaw(input.region, 80) || 'Приморский край';
     const organisation = SanitizedText.sanitizeRaw(input.organisation, 160);
+    const phone = User.parsePhone(input.phone);
+    const telegram = User.parseTelegram(input.telegram);
     const role = parseRole(input.role, ROLES.CANDIDATE);
     const attestationExpiresAt =
       input.attestationExpiresAt === undefined
@@ -152,6 +202,8 @@ export class User {
       fullName,
       region,
       organisation,
+      phone,
+      telegram,
       role,
       // Placeholders: replaced by withPassword() before persistence.
       passwordHash: '',
@@ -200,6 +252,8 @@ export class User {
       fullName: this.fullName,
       region: this.region,
       organisation: this.organisation,
+      phone: this.phone,
+      telegram: this.telegram,
       role: this.role,
       passwordHash: material.passwordHash,
       passwordSalt: material.passwordSalt,
@@ -217,6 +271,8 @@ export class User {
     fullName: string;
     region: string;
     organisation: string;
+    phone?: string;
+    telegram?: string;
     role: unknown;
     passwordHash: string;
     passwordSalt: string;
@@ -231,6 +287,8 @@ export class User {
       fullName: SanitizedText.rehydrate(props.fullName),
       region: props.region,
       organisation: props.organisation,
+      phone: props.phone ?? '',
+      telegram: props.telegram ?? '',
       role: parseRole(props.role),
       passwordHash: props.passwordHash,
       passwordSalt: props.passwordSalt,
@@ -258,6 +316,10 @@ export class User {
       input.organisation === undefined
         ? this.organisation
         : SanitizedText.sanitizeRaw(input.organisation, 160);
+    const phone =
+      input.phone === undefined ? this.phone : User.parsePhone(input.phone);
+    const telegram =
+      input.telegram === undefined ? this.telegram : User.parseTelegram(input.telegram);
     const attestationExpiresAt =
       input.attestationExpiresAt === undefined
         ? this.attestationExpiresAt
@@ -269,6 +331,8 @@ export class User {
       fullName,
       region,
       organisation,
+      phone,
+      telegram,
       role: this.role,
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
@@ -290,6 +354,8 @@ export class User {
       fullName: this.fullName,
       region: this.region,
       organisation: this.organisation,
+      phone: this.phone,
+      telegram: this.telegram,
       role,
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
@@ -307,6 +373,8 @@ export class User {
       fullName: this.fullName,
       region: this.region,
       organisation: this.organisation,
+      phone: this.phone,
+      telegram: this.telegram,
       role: this.role,
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
@@ -325,6 +393,8 @@ export class User {
       fullName: this.fullName,
       region: this.region,
       organisation: this.organisation,
+      phone: this.phone,
+      telegram: this.telegram,
       role: this.role,
       passwordHash: this.passwordHash,
       passwordSalt: this.passwordSalt,
@@ -354,6 +424,8 @@ export class User {
       fullName: this.fullName.value,
       region: this.region,
       organisation: this.organisation,
+      phone: this.phone,
+      telegram: this.telegram,
       role: this.role,
       permissions: [...rolePermissions(this.role)],
       isActive: this.isActive,

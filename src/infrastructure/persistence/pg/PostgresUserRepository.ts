@@ -8,6 +8,8 @@ interface UserRow {
   full_name: string;
   region: string;
   organisation: string;
+  phone?: string | null;
+  telegram?: string | null;
   role: string;
   password_hash: string;
   password_salt: string;
@@ -24,6 +26,8 @@ function toAggregate(row: UserRow): User {
     fullName: row.full_name,
     region: row.region,
     organisation: row.organisation,
+    phone: row.phone ?? '',
+    telegram: row.telegram ?? '',
     role: row.role,
     passwordHash: row.password_hash,
     passwordSalt: row.password_salt,
@@ -61,15 +65,17 @@ export class PostgresUserRepository implements UserRepository {
   async save(user: User): Promise<void> {
     await this.pool.query(
       `INSERT INTO users (
-         id, email, full_name, region, organisation, role,
+         id, email, full_name, region, organisation, phone, telegram, role,
          password_hash, password_salt, is_active, attestation_expires_at,
          created_at, last_login_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (id) DO UPDATE SET
          email = EXCLUDED.email,
          full_name = EXCLUDED.full_name,
          region = EXCLUDED.region,
          organisation = EXCLUDED.organisation,
+         phone = EXCLUDED.phone,
+         telegram = EXCLUDED.telegram,
          role = EXCLUDED.role,
          password_hash = EXCLUDED.password_hash,
          password_salt = EXCLUDED.password_salt,
@@ -82,6 +88,8 @@ export class PostgresUserRepository implements UserRepository {
         user.fullName.value,
         user.region,
         user.organisation,
+        user.phone,
+        user.telegram,
         user.role,
         user.passwordHash,
         user.passwordSalt,

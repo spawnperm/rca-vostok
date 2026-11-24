@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Award,
   BookOpen,
+  Bot,
   CalendarDays,
   CalendarPlus,
   Camera,
@@ -51,7 +52,7 @@ import { PlatformFeedbackForm } from '../PlatformFeedbackForm';
 import { dispatchOpenRcaAssistant } from '../RcaAssistantChatWidget';
 import { RecommendedLiteratureSection } from '../RecommendedLiteratureSection';
 import { TrainingAndAssessmentHub } from '../TrainingAndAssessmentHub';
-import { FAQSection } from './FAQSection';
+import { FAQSection, FAQ_ATTESTATION_ASSISTANT_PROMPT } from './FAQSection';
 
 export { FAQSection };
 
@@ -753,6 +754,15 @@ export function HelpAndContactsWorkspace({
 }) {
   const [subTab, setSubTab] = useState<'faq' | 'consulting' | 'contacts'>(initialSubTab);
 
+  const handleOpenAttestationAssistant = (customPrompt?: string) => {
+    const prompt = customPrompt ?? FAQ_ATTESTATION_ASSISTANT_PROMPT;
+    tracker.trackCustomInteraction('FAQ и связь · Открыть Виртуального ассистента', 'faq');
+    dispatchOpenRcaAssistant({
+      prompt,
+      mode: 'rag',
+    });
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white border border-slate-200 rounded-xl px-6 py-4">
@@ -762,39 +772,50 @@ export function HelpAndContactsWorkspace({
             Частые вопросы, консалтинг (форма 760) и обратная связь
           </h1>
         </div>
-        <div
-          role="tablist"
-          aria-label="Подразделы помощи и контактов"
-          className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
-        >
-          {(
-            [
-              { id: 'faq', label: 'Частые вопросы (FAQ)' },
-              { id: 'consulting', label: 'Консалтинг и форма 760' },
-              { id: 'contacts', label: 'Контакты и обратная связь' },
-            ] as const
-          ).map((tab) => {
-            const active = subTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => {
-                  setSubTab(tab.id);
-                  tracker.trackCustomInteraction(`FAQ и связь · ${tab.label}`, 'faq');
-                }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  active
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div
+            role="tablist"
+            aria-label="Подразделы помощи и контактов"
+            className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg"
+          >
+            {(
+              [
+                { id: 'faq', label: 'Частые вопросы (FAQ)' },
+                { id: 'consulting', label: 'Консалтинг и форма 760' },
+                { id: 'contacts', label: 'Контакты и обратная связь' },
+              ] as const
+            ).map((tab) => {
+              const active = subTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    setSubTab(tab.id);
+                    tracker.trackCustomInteraction(`FAQ и связь · ${tab.label}`, 'faq');
+                  }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    active
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleOpenAttestationAssistant()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+          >
+            <Bot className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
+            <span>Виртуальный ассистент</span>
+          </button>
         </div>
       </div>
 
@@ -804,6 +825,7 @@ export function HelpAndContactsWorkspace({
           onNavigateToCertification={
             onNavigateTab ? () => onNavigateTab('certification') : undefined
           }
+          onOpenAssistant={handleOpenAttestationAssistant}
         />
       )}
 

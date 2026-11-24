@@ -28,6 +28,12 @@ export interface ExperienceComplexityMeta {
   barColor: string;
 }
 
+export interface GeoEndpoint {
+  lat: number;
+  lon: number;
+  label?: string;
+}
+
 export interface ExperienceLogEntry {
   id: string;
   date: string; // YYYY-MM-DD
@@ -38,6 +44,8 @@ export interface ExperienceLogEntry {
   participantsCount: number;
   distanceKm?: number | null;
   notes: string;
+  startPoint?: GeoEndpoint | null;
+  finishPoint?: GeoEndpoint | null;
   createdAt: string;
 }
 
@@ -49,6 +57,8 @@ export interface JournalEntryDraftInput {
   participantsCount: number | string;
   distanceKm?: number | string | null;
   notes?: string;
+  startPoint?: GeoEndpoint | null;
+  finishPoint?: GeoEndpoint | null;
 }
 
 export const COMPLEXITY_BY_RANK: readonly ExpeditionComplexity[] = [
@@ -229,6 +239,8 @@ export class ExperienceEntry {
   readonly participantsCount: number;
   readonly distanceKm: number | null;
   readonly notes: string;
+  readonly startPoint: GeoEndpoint | null;
+  readonly finishPoint: GeoEndpoint | null;
   readonly createdAt: string;
 
   private constructor(props: ExperienceLogEntry) {
@@ -241,6 +253,8 @@ export class ExperienceEntry {
     this.participantsCount = props.participantsCount;
     this.distanceKm = props.distanceKm ?? null;
     this.notes = props.notes;
+    this.startPoint = props.startPoint ?? null;
+    this.finishPoint = props.finishPoint ?? null;
     this.createdAt = props.createdAt;
   }
 
@@ -296,6 +310,37 @@ export class ExperienceEntry {
     const cleanNotes =
       typeof input.notes === 'string' ? input.notes.trim().slice(0, 280) : '';
 
+    const normalizeEndpoint = (
+      raw: GeoEndpoint | null | undefined,
+      fieldLabel: string
+    ): GeoEndpoint | null => {
+      if (!raw || typeof raw !== 'object') return null;
+      const lat = Number(raw.lat);
+      const lon = Number(raw.lon);
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        lat < -90 ||
+        lat > 90 ||
+        lon < -180 ||
+        lon > 180
+      ) {
+        throw new ValidationError(`Укажите корректные координаты (${fieldLabel}).`);
+      }
+      const label =
+        typeof raw.label === 'string' && raw.label.trim()
+          ? raw.label.trim().slice(0, 80)
+          : undefined;
+      return {
+        lat: Math.round(lat * 10000) / 10000,
+        lon: Math.round(lon * 10000) / 10000,
+        ...(label ? { label } : {}),
+      };
+    };
+
+    const startPoint = normalizeEndpoint(input.startPoint, 'точка старта');
+    const finishPoint = normalizeEndpoint(input.finishPoint, 'точка финиша');
+
     const id = `exp-${now.getTime()}-${Math.random().toString(36).slice(2, 7)}`;
 
     return new ExperienceEntry({
@@ -308,6 +353,8 @@ export class ExperienceEntry {
       participantsCount: Math.round(countNum),
       distanceKm,
       notes: cleanNotes,
+      startPoint,
+      finishPoint,
       createdAt: now.toISOString(),
     });
   }
@@ -327,6 +374,8 @@ export class ExperienceEntry {
       participantsCount: this.participantsCount,
       distanceKm: this.distanceKm,
       notes: this.notes,
+      ...(this.startPoint ? { startPoint: this.startPoint } : {}),
+      ...(this.finishPoint ? { finishPoint: this.finishPoint } : {}),
       createdAt: this.createdAt,
     };
   }
@@ -351,6 +400,40 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
   const homeId = resolveJournalRegionId(preferredRegionName);
   const homeRegion = getJournalRegionById(homeId);
 
+  const homeStartEnd: Record<
+    DfoJournalRegionId,
+    { start: GeoEndpoint; finish: GeoEndpoint }
+  > = {
+    primorye: {
+      start: { lat: 43.0582, lon: 132.6815, label: 'с. Лукьяновка (старт тропы)' },
+      finish: { lat: 43.0789, lon: 132.6934, label: 'Вершина г. Пидан (1332 м)' },
+    },
+    kamchatka: {
+      start: { lat: 53.255, lon: 158.83, label: 'Базовый лагерь Авача' },
+      finish: { lat: 53.301, lon: 158.785, label: 'Перемычка г. Верблюд' },
+    },
+    khabarovsk: {
+      start: { lat: 48.27, lon: 135.42, label: 'Кордон Большехехцирский' },
+      finish: { lat: 48.32, lon: 135.51, label: 'Видовая сопка Хехцир' },
+    },
+    sakhalin: {
+      start: { lat: 47.03, lon: 142.81, label: 'ст. Пик Чехова' },
+      finish: { lat: 47.06, lon: 142.86, label: 'г. Чехова (1045 м)' },
+    },
+    yakutia: {
+      start: { lat: 61.105, lon: 127.36, label: 'База р. Лена (Батамай)' },
+      finish: { lat: 61.168, lon: 127.49, label: 'Ленские столбы (смотр. тропа)' },
+    },
+    amur: {
+      start: { lat: 53.68, lon: 127.18, label: 'п. Снежногорский' },
+      finish: { lat: 53.79, lon: 127.35, label: 'Хребет Тукурингра' },
+    },
+    'magadan-chukotka': {
+      start: { lat: 59.56, lon: 150.8, label: 'б. Нагаева, г. Магадан' },
+      finish: { lat: 59.62, lon: 151.05, label: 'Марчеканская сопка' },
+    },
+  };
+
   const base: ExperienceLogEntry[] = [
     {
       id: 'exp-seed-1',
@@ -365,6 +448,8 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       participantsCount: 14,
       distanceKm: 18.5,
       notes: 'Уведомление МЧС за 10 дней, проверка групповой аптечки WFA и раций.',
+      startPoint: homeStartEnd[homeId].start,
+      finishPoint: homeStartEnd[homeId].finish,
       createdAt: '2026-10-13T08:00:00Z',
     },
     {
@@ -377,6 +462,8 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       participantsCount: 10,
       distanceKm: 54.0,
       notes: 'Рафтинг и катамараны-4, страховка с берега, безаварийное прохождение.',
+      startPoint: { lat: 53.317, lon: 157.539, label: 'с. Малки (стапель)' },
+      finishPoint: { lat: 52.885, lon: 156.925, label: 'Японский мост (антистапель)' },
       createdAt: '2026-09-20T10:00:00Z',
     },
     {
@@ -389,6 +476,8 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       participantsCount: 9,
       distanceKm: 82.0,
       notes: 'Согласование маршрута с администрацией Буреинского заповедника.',
+      startPoint: { lat: 51.96, lon: 134.92, label: 'р. Нилан / кордон заповедника' },
+      finishPoint: { lat: 52.14, lon: 135.18, label: 'оз. Медвежье (перевал)' },
       createdAt: '2026-08-26T09:30:00Z',
     },
     {
@@ -401,6 +490,8 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       participantsCount: 16,
       distanceKm: 16.2,
       notes: 'Контроль приливно-отливной таблицы и брифинг по технике безопасности.',
+      startPoint: { lat: 46.54, lon: 143.52, label: 'м. Птичий (выход на берег)' },
+      finishPoint: { lat: 46.51, lon: 143.57, label: 'м. Великан (бухта)' },
       createdAt: '2026-07-12T14:00:00Z',
     },
     {
@@ -413,6 +504,8 @@ export function getDefaultJournalEntries(preferredRegionName?: string): Experien
       participantsCount: 12,
       distanceKm: 21.4,
       notes: 'Отработка навигации в тумане по ГЛОНАСС и бумажной топокарте.',
+      startPoint: { lat: 43.635, lon: 134.142, label: 'с. Ясное / ключ Партизанский' },
+      finishPoint: { lat: 43.694, lon: 134.198, label: 'Вершина г. Облачная (1854 м)' },
       createdAt: '2026-06-07T11:15:00Z',
     },
   ];

@@ -26,6 +26,14 @@ export interface ParsedGpxTrackResult {
     lat: number;
     lon: number;
   };
+  startPoint: {
+    lat: number;
+    lon: number;
+  };
+  finishPoint: {
+    lat: number;
+    lon: number;
+  };
   suggestedNotes: string;
 }
 
@@ -497,6 +505,9 @@ export function parseGpxTrack(
     `${allPoints.length} GPS-точек`,
   ].filter(Boolean);
 
+  const firstPt = allPoints[0];
+  const lastPt = allPoints[allPoints.length - 1];
+
   return {
     fileName,
     routeTitle,
@@ -509,6 +520,14 @@ export function parseGpxTrack(
     pointsCount: allPoints.length,
     segmentsCount: segments.length,
     centroid: { lat: centroidLat, lon: centroidLon },
+    startPoint: {
+      lat: Math.round(firstPt.lat * 10000) / 10000,
+      lon: Math.round(firstPt.lon * 10000) / 10000,
+    },
+    finishPoint: {
+      lat: Math.round(lastPt.lat * 10000) / 10000,
+      lon: Math.round(lastPt.lon * 10000) / 10000,
+    },
     suggestedNotes: noteParts.join(' · '),
   };
 }

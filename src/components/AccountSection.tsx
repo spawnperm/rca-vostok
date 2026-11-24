@@ -46,6 +46,11 @@ import { AttestationSelfDiagnosticsWidget } from './AttestationSelfDiagnosticsWi
 import { InstructorPassportCard } from './InstructorPassportCard';
 import { InstructorResumeGeneratorCard } from './InstructorResumeGeneratorCard';
 import { ProfessionalExperienceLogCard } from './ProfessionalExperienceLogCard';
+import { ExperienceRoutesLeafletMapCard } from './ExperienceRoutesLeafletMapCard';
+import { GearChecklistGeneratorCard } from './GearChecklistGeneratorCard';
+import { UpdatesFeedWidget } from './UpdatesFeedWidget';
+import { UserProfileCard } from './UserProfileCard';
+import { type UpdateFeedActionTarget } from '../utils/updatesFeed';
 import { RouteComplexityForecastCard } from './RouteComplexityForecastCard';
 import { RouteComplexityPieWidget } from './RouteComplexityPieWidget';
 import { ProfileAttestationCertificateCard } from './ProfileAttestationCertificateCard';
@@ -691,6 +696,19 @@ export function AccountSection({
       {/* TAB 1: PROFILE, INQUIRIES, NOTIFICATIONS & SECURITY */}
       {cabinetTab === 'profile' && (
         <div className="space-y-6">
+          <UserProfileCard
+            user={user}
+            attestationPercent={effectiveProgressSummary.percent}
+            selfCheckRevision={selfCheckRevision}
+            onUpdated={handleAuthenticated}
+            onJumpToPreparation={() =>
+              navigateCabinetTarget('preparation', 'qualification-self-check')
+            }
+            onJumpToExperience={() =>
+              navigateCabinetTarget('documents', 'professional-experience-log')
+            }
+          />
+
           <AttestationExpiryMonitorWidget
             user={user}
             inquiries={inquiries}
@@ -750,6 +768,37 @@ export function AccountSection({
               hasPermission(user, 'inquiries:view_own') ? () => void loadInquiries() : undefined
             }
             onOpenOverview={onNavigate ? () => onNavigate('overview') : undefined}
+          />
+
+          <UpdatesFeedWidget
+            user={user}
+            inquiries={inquiries}
+            progressSummary={effectiveProgressSummary}
+            onNavigateAction={(target: UpdateFeedActionTarget, prompt?: string) => {
+              switch (target) {
+                case 'calendar':
+                  navigateCabinetTarget('preparation', 'attestation-sessions-calendar');
+                  break;
+                case 'self_check':
+                  navigateCabinetTarget('preparation', 'qualification-self-check');
+                  break;
+                case 'gear':
+                  navigateCabinetTarget('documents', 'gear-checklist-generator');
+                  break;
+                case 'experience':
+                  navigateCabinetTarget('documents', 'experience-routes-leaflet-map');
+                  break;
+                case 'inquiries':
+                  scrollToElementById('my-inquiries-status-table');
+                  break;
+                case 'assistant':
+                  openAiAssistant(
+                    prompt ??
+                      'Подскажите оптимальный план подготовки и развития навыков для моего уровня квалификации.'
+                  );
+                  break;
+              }
+            }}
           />
 
           <LinkedAccountsCard
@@ -987,6 +1036,11 @@ export function AccountSection({
 
           <ProfessionalExperienceLogCard user={user} />
 
+          <ExperienceRoutesLeafletMapCard
+            user={user}
+            onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+          />
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <RouteComplexityPieWidget
               user={user}
@@ -997,6 +1051,11 @@ export function AccountSection({
               onJumpToJournal={() => scrollToElementById('professional-experience-log')}
             />
           </div>
+
+          <GearChecklistGeneratorCard
+            user={user}
+            onJumpToJournal={() => scrollToElementById('professional-experience-log')}
+          />
         </div>
       )}
 

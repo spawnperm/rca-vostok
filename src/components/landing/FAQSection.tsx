@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Bot,
   CalendarDays,
   CheckCircle2,
   ChevronDown,
@@ -13,6 +14,7 @@ import { ATTESTATION_FAQ, type FaqItem } from '../../data/researchData';
 import { ENRICHED_ATTESTATION_FAQ } from '../../utils/accountKnowledgeBase';
 import { generateFaqPdf } from '../../utils/faqPdfExport';
 import { tracker } from '../../utils/tracker';
+import { dispatchOpenRcaAssistant } from '../RcaAssistantChatWidget';
 
 type FaqCategoryFilter = 'all' | FaqItem['category'];
 
@@ -25,9 +27,13 @@ const CATEGORY_TABS: { id: FaqCategoryFilter; label: string }[] = [
   { id: 'region', label: 'Специфика ДФО' },
 ];
 
+export const FAQ_ATTESTATION_ASSISTANT_PROMPT =
+  'Расскажите пошагово о процедуре аттестации инструкторов-проводников в РЦА «Русский Восток»: этапы, перечень документов, сроки и экзамен на полигоне.';
+
 export interface FAQSectionProps {
   onNavigateToContacts?: () => void;
   onNavigateToCertification?: () => void;
+  onOpenAssistant?: (prompt?: string) => void;
 }
 
 /**
@@ -37,6 +43,7 @@ export interface FAQSectionProps {
 export function FAQSection({
   onNavigateToContacts,
   onNavigateToCertification,
+  onOpenAssistant,
 }: FAQSectionProps = {}) {
   const [category, setCategory] = useState<FaqCategoryFilter>('all');
   const [query, setQuery] = useState<string>('');
@@ -351,6 +358,27 @@ export function FAQSection({
             субсидированию обучения сотрудников?
           </p>
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                tracker.trackCustomInteraction(
+                  'FAQ и связь · Быстрый доступ к Виртуальному ассистенту',
+                  'faq'
+                );
+                if (onOpenAssistant) {
+                  onOpenAssistant(FAQ_ATTESTATION_ASSISTANT_PROMPT);
+                } else {
+                  dispatchOpenRcaAssistant({
+                    prompt: FAQ_ATTESTATION_ASSISTANT_PROMPT,
+                    mode: 'rag',
+                  });
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 text-white text-xs font-semibold rounded-lg hover:bg-slate-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+            >
+              <Bot className="w-3.5 h-3.5 text-teal-300" aria-hidden="true" />
+              <span>Виртуальный ассистент</span>
+            </button>
             {onNavigateToCertification && (
               <button
                 type="button"

@@ -124,6 +124,11 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
   const [distanceKm, setDistanceKm] = useState<string>('');
   const [routeTitle, setRouteTitle] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [showCoordInputs, setShowCoordInputs] = useState<boolean>(false);
+  const [startLat, setStartLat] = useState<string>('');
+  const [startLon, setStartLon] = useState<string>('');
+  const [finishLat, setFinishLat] = useState<string>('');
+  const [finishLon, setFinishLon] = useState<string>('');
   const [gpxPreview, setGpxPreview] = useState<ParsedGpxTrackResult | null>(null);
   const [isDraggingGpx, setIsDraggingGpx] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -211,11 +216,15 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
       setDistanceKm(parsed.distanceKm > 0 ? String(parsed.distanceKm) : '');
       setRouteTitle(parsed.routeTitle);
       setNotes(parsed.suggestedNotes);
+      setStartLat(String(parsed.startPoint.lat));
+      setStartLon(String(parsed.startPoint.lon));
+      setFinishLat(String(parsed.finishPoint.lat));
+      setFinishLon(String(parsed.finishPoint.lon));
       setGpxPreview(parsed);
       setStatusNotice(
         `Трек «${parsed.routeTitle}» импортирован: ${parsed.regionName}, ${parsed.distanceKm.toFixed(1)} км${
           parsed.date ? `, дата ${formatRussianJournalDate(parsed.date)}` : ''
-        }. Проверьте параметры и нажмите «Добавить запись в журнал».`
+        }. Точки старта и финиша зафиксированы.`
       );
       tracker.trackCustomInteraction(
         'Журнал опыта · Импорт GPX-трека',
@@ -261,7 +270,22 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
     setStatusNotice(null);
     setIsSyncing(true);
 
+    const parseOptionalPoint = (latRaw: string, lonRaw: string, label: string) => {
+      const latTrim = latRaw.trim().replace(',', '.');
+      const lonTrim = lonRaw.trim().replace(',', '.');
+      if (!latTrim && !lonTrim) return undefined;
+      const latNum = Number.parseFloat(latTrim);
+      const lonNum = Number.parseFloat(lonTrim);
+      if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) {
+        throw new Error(`Укажите обе координаты (${label}: широта и долгота).`);
+      }
+      return { lat: latNum, lon: lonNum, label };
+    };
+
     try {
+      const parsedStartPoint = parseOptionalPoint(startLat, startLon, 'Старт');
+      const parsedFinishPoint = parseOptionalPoint(finishLat, finishLon, 'Финиш');
+
       const result = await experienceJournalGateway.logExpedition({
         userId,
         preferredRegionName: preferredRegion,
@@ -273,6 +297,8 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
           participantsCount,
           distanceKm: distanceKm.trim() || null,
           notes,
+          ...(parsedStartPoint ? { startPoint: parsedStartPoint } : {}),
+          ...(parsedFinishPoint ? { finishPoint: parsedFinishPoint } : {}),
         },
       });
       setEntries(result.entries);
@@ -288,6 +314,10 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
       setRouteTitle('');
       setDistanceKm('');
       setNotes('');
+      setStartLat('');
+      setStartLon('');
+      setFinishLat('');
+      setFinishLon('');
       setGpxPreview(null);
       setStatusNotice(
         `Запись добавлена: ${result.entry.routeTitle} (${result.entry.regionName}, ${result.entry.complexity}${
@@ -625,6 +655,66 @@ export const ProfessionalExperienceLogCard: React.FC<ProfessionalExperienceLogCa
               className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:border-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-100"
             />
           </label>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setShowCoordInputs((v) => !v)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-800 hover:text-teal-950 cursor-pointer"
+            >
+              <MapPin className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>
+                {showCoordInputs
+                  ? 'Скрыть координаты старта и финиша'
+                  : 'Указать координаты старта и финиша (необязательно)'}
+              </span>
+            </button>
+
+            {showCoordInputs && (
+              <div className="grid grid-cols-2 gap-2.5 p-3 bg-white border border-slate-200 rounded-lg">
+                <label className="block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">Старт · широта</span>
+                  <input
+                    type="text"
+                    value={startLat}
+                    onChange={(e) => setStartLat(e.target.value)}
+                    placeholder="43.0582"
+                    className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-md focus:border-teal-600 focus:outline-none"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">Старт · долгота</span>
+                  <input
+                    type="text"
+                    value={startLon}
+                    onChange={(e) => setStartLon(e.target.value)}
+                    placeholder="132.6815"
+                    className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-md focus:border-teal-600 focus:outline-none"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">Финиш · широта</span>
+                  <input
+                    type="text"
+                    value={finishLat}
+                    onChange={(e) => setFinishLat(e.target.value)}
+                    placeholder="43.0789"
+                    className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-md focus:border-teal-600 focus:outline-none"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[11px] font-medium text-slate-600">Финиш · долгота</span>
+                  <input
+                    type="text"
+                    value={finishLon}
+                    onChange={(e) => setFinishLon(e.target.value)}
+                    placeholder="132.6934"
+                    className="w-full px-2.5 py-1.5 text-xs font-mono bg-white border border-slate-300 rounded-md focus:border-teal-600 focus:outline-none"
+                  />
+                </label>
+              </div>
+            )}
+          </div>
 
           {formError && (
             <p

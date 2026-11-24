@@ -69,6 +69,7 @@ const MIGRATION_STEPS: { version: string; run: (pool: pg.Pool) => Promise<void> 
   { version: '006_guide_leaderboard', run: (p) => migrateGuideLeaderboard(p) },
   { version: '007_linked_accounts', run: (p) => migrateLinkedAccounts(p) },
   { version: '008_user_attestation_expiry', run: (p) => migrateUserAttestationExpiry(p) },
+  { version: '009_user_contact_details', run: (p) => migrateUserContactDetails(p) },
 ];
 
 /**
@@ -777,4 +778,11 @@ async function migrateUserAttestationExpiry(pool: pg.Pool): Promise<void> {
   `);
 }
 
-
+/** User profile contact columns (phone and telegram handle). */
+async function migrateUserContactDetails(pool: pg.Pool): Promise<void> {
+  await pool.query(`
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS telegram TEXT NOT NULL DEFAULT '';
+  `);
+}

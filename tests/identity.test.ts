@@ -429,3 +429,34 @@ test('User: password hash material must be present when attached', () => {
   });
   assert.throws(() => created.withPassword({ passwordHash: '', passwordSalt: '' }));
 });
+
+test('Profile: updateProfile validates and persists phone and telegram contact details', async () => {
+  const ctx = makeIdentity();
+  const { user } = await registerAndAuthenticate(ctx);
+
+  const updated = await ctx.updateProfile.execute(user, {
+    phone: '+7 (914) 555-01-22',
+    telegram: 'https://t.me/guide_vostok',
+    region: 'Камчатский край',
+    organisation: 'Турклуб «Вулкан»',
+  });
+
+  assert.equal(updated.phone, '+7 (914) 555-01-22');
+  assert.equal(updated.telegram, '@guide_vostok');
+  assert.equal(updated.region, 'Камчатский край');
+  assert.equal(updated.organisation, 'Турклуб «Вулкан»');
+
+  const stored = await ctx.users.findById(user.id);
+  assert.equal(stored?.phone, '+7 (914) 555-01-22');
+  assert.equal(stored?.telegram, '@guide_vostok');
+
+  await assert.rejects(
+    () => ctx.updateProfile.execute(stored!, { phone: '123' }),
+    ValidationError
+  );
+  await assert.rejects(
+    () => ctx.updateProfile.execute(stored!, { telegram: 'bad handle!' }),
+    ValidationError
+  );
+});
+

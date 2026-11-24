@@ -8,6 +8,7 @@ import {
 import type {
   DfoJournalRegionId,
   ExpeditionComplexity,
+  GeoEndpoint,
 } from '../../domain/experience/ExperienceEntry.ts';
 import { DomainError, NotFoundError, ValidationError } from '../../domain/shared/DomainError.ts';
 import { requireAuth } from './AuthMiddleware.ts';
@@ -84,6 +85,14 @@ export function createExperienceJournalRouter(
               ? body.distanceKm
               : undefined,
           notes: typeof body.notes === 'string' ? body.notes : '',
+          startPoint:
+            body.startPoint && typeof body.startPoint === 'object'
+              ? (body.startPoint as GeoEndpoint)
+              : undefined,
+          finishPoint:
+            body.finishPoint && typeof body.finishPoint === 'object'
+              ? (body.finishPoint as GeoEndpoint)
+              : undefined,
         },
       });
       res.status(201).json(result);

@@ -80,6 +80,8 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
         fullName: body.fullName,
         region: body.region,
         organisation: body.organisation,
+        phone: body.phone,
+        telegram: body.telegram,
         attestationExpiresAt: body.attestationExpiresAt,
       });
 
@@ -211,6 +213,8 @@ export function createIdentityRouter(deps: IdentityRouterDeps): express.Router {
           fullName: body.fullName,
           region: body.region,
           organisation: body.organisation,
+          phone: body.phone,
+          telegram: body.telegram,
           attestationExpiresAt: body.attestationExpiresAt,
         })
       );
