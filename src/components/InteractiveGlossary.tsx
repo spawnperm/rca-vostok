@@ -1,7 +1,9 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
+  Check,
   ChevronDown,
+  Copy,
   Eye,
   EyeOff,
   MessageSquare,
@@ -19,13 +21,16 @@ import { tracker } from '../utils/tracker.ts';
 export type GlossaryCategoryFilter = 'all' | GlossaryTerm['category'];
 
 const QUICK_GLOSSARY_TOPICS = [
+  'ФСТР',
+  'Маршрутная книжка',
+  'к.т.',
+  'КСР',
+  'МЧС',
   'активный туризм',
-  'инструктор-проводник',
   '132-ФЗ',
   '1003',
   '760',
   'МКК',
-  'Контур А',
   'ООПТ',
 ] as const;
 
@@ -54,6 +59,12 @@ const READING_PASSAGES: GlossaryReadingPassage[] = [
     label: '03. Двухконтурная модель ДФО',
     title: 'Легализация кадров через программы ДПО ВВГУ',
     text: 'Чтобы вовлечь нелегализованный резерв действующих практиков, в Приморском крае внедрена двухконтурная модель. Опытные гиды проходят модульное обучение Контура А, а новые специалисты осваивают программу ДПО ВВГУ объёмом 250 часов, выходя на экзамен РЦА без повторного переучивания.',
+  },
+  {
+    id: 'fstr-tactics',
+    label: '04. Термины ФСТР и тактика',
+    title: 'Классификация препятствий, маршрутная книжка и безопасность по стандарту ФСТР',
+    text: 'Перед выходом на маршрут по методике ФСТР группа оформляет маршрутную книжку, оценивает категорию трудности препятствий (к.т.) и регистрируется в МЧС с указанием контрольного срока (КСР) и аварийных выходов. На самом маршруте проводник организует безопасный бивуак, навесную переправу со страховкой и предъявляет нагрудный бейдж ЕФРТА.',
   },
 ];
 
@@ -342,6 +353,7 @@ export const InteractiveGlossary: React.FC<InteractiveGlossaryProps> = ({
     useState<GlossaryCategoryFilter>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [pinnedGlossaryId, setPinnedGlossaryId] = useState<string | null>(null);
+  const [copiedTermId, setCopiedTermId] = useState<string | null>(null);
   const [activePassageId, setActivePassageId] = useState<string>(
     READING_PASSAGES[0].id
   );
@@ -615,6 +627,7 @@ export const InteractiveGlossary: React.FC<InteractiveGlossaryProps> = ({
             {(
               [
                 { id: 'all', label: `Все понятия (${GLOSSARY_TERMS.length})` },
+                { id: 'fstr', label: 'Термины ФСТР' },
                 { id: 'regulation', label: 'Правовой статус' },
                 { id: 'procedure', label: 'Процедура и маршруты' },
                 { id: 'economics', label: 'Экономика и модель' },
@@ -757,24 +770,52 @@ export const InteractiveGlossary: React.FC<InteractiveGlossaryProps> = ({
                       {item.contextNote}
                     </p>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => handleToggleGlossaryPin(item)}
-                    aria-expanded={isExpanded}
-                    className="text-[11px] font-medium text-teal-800 hover:text-teal-950 inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>
-                      {isExpanded
-                        ? 'Скрыть примечание'
-                        : 'Показать нормативный контекст'}
-                    </span>
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-150 ${
-                        isExpanded ? 'rotate-180' : ''
-                      }`}
-                      aria-hidden="true"
-                    />
-                  </button>
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleGlossaryPin(item)}
+                      aria-expanded={isExpanded}
+                      className="text-[11px] font-medium text-teal-800 hover:text-teal-950 inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>
+                        {isExpanded
+                          ? 'Скрыть примечание'
+                          : 'Показать нормативный контекст'}
+                      </span>
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform duration-150 ${
+                          isExpanded ? 'rotate-180' : ''
+                        }`}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const textToCopy = `${item.term} (${item.shortTag}) — ${item.definition}`;
+                        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                          void navigator.clipboard.writeText(textToCopy).catch(() => {});
+                        }
+                        setCopiedTermId(item.id);
+                        window.setTimeout(() => {
+                          setCopiedTermId((prev) => (prev === item.id ? null : prev));
+                        }, 1800);
+                      }}
+                      className="text-[11px] font-medium text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 cursor-pointer shrink-0"
+                    >
+                      {copiedTermId === item.id ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-700" aria-hidden="true" />
+                          <span className="text-emerald-700">Скопировано</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" aria-hidden="true" />
+                          <span>Копировать</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </article>
             );

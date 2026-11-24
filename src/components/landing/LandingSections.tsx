@@ -45,6 +45,7 @@ import type { SiteTabId } from '../../utils/seo';
 import { AttestationLocationsLeafletMap } from './AttestationLocationsLeafletMap';
 import { CertificationCalendarHub } from '../CertificationCalendarHub';
 import { CertifiedGuidesRegistryTable } from '../CertifiedGuidesRegistryTable';
+import { GuideLearningRoadmapGraph } from '../GuideLearningRoadmapGraph';
 import { InteractiveGlossary } from '../InteractiveGlossary';
 import { OverviewDemoCertificateSection } from '../OverviewDemoCertificateSection';
 import { PlatformFeedbackForm } from '../PlatformFeedbackForm';
@@ -244,11 +245,13 @@ export function LearningSection({
   compact = false,
   onNavigateTab,
 }: {
-  initialSubTab?: 'programmes' | 'exam' | 'library';
+  initialSubTab?: 'programmes' | 'glossary' | 'exam' | 'library';
   compact?: boolean;
   onNavigateTab?: (tab: SiteTabId) => void;
 }) {
-  const [subTab, setSubTab] = useState<'programmes' | 'exam' | 'library'>(initialSubTab);
+  const [subTab, setSubTab] = useState<'programmes' | 'glossary' | 'exam' | 'library'>(
+    initialSubTab
+  );
 
   useEffect(() => {
     setSubTab(initialSubTab);
@@ -272,9 +275,10 @@ export function LearningSection({
           >
             {(
               [
-                { id: 'programmes', label: 'Программы и этапы' },
+                { id: 'programmes', label: 'Программы и граф обучения' },
+                { id: 'glossary', label: 'Глоссарий ФСТР' },
                 { id: 'exam', label: 'Тренажёр и диагностика' },
-                { id: 'library', label: 'Литература и глоссарий' },
+                { id: 'library', label: 'Литература' },
               ] as const
             ).map((tab) => {
               const active = subTab === tab.id;
@@ -336,37 +340,59 @@ export function LearningSection({
             })}
           </div>
 
-          <div className="space-y-3 pt-2">
-            <h3 className="text-sm font-bold text-slate-900">
-              Этапы подготовки к аттестации по пешеходному туризму
-            </h3>
-            <ol className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {PREPARATION_STEPS.map((step, index) => {
-                const Icon = STEP_ICONS[step.icon] ?? BookOpen;
-                return (
-                  <li
-                    key={step.title}
-                    className="bg-white border border-slate-200 rounded-xl p-5 space-y-2.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="w-9 h-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
-                        <Icon className="w-4 h-4 text-slate-700" aria-hidden="true" />
-                      </span>
-                      <span className="text-xs font-mono text-slate-400 tabular-nums">
-                        0{index + 1}
-                      </span>
-                    </div>
-                    <h4 className="text-sm font-semibold text-slate-900">{step.title}</h4>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {STEP_SUMMARIES[index]}
-                    </p>
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
+          <GuideLearningRoadmapGraph
+            onOpenExam={() => {
+              if (compact && onNavigateTab) {
+                onNavigateTab('preparation');
+                return;
+              }
+              setSubTab('exam');
+            }}
+            onOpenLibrary={() => {
+              if (compact && onNavigateTab) {
+                onNavigateTab('learning');
+                return;
+              }
+              setSubTab('library');
+            }}
+            onNavigateTab={onNavigateTab}
+          />
+
+          {compact && (
+            <div className="space-y-3 pt-1">
+              <h3 className="text-sm font-bold text-slate-900">
+                Базовые этапы подготовки к аттестации
+              </h3>
+              <ol className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {PREPARATION_STEPS.map((step, index) => {
+                  const Icon = STEP_ICONS[step.icon] ?? BookOpen;
+                  return (
+                    <li
+                      key={step.title}
+                      className="bg-white border border-slate-200 rounded-xl p-5 space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="w-9 h-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                          <Icon className="w-4 h-4 text-slate-700" aria-hidden="true" />
+                        </span>
+                        <span className="text-xs font-mono text-slate-400 tabular-nums">
+                          0{index + 1}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-semibold text-slate-900">{step.title}</h4>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        {STEP_SUMMARIES[index]}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          )}
         </div>
       )}
+
+      {!compact && subTab === 'glossary' && <InteractiveGlossary />}
 
       {!compact && subTab === 'exam' && <TrainingAndAssessmentHub onNavigateTab={onNavigateTab} />}
 

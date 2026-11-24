@@ -42,6 +42,11 @@ import { ProfileAttestationCertificateCard } from './ProfileAttestationCertifica
 import { PreparationChecklistPdfCard } from './PreparationChecklistPdfCard';
 import { QualificationCertificatesJsonExportCard } from './QualificationCertificatesJsonExportCard';
 import { AccountDataBackupCard } from './AccountDataBackupCard';
+import {
+  CompetencyAssessmentQuizCard,
+  CompetencyPeriodicBanner,
+} from './CompetencyAssessmentQuizCard';
+import { HikeScheduleExportCard } from './HikeScheduleExportCard';
 import { InstructorAchievementsWidget } from './InstructorAchievementsWidget';
 import {
   useInstructorAchievements,
@@ -112,6 +117,7 @@ export function AccountSection({
   const [selectedContour, setSelectedContour] = useState<'contour_b' | 'contour_a'>('contour_b');
   const [reviewsRefreshKey, setReviewsRefreshKey] = useState<number>(0);
   const [selfCheckRevision, setSelfCheckRevision] = useState<number>(0);
+  const [competencyRevision, setCompetencyRevision] = useState<number>(0);
   const [kbExternalSearch, setKbExternalSearch] = useState<{
     query: string;
     nonce: number;
@@ -648,6 +654,14 @@ export function AccountSection({
             }
           />
 
+          <CompetencyPeriodicBanner
+            user={user}
+            revision={competencyRevision}
+            onStartQuiz={() =>
+              navigateCabinetTarget('preparation', 'competency-assessment-quiz')
+            }
+          />
+
           <AttestationExpiryMonitorWidget
             user={user}
             inquiries={inquiries}
@@ -872,6 +886,12 @@ export function AccountSection({
             }
           />
 
+          <CompetencyAssessmentQuizCard
+            user={user}
+            onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
+            onUpdated={() => setCompetencyRevision((n) => n + 1)}
+          />
+
           <AttestationSelfDiagnosticsWidget
             user={user}
             onJumpToKnowledgeBase={jumpToKnowledgeBaseWithQuery}
@@ -961,6 +981,8 @@ export function AccountSection({
           />
 
           <ProfessionalExperienceLogCard user={user} />
+
+          <HikeScheduleExportCard user={user} />
 
           <ExperienceRoutesLeafletMapCard
             user={user}

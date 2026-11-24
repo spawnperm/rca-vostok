@@ -339,7 +339,7 @@ export default function App() {
                 <LandingHero onNavigate={scrollToSection} onNavigateTab={navigateTo} />
 
                 <div className="space-y-4">
-                  <LearningSection compact />
+                  <LearningSection compact onNavigateTab={navigateTo} />
                   <div className="flex justify-end">
                     <button
                       type="button"
