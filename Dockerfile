@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Stage 1: build the client bundle -------------------------------------
-FROM node:22.23.5-bookworm-slim AS builder
+FROM node:26.13.0-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ COPY public ./public
 RUN npm run build
 
 # ---- Stage 2: runtime ------------------------------------------------------
-FROM node:22.23.5-bookworm-slim AS runtime
+FROM node:26.13.0-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     PORT=3000
