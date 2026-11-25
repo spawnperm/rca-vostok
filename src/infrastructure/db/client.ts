@@ -251,12 +251,18 @@ export async function getDb(): Promise<AppDatabase> {
   if (globalThis._dbInitPromise) return globalThis._dbInitPromise;
 
   globalThis._dbInitPromise = (async () => {
-    const url = process.env.DATABASE_URL?.trim();
+    // Postgres configuration is owned by the persistence layer
+    // (PostgresPool.createPool), which also understands PGHOST/PGDATABASE and
+    // applies pool error handling. Reusing that decision here instead of
+    // re-reading DATABASE_URL keeps a single source of truth — two independent
+    // "is a database configured?" checks are how a service ends up half on
+    // Postgres and half on an embedded engine.
+    const { createPool } = await import('../persistence/pg/PostgresPool.ts');
+    const sharedPool = createPool();
 
-    if (url) {
-      const pool = new Pool({ connectionString: url });
-      globalThis._pgPool = pool;
-      const db = drizzlePg(pool, { schema });
+    if (sharedPool) {
+      globalThis._pgPool = sharedPool as unknown as Pool;
+      const db = drizzlePg(globalThis._pgPool, { schema });
       globalThis._appDb = db;
       return db;
     }

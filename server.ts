@@ -28,6 +28,7 @@ import {
 } from './src/application/feedback/FeedbackUseCases.ts';
 import { GetSystemHealthUseCase } from './src/application/system/HealthCheckUseCase.ts';
 import { HousekeepingJob } from './src/application/system/HousekeepingJob.ts';
+import { closeDatabase, getDb } from './src/infrastructure/db/client.ts';
 import { MetricsCollector } from './src/infrastructure/http/Metrics.ts';
 import type { AnalyticsRepository } from './src/domain/analytics/AnalyticsRepository.ts';
 import type { FeedbackRepository } from './src/domain/feedback/FeedbackRepository.ts';
@@ -433,6 +434,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
         : undefined,
       checkStorage: async () =>
         objectStorage.checkHealth ? objectStorage.checkHealth() : true,
+      // The Drizzle layer picks its engine independently of the repositories,
+      // so surface it here. A mismatch between the two would otherwise only
+      // appear as missing rows at runtime.
+      checkDrizzle: async () => Boolean(await getDb()),
     },
     storageProvider
   );
