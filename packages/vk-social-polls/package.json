@@ -1,0 +1,41 @@
+{
+  "name": "@nexus-plugins/vk-social-polls",
+  "version": "1.1.5",
+  "description": "Social Poll Aggregate enforcing option bounds and vote invariants for the Social Cabinet bounded context.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "registry": "http://localhost:4873"
+  },
+  "dependencies": {
+    "@nexus-core/ddd-kernel": "*",
+    "zod": "^4.6.7"
+  },
+  "nexusModule": {
+    "boundedContext": "social",
+    "contextMapping": "Customer-Supplier",
+    "role": "plugin-module",
+    "slot": "social_composer",
+    "aggregates": [
+      "SocialPollAggregate"
+    ],
+    "valueObjects": [
+      "PollOptionSet"
+    ],
+    "domainEvents": [
+      "social.<tenant>.poll.created",
+      "social.<tenant>.poll.voted"
+    ],
+    "subscribedSubjects": [
+      "social.*.post.created"
+    ],
+    "permissionsRequired": [
+      "social:post"
+    ]
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@nexus-plugins/directus-bi-connector",
+  "version": "1.0.8",
+  "description": "Directus Anti-Corruption Layer (ACL) projecting internal PostgreSQL/NocoBase records into BI-safe analytics DTOs.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "registry": "http://localhost:4873"
+  },
+  "dependencies": {
+    "@nexus-core/ddd-kernel": "*",
+    "zod": "^4.6.7"
+  },
+  "nexusModule": {
+    "boundedContext": "analytics",
+    "contextMapping": "Anti-Corruption Layer",
+    "role": "plugin-module",
+    "slot": "portal_module",
+    "aggregates": [
+      "BiCollectionProjection"
+    ],
+    "valueObjects": [
+      "CollectionFieldMask",
+      "SyncSchedule"
+    ],
+    "domainEvents": [
+      "analytics.<tenant>.bi_projection.synced"
+    ],
+    "subscribedSubjects": [
+      "crm.*.deal.*",
+      "nocobase.*.record.*"
+    ],
+    "permissionsRequired": [
+      "cms:edit"
+    ]
+  },
+  "license": "Apache-2.0"
+}

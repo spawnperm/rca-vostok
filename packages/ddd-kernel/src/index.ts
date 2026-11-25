@@ -1,31 +1,23 @@
 import { z } from 'zod';
 
-/**
- * Bounded contexts of this platform.
- *
- * Adopted from the mvr_ kernel, but the list now names the contexts that
- * actually exist in src/domain/: certification, analytics, identity, social,
- * chat, media, experience, lms. Anything the platform cannot emit or handle is
- * removed rather than left as a lying union member.
- */
 export type BoundedContextId =
   | 'shared-kernel'
-  | 'identity'
-  | 'certification'
-  | 'analytics'
-  | 'research'
-  | 'feedback'
+  | 'iam'
+  | 'tenancy'
+  | 'crm'
   | 'social'
-  | 'chat'
-  | 'media'
-  | 'experience'
-  | 'lms';
+  | 'office'
+  | 'nocobase'
+  | 'cms'
+  | 'marketplace'
+  | 'integration'
+  | 'analytics';
 
 export type PluginExtensionSlot =
-  | 'account_sidebar'
-  | 'account_toolbar'
+  | 'crm_deal_sidebar'
+  | 'crm_toolbar'
   | 'social_composer'
-  | 'admin_module';
+  | 'portal_module';
 
 export class DomainInvariantError extends Error {
   readonly code: string;
@@ -151,7 +143,7 @@ export class Money extends ValueObject<{ amount: number; currency: CurrencyCode 
       throw new DomainInvariantError(
         'Денежная сумма не может быть отрицательной или нечисловой',
         'INVALID_MONEY_AMOUNT',
-        'certification'
+        'crm'
       );
     }
     return new Money(Math.round(amount * 100) / 100, currency);
@@ -170,7 +162,7 @@ export class Money extends ValueObject<{ amount: number; currency: CurrencyCode 
       throw new DomainInvariantError(
         `Нельзя складывать суммы в разных валютах: ${this.currency} и ${other.currency}`,
         'CURRENCY_MISMATCH',
-        'certification'
+        'crm'
       );
     }
     return Money.create(this.amount + other.amount, this.currency);
@@ -200,7 +192,7 @@ export class VerdaccioPackageName extends ValueObject<{ fullName: string; scope:
       throw new DomainInvariantError(
         parsed.error.issues[0]?.message || 'Некорректное имя пакета Verdaccio',
         'INVALID_PACKAGE_NAME',
-        'social'
+        'marketplace'
       );
     }
     const [scope, slug] = parsed.data.split('/');
