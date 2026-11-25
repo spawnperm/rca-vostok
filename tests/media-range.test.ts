@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { parseByteRange } from '../src/infrastructure/http/MediaRouter.ts';
 
 // Video and audio seeking depend on correct Range handling; a wrong end offset

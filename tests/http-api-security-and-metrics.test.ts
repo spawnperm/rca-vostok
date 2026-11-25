@@ -1,4 +1,4 @@
-import { after, before, describe, it } from 'node:test';
+import { it, describe, beforeAll, afterAll } from 'vitest';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -35,7 +35,7 @@ describe('HTTP API, Security Hardening, OpenAPI & Metrics', () => {
   let prevDatabaseUrl: string | undefined;
   let prevAdminSetupKey: string | undefined;
 
-  before(async () => {
+  beforeAll(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rca-http-test-'));
     prevDatabaseUrl = process.env.DATABASE_URL;
     prevAdminSetupKey = process.env.RCA_ADMIN_SETUP_KEY;
@@ -57,7 +57,7 @@ describe('HTTP API, Security Hardening, OpenAPI & Metrics', () => {
     baseUrl = `http://127.0.0.1:${addr.port}`;
   });
 
-  after(async () => {
+  afterAll(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await runtime.close();
     if (prevDatabaseUrl !== undefined) process.env.DATABASE_URL = prevDatabaseUrl;

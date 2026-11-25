@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { HousekeepingJob } from '../src/application/system/HousekeepingJob.ts';
 import { InMemorySessionRepository } from '../src/infrastructure/persistence/InMemoryIdentityRepositories.ts';
 import { InMemoryPasswordResetRepository } from '../src/infrastructure/persistence/pg/PostgresPasswordResetRepository.ts';

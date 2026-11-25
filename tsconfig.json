@@ -19,6 +19,24 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@nexus-core/ddd-kernel": [
+        "./packages/ddd-kernel/src/index.ts"
+      ],
+      "@nexus-plugins/dify-deal-copilot": [
+        "./packages/dify-deal-copilot/src/index.ts"
+      ],
+      "@nexus-plugins/nats-webhook-bridge": [
+        "./packages/nats-webhook-bridge/src/index.ts"
+      ],
+      "@nexus-plugins/vk-social-polls": [
+        "./packages/vk-social-polls/src/index.ts"
+      ],
+      "@nexus-plugins/directus-bi-connector": [
+        "./packages/directus-bi-connector/src/index.ts"
+      ],
+      "@nexus-plugins/tinacms-sales-playbooks": [
+        "./packages/tinacms-sales-playbooks/src/index.ts"
       ]
     },
     "allowImportingTsExtensions": true,

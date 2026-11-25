@@ -274,7 +274,7 @@ async function migrateIdentity(pool: pg.Pool): Promise<void> {
   // Accounts for the personal cabinet. Email is the login key, so it carries a
   // unique constraint; the role drives all RBAC decisions.
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS rca_users (
       id             TEXT PRIMARY KEY,
       email          TEXT NOT NULL,
       full_name      TEXT NOT NULL,
@@ -290,7 +290,7 @@ async function migrateIdentity(pool: pg.Pool): Promise<void> {
   `);
 
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (email);
+    CREATE UNIQUE INDEX IF NOT EXISTS rca_users_email_key ON rca_users (email);
   `);
 
   // The role is constrained at the storage layer as a second line of defence:
@@ -301,7 +301,7 @@ async function migrateIdentity(pool: pg.Pool): Promise<void> {
       IF NOT EXISTS (
         SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check'
       ) THEN
-        ALTER TABLE users
+        ALTER TABLE rca_users
           ADD CONSTRAINT users_role_check
           CHECK (role IN ('candidate', 'instructor', 'curator', 'admin'));
       END IF;
@@ -312,7 +312,7 @@ async function migrateIdentity(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_sessions (
       token_hash  TEXT PRIMARY KEY,
-      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id     TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       created_at  TIMESTAMPTZ NOT NULL,
       expires_at  TIMESTAMPTZ NOT NULL
     );
@@ -331,7 +331,7 @@ async function migrateIdentity(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
       token_hash  TEXT PRIMARY KEY,
-      user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id     TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       created_at  TIMESTAMPTZ NOT NULL,
       expires_at  TIMESTAMPTZ NOT NULL,
       used_at     TIMESTAMPTZ
@@ -390,7 +390,7 @@ async function migrateIdentity(pool: pg.Pool): Promise<void> {
       ) THEN
         ALTER TABLE certification_inquiries
           ADD CONSTRAINT certification_inquiries_user_fk
-          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+          FOREIGN KEY (user_id) REFERENCES rca_users(id) ON DELETE SET NULL;
       END IF;
     END $$;
   `);
@@ -414,8 +414,8 @@ async function migrateIdentity(pool: pg.Pool): Promise<void> {
  */
 async function migrateSocial(pool: pg.Pool): Promise<void> {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS social_profiles (
-      user_id         TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    CREATE TABLE IF NOT EXISTS rca_social_profiles (
+      user_id         TEXT PRIMARY KEY REFERENCES rca_users(id) ON DELETE CASCADE,
       display_name    TEXT NOT NULL,
       headline        TEXT NOT NULL DEFAULT '',
       bio             TEXT NOT NULL DEFAULT '',
@@ -434,7 +434,7 @@ async function migrateSocial(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS posts (
       id              TEXT PRIMARY KEY,
-      author_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      author_id       TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       author_name     TEXT NOT NULL,
       kind            TEXT NOT NULL DEFAULT 'update',
       title           TEXT NOT NULL DEFAULT '',
@@ -491,7 +491,7 @@ async function migrateSocial(pool: pg.Pool): Promise<void> {
     CREATE TABLE IF NOT EXISTS post_comments (
       id          TEXT PRIMARY KEY,
       post_id     TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-      author_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      author_id   TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       author_name TEXT NOT NULL,
       body        TEXT NOT NULL,
       created_at  TIMESTAMPTZ NOT NULL
@@ -504,7 +504,7 @@ async function migrateSocial(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS post_likes (
       post_id    TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id    TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       created_at TIMESTAMPTZ NOT NULL,
       PRIMARY KEY (post_id, user_id)
     );
@@ -512,8 +512,8 @@ async function migrateSocial(pool: pg.Pool): Promise<void> {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS social_follows (
-      follower_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      followee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      follower_id TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
+      followee_id TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       created_at  TIMESTAMPTZ NOT NULL,
       PRIMARY KEY (follower_id, followee_id),
       CONSTRAINT social_follows_no_self CHECK (follower_id <> followee_id)
@@ -527,7 +527,7 @@ async function migrateSocial(pool: pg.Pool): Promise<void> {
     CREATE TABLE IF NOT EXISTS social_activity (
       id         TEXT PRIMARY KEY,
       type       TEXT NOT NULL,
-      actor_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      actor_id   TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       actor_name TEXT NOT NULL,
       summary    TEXT NOT NULL,
       target_id  TEXT,
@@ -552,7 +552,7 @@ async function migrateChat(pool: pg.Pool): Promise<void> {
       display_name TEXT NOT NULL,
       purpose      TEXT NOT NULL DEFAULT '',
       type         TEXT NOT NULL DEFAULT 'public',
-      created_by   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_by   TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       created_at   TIMESTAMPTZ NOT NULL
     );
   `);
@@ -572,7 +572,7 @@ async function migrateChat(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS chat_members (
       channel_id    TEXT NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
-      user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id       TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       display_name  TEXT NOT NULL,
       joined_at     TIMESTAMPTZ NOT NULL,
       last_read_at  TIMESTAMPTZ,
@@ -587,7 +587,7 @@ async function migrateChat(pool: pg.Pool): Promise<void> {
     CREATE TABLE IF NOT EXISTS chat_messages (
       id          TEXT PRIMARY KEY,
       channel_id  TEXT NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
-      author_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      author_id   TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       author_name TEXT NOT NULL,
       body        TEXT NOT NULL DEFAULT '',
       root_id     TEXT REFERENCES chat_messages(id) ON DELETE CASCADE,
@@ -607,7 +607,7 @@ async function migrateChat(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS chat_reactions (
       message_id TEXT NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
-      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id    TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       emoji      TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL,
       PRIMARY KEY (message_id, user_id, emoji)
@@ -620,7 +620,7 @@ async function migrateMedia(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS media_albums (
       id              TEXT PRIMARY KEY,
-      owner_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      owner_id        TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       owner_name      TEXT NOT NULL,
       title           TEXT NOT NULL,
       description     TEXT NOT NULL DEFAULT '',
@@ -647,7 +647,7 @@ async function migrateMedia(pool: pg.Pool): Promise<void> {
     CREATE TABLE IF NOT EXISTS media_assets (
       id           TEXT PRIMARY KEY,
       album_id     TEXT REFERENCES media_albums(id) ON DELETE SET NULL,
-      owner_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      owner_id     TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       owner_name   TEXT NOT NULL,
       kind         TEXT NOT NULL,
       title        TEXT NOT NULL DEFAULT '',
@@ -683,7 +683,7 @@ async function migrateGuideLeaderboard(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS certified_guides_registry (
       id                     TEXT PRIMARY KEY,
-      user_id                TEXT REFERENCES users(id) ON DELETE SET NULL,
+      user_id                TEXT REFERENCES rca_users(id) ON DELETE SET NULL,
       full_name              TEXT NOT NULL,
       region                 TEXT NOT NULL,
       organisation           TEXT NOT NULL DEFAULT '',
@@ -749,7 +749,7 @@ async function migrateGuideLeaderboard(pool: pg.Pool): Promise<void> {
 async function migrateLinkedAccounts(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_linked_accounts (
-      user_id               TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id               TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
       provider              TEXT NOT NULL,
       connection_method     TEXT NOT NULL DEFAULT 'profile_link',
       external_id           TEXT NOT NULL,
@@ -777,7 +777,7 @@ async function migrateLinkedAccounts(pool: pg.Pool): Promise<void> {
 /** User profile attestation expiry column for re-attestation monitoring. */
 async function migrateUserAttestationExpiry(pool: pg.Pool): Promise<void> {
   await pool.query(`
-    ALTER TABLE users
+    ALTER TABLE rca_users
       ADD COLUMN IF NOT EXISTS attestation_expires_at TEXT;
   `);
 }
@@ -785,7 +785,7 @@ async function migrateUserAttestationExpiry(pool: pg.Pool): Promise<void> {
 /** User profile contact columns (phone and telegram handle). */
 async function migrateUserContactDetails(pool: pg.Pool): Promise<void> {
   await pool.query(`
-    ALTER TABLE users
+    ALTER TABLE rca_users
       ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS telegram TEXT NOT NULL DEFAULT '';
   `);
@@ -794,7 +794,7 @@ async function migrateUserContactDetails(pool: pg.Pool): Promise<void> {
 /** User profile avatar URL/data-URL column. */
 async function migrateUserAvatarUrl(pool: pg.Pool): Promise<void> {
   await pool.query(`
-    ALTER TABLE users
+    ALTER TABLE rca_users
       ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT '';
   `);
 }
@@ -803,7 +803,7 @@ async function migrateUserAvatarUrl(pool: pg.Pool): Promise<void> {
 async function migrateLmsProgress(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS lms_progress (
-      user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      user_id    TEXT PRIMARY KEY REFERENCES rca_users(id) ON DELETE CASCADE,
       state_json JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
@@ -813,7 +813,7 @@ async function migrateLmsProgress(pool: pg.Pool): Promise<void> {
 /** Social profile customization columns: cover, avatar, and public contacts. */
 async function migrateSocialProfileCustomization(pool: pg.Pool): Promise<void> {
   await pool.query(`
-    ALTER TABLE social_profiles
+    ALTER TABLE rca_social_profiles
       ADD COLUMN IF NOT EXISTS phone        TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS telegram     TEXT NOT NULL DEFAULT '',
       ADD COLUMN IF NOT EXISTS public_email TEXT NOT NULL DEFAULT '',
@@ -871,7 +871,7 @@ async function migrateSurveysAndExperience(pool: pg.Pool): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS employment_reattestation_surveys (
       id                     TEXT PRIMARY KEY,
-      owner_user_id          TEXT REFERENCES users(id) ON DELETE SET NULL,
+      owner_user_id          TEXT REFERENCES rca_users(id) ON DELETE SET NULL,
       respondent_name        TEXT NOT NULL DEFAULT '',
       region                 TEXT NOT NULL,
       discipline             TEXT NOT NULL,
@@ -898,7 +898,7 @@ async function migrateSurveysAndExperience(pool: pg.Pool): Promise<void> {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS experience_journal_entries (
-      owner_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      owner_id     TEXT PRIMARY KEY REFERENCES rca_users(id) ON DELETE CASCADE,
       entries_json JSONB NOT NULL DEFAULT '[]'::jsonb,
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     );

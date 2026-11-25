@@ -1,0 +1,35 @@
+storage: /verdaccio/storage/data
+plugins: /verdaccio/plugins
+
+web:
+  title: NexusHarness Private DDD & Plugin Registry
+
+auth:
+  htpasswd:
+    file: /verdaccio/storage/htpasswd
+    max_users: 100
+
+uplinks:
+  npmjs:
+    url: https://registry.npmjs.org/
+
+packages:
+  "@nexus-core/*":
+    access: $all
+    publish: $authenticated
+    unpublish: $authenticated
+
+  "@nexus-plugins/*":
+    access: $all
+    publish: $authenticated
+    unpublish: $authenticated
+
+  "**":
+    access: $all
+    publish: $authenticated
+    proxy: npmjs
+
+server:
+  keepAliveTimeout: 60
+
+listen: 0.0.0.0:4873

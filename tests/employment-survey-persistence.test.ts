@@ -1,4 +1,4 @@
-import { after, before, describe, it } from 'node:test';
+import { it, describe, beforeAll, afterAll } from 'vitest';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -52,7 +52,7 @@ describe('Employment Survey Repository, Object Storage Archiving & HTTP API', ()
   let prevDatabaseUrl: string | undefined;
   let prevS3Endpoint: string | undefined;
 
-  before(async () => {
+  beforeAll(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rca-emp-survey-test-'));
     prevDatabaseUrl = process.env.DATABASE_URL;
     prevS3Endpoint = process.env.S3_ENDPOINT;
@@ -74,7 +74,7 @@ describe('Employment Survey Repository, Object Storage Archiving & HTTP API', ()
     baseUrl = `http://127.0.0.1:${addr.port}`;
   });
 
-  after(async () => {
+  afterAll(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await runtime.close();
     if (prevDatabaseUrl !== undefined) process.env.DATABASE_URL = prevDatabaseUrl;

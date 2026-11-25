@@ -124,7 +124,7 @@ export class PostgresSocialRepository implements SocialRepository {
 
   async findProfile(userId: string): Promise<SocialProfile | null> {
     const res = await this.pool.query<ProfileRow>(
-      'SELECT * FROM social_profiles WHERE user_id = $1',
+      'SELECT * FROM rca_social_profiles WHERE user_id = $1',
       [userId]
     );
     return res.rows.length > 0 ? toProfile(res.rows[0]) : null;
@@ -132,7 +132,7 @@ export class PostgresSocialRepository implements SocialRepository {
 
   async saveProfile(profile: SocialProfile): Promise<void> {
     await this.pool.query(
-      `INSERT INTO social_profiles (
+      `INSERT INTO rca_social_profiles (
          user_id, display_name, headline, bio, region, organisation, role,
          phone, telegram, public_email, vk_url,
          website_url, cover_url, avatar_url, cover_asset_id, avatar_asset_id, skills, created_at, updated_at

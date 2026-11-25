@@ -17,6 +17,15 @@ export interface HealthProbes {
   checkMigrations?: () => Promise<boolean>;
   /** Checks connectivity/bucket health for Garage S3 or local object storage. */
   checkStorage?: () => Promise<boolean>;
+  /**
+   * Reports whether the Drizzle layer initialised.
+   *
+   * It selects its engine independently of the repositories (pg.Pool when a
+   * database is configured, embedded PGlite otherwise), so a configuration
+   * mistake can leave one working while the other is silently in the wrong
+   * place.
+   */
+  checkDrizzle?: () => Promise<boolean>;
 }
 
 export interface DependencyStatus {
@@ -78,17 +87,19 @@ export class GetSystemHealthUseCase {
   }
 
   async execute(): Promise<SystemHealthDTO> {
-    const [database, eventBus, migrations, objectStorage] = await Promise.all([
+    const [database, eventBus, migrations, objectStorage, drizzle] = await Promise.all([
       probe(this.probes.checkDatabase),
       probe(this.probes.checkEventBus),
       probe(this.probes.checkMigrations),
       probe(this.probes.checkStorage),
+      probe(this.probes.checkDrizzle),
     ]);
 
     const dependencies: Record<string, DependencyStatus> = {};
     if (database) dependencies.database = database;
     if (eventBus) dependencies.eventBus = eventBus;
     if (migrations) dependencies.migrations = migrations;
+    if (drizzle) dependencies.drizzle = drizzle;
     if (objectStorage) dependencies.objectStorage = objectStorage;
 
     // Database is the only hard dependency: without it nothing works. The bus

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { createPool, runMigrations } from '../src/infrastructure/persistence/pg/PostgresPool.ts';
 import { AnalyticsAggregationService } from '../src/domain/analytics/AnalyticsAggregationService.ts';
@@ -66,7 +66,7 @@ async function cleanup() {
   await pool.query('DELETE FROM posts');
   await pool.query('DELETE FROM social_activity');
   await pool.query('DELETE FROM social_follows');
-  await pool.query('DELETE FROM social_profiles');
+  await pool.query('DELETE FROM rca_social_profiles');
   await pool.query('DELETE FROM experience_journal_entries');
   await pool.query('DELETE FROM employment_reattestation_surveys');
   await pool.query('DELETE FROM readiness_surveys');
@@ -75,7 +75,7 @@ async function cleanup() {
   await pool.query('DELETE FROM password_reset_tokens');
   await pool.query('DELETE FROM user_sessions');
   await pool.query('DELETE FROM certification_inquiries');
-  await pool.query('DELETE FROM users');
+  await pool.query('DELETE FROM rca_users');
 }
 
 async function seedUser(email = 'integration@example.ru') {
@@ -100,14 +100,14 @@ maybe('Postgres: migrations create every expected table', async () => {
   );
   const names = res.rows.map((r) => r.tablename);
   for (const expected of [
-    'users',
+    'rca_users',
     'user_sessions',
     'password_reset_tokens',
     'certification_inquiries',
     'platform_feedback',
     'analytics_sessions',
     'analytics_events',
-    'social_profiles',
+    'rca_social_profiles',
     'posts',
     'post_comments',
     'post_likes',

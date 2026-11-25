@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import {
   DEFAULT_SELECTED_DFO_REGION_IDS,
   DFO_CONCENTRATION_PRESETS,

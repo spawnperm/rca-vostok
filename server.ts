@@ -28,6 +28,7 @@ import {
 } from './src/application/feedback/FeedbackUseCases.ts';
 import { GetSystemHealthUseCase } from './src/application/system/HealthCheckUseCase.ts';
 import { HousekeepingJob } from './src/application/system/HousekeepingJob.ts';
+import { closeDatabase, getDb } from './src/infrastructure/db/client.ts';
 import { MetricsCollector } from './src/infrastructure/http/Metrics.ts';
 import type { AnalyticsRepository } from './src/domain/analytics/AnalyticsRepository.ts';
 import type { FeedbackRepository } from './src/domain/feedback/FeedbackRepository.ts';
@@ -79,6 +80,17 @@ import {
   RegisterAssetUseCase,
 } from './src/application/media/MediaUseCases.ts';
 import { createSocialRouter } from './src/infrastructure/http/SocialRouter.ts';
+// mvr_ platform routers (CRM, Mattermost v4, Office, NocoBase, marketplace,
+// tenancy, harness). Migrated from the mvr_ base and mounted alongside this
+// project's own routes.
+import { createApiRouter } from './src/application/routes/apiRouter.ts';
+import { createCrmRouter } from './src/application/routes/crmRouter.ts';
+import { createDirectusRouter } from './src/application/routes/directusRouter.ts';
+import { createMarketplaceRouter } from './src/application/routes/marketplaceRouter.ts';
+import { createMattermostRouter } from './src/application/routes/mattermostRouter.ts';
+import { createNocobaseRouter } from './src/application/routes/nocobaseRouter.ts';
+import { createOfficeRouter } from './src/application/routes/officeRouter.ts';
+import { createPlatformRouter } from './src/application/routes/platformRouter.ts';
 import { createChatRouter } from './src/infrastructure/http/ChatRouter.ts';
 import { createMediaRouter } from './src/infrastructure/http/MediaRouter.ts';
 import { createSystemRouter } from './src/infrastructure/http/SystemRouter.ts';
@@ -433,6 +445,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
         : undefined,
       checkStorage: async () =>
         objectStorage.checkHealth ? objectStorage.checkHealth() : true,
+      // The Drizzle layer picks its engine independently of the repositories,
+      // so surface it here. A mismatch between the two would otherwise only
+      // appear as missing rows at runtime.
+      checkDrizzle: async () => Boolean(await getDb()),
     },
     storageProvider
   );
@@ -653,6 +669,22 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
   );
 
   // Unknown API endpoints always return JSON 404 rather than HTML SPA fallback.
+  // mvr_ platform API (CRM, Mattermost v4, Office, NocoBase, marketplace,
+  // tenancy, harness).
+  //
+  // These routers declare absolute paths ('/crm/pipelines', '/v4/system/ping'),
+  // so they must be mounted under '/api' exactly as mvr_ itself does. The aggregator's trailing not-found and
+  // error handlers would otherwise answer every unmatched /api/* request, which
+  // is why each router is mounted individually here and this project's own
+  // routes are registered first.
+  app.use('/api', createCrmRouter());
+  app.use('/api', createOfficeRouter());
+  app.use('/api', createMarketplaceRouter());
+  app.use('/api', createNocobaseRouter());
+  app.use('/api', createDirectusRouter());
+  app.use('/api', createMattermostRouter());
+  app.use('/api', createPlatformRouter());
+
   app.use('/api', (_req, res) => {
     res.status(404).json({
       error: 'Запрошенный метод API не найден.',

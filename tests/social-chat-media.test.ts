@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { ChatMessage, Channel, assertReactionEmoji } from '../src/domain/chat/Chat.ts';
 import { Album, MediaAsset, MAX_IMAGE_BYTES } from '../src/domain/media/MediaLibrary.ts';
 import { Comment, Post } from '../src/domain/social/Post.ts';

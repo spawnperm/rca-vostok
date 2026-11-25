@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildApplicationProgressModel } from '../src/utils/applicationProgress.ts';
 import { LANDING_SECTIONS } from '../src/data/landingContent.ts';
