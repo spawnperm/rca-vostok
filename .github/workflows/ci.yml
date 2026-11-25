@@ -27,20 +27,16 @@ jobs:
         with:
           node-version: '22'
 
+      # `npm ci`, not `npm install`: it installs exactly what package-lock.json
+      # pins and fails if the lockfile and package.json disagree. The fallback to
+      # `npm install` was removed on purpose — it silently resolved fresh
+      # versions whenever the lockfile was missing, which is how a release could
+      # change without a commit.
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            npm install --no-audit --no-fund
-          fi
+        run: npm ci --no-audit --no-fund
 
       - name: Dependency vulnerability audit
-        run: |
-          if [ ! -f package-lock.json ]; then
-            npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          fi
-          npm audit --audit-level=high
+        run: npm audit --audit-level=high
 
       - name: TypeScript static check
         run: npm run lint
@@ -80,12 +76,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            npm install --no-audit --no-fund
-          fi
+        run: npm ci --no-audit --no-fund
 
       - name: Run PostgreSQL integration suite
         env:

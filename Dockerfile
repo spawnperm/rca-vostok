@@ -7,7 +7,10 @@ WORKDIR /app
 
 # Dependency manifests first: this layer is reused until package*.json changes.
 COPY package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+# `npm ci` requires package-lock.json, which is committed. The previous
+# conditional fell back to `npm install` when the lockfile was missing, so image
+# builds could pull newer dependency versions than CI had tested.
+RUN npm ci --no-audit --no-fund
 
 # Build the Vite bundle (also runs the copy-unbundled-src-assets plugin).
 COPY tsconfig.json vite.config.ts index.html ./
@@ -26,7 +29,7 @@ WORKDIR /app
 # server.ts is executed directly by Node, which strips TypeScript types
 # natively (Node >= 22.18). Only runtime dependencies are installed here.
 COPY package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev --no-audit --no-fund; else npm install --omit=dev --no-audit --no-fund; fi \
+RUN npm ci --omit=dev --no-audit --no-fund \
  && npm cache clean --force
 
 # TypeScript sources are required at runtime: server.ts imports the

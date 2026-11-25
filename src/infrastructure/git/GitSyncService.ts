@@ -12,6 +12,33 @@ const gitLog = appLogger.child('git-sync');
 export const TARGET_REPOSITORY_SLUG = 'spawnperm/rca-vostok';
 export const TARGET_BRANCH = 'main';
 
+/**
+ * Whether the `git` executable exists in this environment.
+ *
+ * The production image is built from node:*-slim, which does not ship git, and
+ * `.git` is excluded from the build context. So in production git-sync cannot
+ * work at all — but the only check used to be for a `.git` directory, and a
+ * missing binary surfaced as a raw ENOENT from execFile ("spawn git ENOENT")
+ * rather than as an explanation.
+ *
+ * The check is cached because it cannot change while the process runs, and it
+ * is cheap to repeat: one execFile on first use.
+ */
+let gitAvailability: Promise<boolean> | null = null;
+
+export function isGitBinaryAvailable(): Promise<boolean> {
+  if (gitAvailability) return gitAvailability;
+  gitAvailability = execFileAsync('git', ['--version'], { timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  return gitAvailability;
+}
+
+/** Reset the cached probe. Tests use this; production never needs it. */
+export function resetGitAvailabilityCache(): void {
+  gitAvailability = null;
+}
+
 const DEFAULT_AUTHOR_NAME = 'RCA Vostok Developer';
 const DEFAULT_AUTHOR_EMAIL = 'spawnperm@gmail.com';
 
@@ -223,6 +250,28 @@ export class GitSyncService {
   }
 
   async getStatus(): Promise<GitStatusReport> {
+    // Probe the binary before touching the filesystem: in the production image
+    // there is no git at all, and reporting "(.git) отсутствует" would send
+    // whoever debugs it looking in the wrong place.
+    const hasGit = await isGitBinaryAvailable();
+    if (!hasGit) {
+      return {
+        initialized: false,
+        statusMessage:
+          'Утилита git не установлена в текущем окружении, поэтому синхронизация с GitHub недоступна. Требуется образ с git и каталогом .git.',
+        repository: TARGET_REPOSITORY_SLUG,
+        branch: 'unavailable',
+        targetBranch: TARGET_BRANCH,
+        remoteUrl: '',
+        ahead: 0,
+        behind: 0,
+        changedFiles: [],
+        hasChangesToCommit: false,
+        canPush: false,
+        recentCommits: [],
+      };
+    }
+
     const gitDirExists = fs.existsSync(path.join(this.repoRoot, '.git'));
     if (!gitDirExists) {
       return {

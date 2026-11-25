@@ -4,8 +4,10 @@ dist
 build
 coverage
 
-# Foreign lockfiles: the image builds with pnpm only.
-package-lock.json
+# Foreign lockfiles. package-lock.json is deliberately NOT ignored: the image
+# installs with `npm ci`, which needs it inside the build context. Ignoring it
+# was left over from the pnpm era and made every image build resolve fresh
+# versions instead of the ones CI had verified.
 yarn.lock
 bun.lock
 

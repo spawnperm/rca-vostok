@@ -1,7 +1,11 @@
 import express from 'express';
 import { appLogger } from '../logging/Logger.ts';
 import { GitAuthError, type GitSyncAuthService } from '../git/GitSyncAuth.ts';
-import { GitSyncError, type GitSyncService } from '../git/GitSyncService.ts';
+import {
+  GitSyncError,
+  isGitBinaryAvailable,
+  type GitSyncService,
+} from '../git/GitSyncService.ts';
 
 const routerLog = appLogger.child('git-router');
 
@@ -46,12 +50,22 @@ export function createGitRouter(deps: GitRouterDeps): express.Router {
     next();
   };
 
-  router.get('/api/git/auth-status', (req, res) => {
-    res.json(
-      deps.gitAuth.getAuthStatus({
-        authHeader: req.headers.authorization,
-      })
-    );
+  router.get('/api/git/auth-status', async (req, res) => {
+    // Include whether the feature can work at all. Without this the UI only
+    // learns that git is missing after someone contributes a repository key —
+    // and in the slim production image there is no git binary, so the answer
+    // is always no there.
+    const gitAvailable = await isGitBinaryAvailable();
+    res.json({
+      ...deps.gitAuth.getAuthStatus({ authHeader: req.headers.authorization }),
+      gitAvailable,
+      ...(gitAvailable
+        ? {}
+        : {
+            unavailableReason:
+              'Утилита git не установлена в текущем окружении. Синхронизация с GitHub доступна только в окружении с установленным git и каталогом .git.',
+          }),
+    });
   });
 
   router.post('/api/git/verify-key', deps.unlockRateLimit, async (req, res) => {

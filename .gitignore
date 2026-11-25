@@ -13,8 +13,16 @@ coverage/
 .pnpm-store/
 .pnpm-debug.log*
 
-# Foreign lockfiles (the project builds with pnpm)
-package-lock.json
+# Lockfiles.
+#
+# package-lock.json IS committed: the project installs with npm, and without a
+# committed lockfile every CI run and every image build resolves dependency
+# versions from the ^ ranges in package.json. That means a release can change
+# without a single commit, and a build that passed yesterday can fail today.
+#
+# npm was migrated from pnpm in d67e17e, which deleted pnpm-lock.yaml but left
+# this file ignoring package-lock.json — so for a while nothing was pinned at
+# all. Only genuinely foreign lockfiles are ignored now.
 yarn.lock
 bun.lock
 

@@ -3,6 +3,15 @@ export type GitSyncAuthMode = 'key' | 'key_required';
 export interface GitAuthStatusResponse {
   authorized: boolean;
   mode: GitSyncAuthMode;
+  /**
+   * Whether the `git` executable exists in this environment.
+   *
+   * The production image has no git, so the feature cannot work there. Knowing
+   * this before a key is entered lets the UI explain the situation instead of
+   * letting someone find a repository key and only then hit a failure.
+   */
+  gitAvailable?: boolean;
+  unavailableReason?: string;
 }
 
 export interface GitChangedFile {

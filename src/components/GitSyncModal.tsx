@@ -205,6 +205,26 @@ export const GitSyncPanel: React.FC<GitSyncPanelProps> = ({
       <div className="p-6 space-y-5">
         {loading && !authStatus ? (
           <p className="text-sm text-slate-500">Проверяем состояние репозитория…</p>
+        ) : authStatus?.gitAvailable === false ? (
+          // The feature cannot work here, so asking for a key would be a dead
+          // end. Say so plainly instead of collecting a credential first.
+          <div
+            role="status"
+            className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2"
+          >
+            <p className="text-xs font-semibold text-amber-900 inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-amber-700" aria-hidden="true" />
+              <span>Синхронизация с GitHub недоступна в этом окружении</span>
+            </p>
+            <p className="text-xs text-amber-900 leading-relaxed">
+              {authStatus.unavailableReason ||
+                'Утилита git не установлена в текущем окружении.'}
+            </p>
+            <p className="text-[11px] text-amber-800 leading-relaxed">
+              Изменения можно зафиксировать локально и отправить в репозиторий командой{' '}
+              <code className="font-mono">git push</code> из рабочей копии на машине разработчика.
+            </p>
+          </div>
         ) : !authStatus?.authorized ? (
           <form onSubmit={handleVerifyKey} className="space-y-4">
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-1.5">
