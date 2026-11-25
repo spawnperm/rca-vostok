@@ -80,8 +80,8 @@ import {
   RegisterAssetUseCase,
 } from './src/application/media/MediaUseCases.ts';
 import { createSocialRouter } from './src/infrastructure/http/SocialRouter.ts';
-// mvr_ platform routers (CRM, Mattermost v4, Office, NocoBase, marketplace,
-// tenancy, harness). Migrated from the mvr_ base and mounted alongside this
+// mvr platform routers (CRM, Mattermost v4, Office, NocoBase, marketplace,
+// tenancy, harness). Migrated from the mvr base and mounted alongside this
 // project's own routes.
 import { createApiRouter } from './src/application/routes/apiRouter.ts';
 import { createCrmRouter } from './src/application/routes/crmRouter.ts';
@@ -671,11 +671,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
   );
 
   // Unknown API endpoints always return JSON 404 rather than HTML SPA fallback.
-  // mvr_ platform API (CRM, Mattermost v4, Office, NocoBase, marketplace,
+  // mvr platform API (CRM, Mattermost v4, Office, NocoBase, marketplace,
   // tenancy, harness).
   //
   // These routers declare absolute paths ('/crm/pipelines', '/v4/system/ping'),
-  // so they must be mounted under '/api' exactly as mvr_ itself does. The aggregator's trailing not-found and
+  // so they must be mounted under '/api' exactly as mvr itself does. The aggregator's trailing not-found and
   // error handlers would otherwise answer every unmatched /api/* request, which
   // is why each router is mounted individually here and this project's own
   // routes are registered first.
@@ -684,24 +684,24 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
   app.use('/api', createMarketplaceRouter());
   app.use('/api', createNocobaseRouter());
   app.use('/api', createDirectusRouter());
-  // Mattermost-compatible API lives under /api/v4, exactly as mvr_ mounts it.
+  // Mattermost-compatible API lives under /api/v4, exactly as mvr mounts it.
   app.use('/api/v4', createMattermostRouter());
   app.use('/api', createPlatformRouter());
 
-  // Auth, tenancy and the mvr_ social surface.
+  // Auth, tenancy and the mvr social surface.
   //
-  // mvr_ mounts these at /api/auth, /api/tenancy and /api/social. /api/auth is
+  // mvr mounts these at /api/auth, /api/tenancy and /api/social. /api/auth is
   // already this project's (login, register, session, logout, reset), so only
-  // the paths mvr_ adds are taken: /auth/me and /auth/demo-accounts. Its social
+  // the paths mvr adds are taken: /auth/me and /auth/demo-accounts. Its social
   app.use('/api', createAuthAndTenancyRouter());
-  // mvr_ social surface, merged into /api/social.
+  // mvr social surface, merged into /api/social.
   //
   // Both routers report a social API and five method+path pairs overlap:
   //   PATCH /profile, POST /posts, POST /posts/:id/comments,
   //   POST /posts/:id/like, DELETE /posts/:id
   // Two handlers cannot answer the same request, so the overlap is resolved by
   // this project's routers staying first (they own the request shape the UI
-  // already sends) and the mvr_ router contributing only the paths it adds:
+  // already sends) and the mvr router contributing only the paths it adds:
   //   GET  /cabinet, POST /groups, POST /groups/:id/toggle,
   //   POST /posts/:id/repost, POST /posts/:id/vote
   // Its internal '/social' prefix is prepended back because Express strips the

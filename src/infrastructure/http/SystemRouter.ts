@@ -57,7 +57,7 @@ export function createSystemRouter(deps: SystemRouterDeps): express.Router {
   // Readiness probe: fails with 503 whenever critical persistence or migrations fail.
   //
   // Registered under two paths because the two upstream conventions differ:
-  // this project uses /api/health/ready, while mvr_ exposes /api/ready. Both
+  // this project uses /api/health/ready, while mvr exposes /api/ready. Both
   // answer identically so either can be pointed at by an orchestrator.
   const readinessHandler = async (_req: express.Request, res: express.Response) => {
     try {

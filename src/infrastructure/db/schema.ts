@@ -1,8 +1,8 @@
 /**
  * Database schema for the whole platform.
  *
- * The first section is the mvr_ skeleton's schema (multi-tenant CRM, Mattermost,
- * Office, marketplace). It is primary because the mvr_ modules are the base of
+ * The first section is the mvr skeleton's schema (multi-tenant CRM, Mattermost,
+ * Office, marketplace). It is primary because the mvr modules are the base of
  * this application and import from this file directly.
  *
  * The second section adds this project's own tables (certification, analytics,
@@ -512,7 +512,7 @@ export const mmReactions = pgTable('mm_reactions', {
 /**
  * Tables for this platform's eight bounded contexts.
  *
- * Added to the mvr_ schema above; kept as one module so both halves share a
+ * Added to the mvr schema above; kept as one module so both halves share a
  * single Drizzle instance.
  */
 

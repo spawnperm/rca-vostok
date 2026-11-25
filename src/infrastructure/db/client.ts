@@ -7,14 +7,14 @@ import { Pool } from 'pg';
 import * as schema from './schema.ts';
 
 /**
- * Database access, adopted from the mvr_ skeleton.
+ * Database access, adopted from the mvr skeleton.
  *
  * Two engines behind one interface:
  *   - PostgreSQL through pg.Pool when DATABASE_URL is set (production)
  *   - PGlite (embedded, file-backed) otherwise, so tests and local runs need no
  *     external service
  *
- * The DDL below is the schema this platform actually uses. The mvr_ skeleton
+ * The DDL below is the schema this platform actually uses. The mvr skeleton
  * shipped its own multi-tenant CRM tables; those are gone because this project's
  * domain does not have tenants, pipelines or deals.
  */
@@ -38,8 +38,8 @@ declare global {
  * `IF NOT EXISTS`, so running it against the current database is a no-op.
  */
 const DDL_SQL = `
--- ── mvr_ platform schema (tenants, IAM, CRM, Mattermost, Office, NocoBase) ──
--- Migrated with the mvr_ code base. Without these tables every mvr_ router
+-- ── mvr platform schema (tenants, IAM, CRM, Mattermost, Office, NocoBase) ──
+-- Migrated with the mvr code base. Without these tables every mvr router
 -- failed on its first query.
 
 
@@ -746,7 +746,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 /**
  * Engine description.
  *
- * `persistence` is kept because the mvr_ telemetry module reads it as the
+ * `persistence` is kept because the mvr telemetry module reads it as the
  * display endpoint (`dbInfo.persistence`), and its health panel would otherwise
  * show `undefined` where the connection target belongs.
  */
