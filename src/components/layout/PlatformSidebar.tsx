@@ -1,8 +1,21 @@
 import React, { useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, GitBranch, X } from 'lucide-react';
+import {
+  BookOpen,
+  Calculator,
+  ChartLine,
+  ChevronLeft,
+  ChevronRight,
+  GitBranch,
+  LayoutDashboard,
+  Map,
+  Presentation,
+  UserRound,
+  X,
+} from 'lucide-react';
 import type { NavigateOptions, SiteTabId } from '../../utils/seo';
 import { tracker } from '../../utils/tracker';
-import { SIDEBAR_NAV, prefetchModal, prefetchSection } from './navigationConfig';
+import { SIDEBAR_NAV, SIDEBAR_NAV_GROUPS, prefetchModal, prefetchSection } from './navigationConfig';
+import type { SidebarNavItem } from './navigationConfig';
 
 interface PlatformSidebarProps {
   activeTab: SiteTabId;
@@ -12,6 +25,22 @@ interface PlatformSidebarProps {
   onCloseMobileSidebar: () => void;
   onNavigate: (tab: SiteTabId, options?: NavigateOptions) => void;
   onOpenGitSync: (source: 'sidebar' | 'mobile_drawer') => void;
+}
+
+
+/** Maps a manifest icon name to its component. Kept here so navigationConfig stays data-only. */
+const SIDEBAR_ICONS: Record<string, React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>> = {
+  LayoutDashboard,
+  ChartLine,
+  Map,
+  Calculator,
+  Presentation,
+  BookOpen,
+  UserRound,
+};
+
+function resolveIcon(name?: string) {
+  return name ? SIDEBAR_ICONS[name] ?? LayoutDashboard : LayoutDashboard;
 }
 
 export const PlatformSidebar: React.FC<PlatformSidebarProps> = ({
@@ -60,10 +89,10 @@ export const PlatformSidebar: React.FC<PlatformSidebarProps> = ({
           sidebarOpen ? 'w-60' : 'w-12'
         } hidden lg:block`}
       >
-        <div className="sticky top-24">
-          <div className="flex items-center justify-between mb-3">
+        <div className="sticky top-24 bg-slate-900 border border-slate-800 rounded-xl p-2 shadow-lg flex max-h-[calc(100vh-8rem)] flex-col">
+          <div className="flex items-center justify-between mb-2 px-1">
             {sidebarOpen && (
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                 Платформа
               </h2>
             )}
@@ -72,7 +101,7 @@ export const PlatformSidebar: React.FC<PlatformSidebarProps> = ({
               onClick={onToggleSidebar}
               aria-expanded={sidebarOpen}
               aria-label={sidebarOpen ? 'Свернуть меню' : 'Развернуть меню'}
-              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+              className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
             >
               {sidebarOpen ? (
                 <ChevronRight className="w-4 h-4" aria-hidden="true" />
@@ -82,33 +111,53 @@ export const PlatformSidebar: React.FC<PlatformSidebarProps> = ({
             </button>
           </div>
 
-          <nav aria-label="Разделы платформы" className="space-y-0.5">
-            {SIDEBAR_NAV.map((item) => {
-              const active = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-current={active ? 'page' : undefined}
-                  onClick={() => onNavigate(item.id)}
-                  onMouseEnter={() => prefetchSection(item.id)}
-                  onFocus={() => prefetchSection(item.id)}
-                  title={!sidebarOpen ? item.label : undefined}
-                  className={`block w-full text-left rounded-lg text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
-                    sidebarOpen ? 'px-3 py-2' : 'px-2 py-2 text-center'
-                  } ${
-                    active
-                      ? 'bg-teal-50 text-teal-900 font-semibold'
-                      : 'text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  {sidebarOpen ? item.label : item.label.slice(0, 1)}
-                </button>
-              );
-            })}
+          <nav aria-label="Разделы платформы" className="flex-1 overflow-y-auto">
+            {SIDEBAR_NAV_GROUPS.map((group, groupIndex) => (
+              <div key={group.id} className={groupIndex === 0 ? '' : 'mt-5'}>
+                {/* Band label, as on the mvr rail. Hidden when collapsed, where
+                    the icons plus tooltips carry the meaning instead. */}
+                {sidebarOpen ? (
+                  <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    {group.label}
+                  </p>
+                ) : (
+                  <div className="my-2 mx-2 border-t border-slate-700/60" aria-hidden="true" />
+                )}
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const active = activeTab === item.id;
+                    const Icon = resolveIcon(item.icon);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        aria-current={active ? 'page' : undefined}
+                        onClick={() => onNavigate(item.id)}
+                        onMouseEnter={() => prefetchSection(item.id)}
+                        onFocus={() => prefetchSection(item.id)}
+                        title={!sidebarOpen ? `${item.label}${item.hint ? ` — ${item.hint}` : ''}` : item.hint}
+                        className={`w-full inline-flex items-center rounded-lg text-sm transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-300 ${
+                          sidebarOpen ? 'gap-2.5 px-3 py-2' : 'justify-center px-0 py-2'
+                        } ${
+                          active
+                            ? 'bg-teal-500/15 text-teal-100 font-semibold ring-1 ring-inset ring-teal-400/30'
+                            : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <Icon
+                          className={`w-4 h-4 shrink-0 ${active ? 'text-teal-300' : 'text-slate-400'}`}
+                          aria-hidden={true}
+                        />
+                        {sidebarOpen && <span className="truncate">{item.label}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
 
-          <div className="mt-4 pt-4 border-t border-slate-200">
+          <div className="mt-3 pt-3 border-t border-slate-800">
             <button
               type="button"
               onClick={() => {
@@ -118,11 +167,11 @@ export const PlatformSidebar: React.FC<PlatformSidebarProps> = ({
               onMouseEnter={() => prefetchModal('gitSync')}
               onFocus={() => prefetchModal('gitSync')}
               title={!sidebarOpen ? 'Отправить в main (Git)' : undefined}
-              className={`w-full inline-flex items-center gap-2 rounded-lg text-xs font-semibold border border-slate-300 bg-white text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
+              className={`w-full inline-flex items-center gap-2 rounded-lg text-xs font-semibold border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 ${
                 sidebarOpen ? 'px-3 py-2 justify-start' : 'px-2 py-2 justify-center'
               }`}
             >
-              <GitBranch className="w-3.5 h-3.5 text-teal-700 shrink-0" aria-hidden="true" />
+              <GitBranch className="w-3.5 h-3.5 text-teal-300 shrink-0" aria-hidden="true" />
               {sidebarOpen && <span>Отправить в main</span>}
             </button>
           </div>

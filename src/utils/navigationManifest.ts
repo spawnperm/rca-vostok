@@ -11,6 +11,22 @@ export interface SidebarNavItem {
   label: string;
   /** Set to false for private/authenticated workspaces that must stay out of search engines. */
   indexable?: boolean;
+  /**
+   * Lucide icon name, resolved by the sidebar.
+   *
+   * Adopted from the mvr rail, where every entry carries an icon: with grouped
+   * sections the icon is what makes an entry findable without reading labels.
+   */
+  icon?: string;
+  /** Optional one-line hint shown in the tooltip when the rail is collapsed. */
+  hint?: string;
+}
+
+/** A labelled group of rail entries, mirroring mvr's "Обзор / CRM / Документы" bands. */
+export interface SidebarNavGroup {
+  id: string;
+  label: string;
+  items: readonly SidebarNavItem[];
 }
 
 export interface SubTabManifestEntry {
@@ -30,15 +46,44 @@ export const TOP_NAV: readonly TopNavItem[] = [
   { id: 'faq', label: 'FAQ и связь', matches: ['faq', 'consulting', 'contacts'] },
 ];
 
-export const SIDEBAR_NAV: readonly SidebarNavItem[] = [
-  { id: 'overview', label: 'Обзор центра' },
-  { id: 'calculator', label: 'Калькулятор' },
-  { id: 'market', label: 'Рынок ДФО' },
-  { id: 'dissertation', label: 'Диссертация' },
-  { id: 'presentations', label: 'Презентации' },
-  { id: 'analytics', label: 'Аналитика и SEO' },
-  { id: 'account', label: 'Личный кабинет', indexable: false },
+/**
+ * Rail navigation, grouped the way the mvr portal groups its modules: a short
+ * band label followed by its entries. The sections themselves are unchanged —
+ * this is the same seven destinations, arranged so the rail reads as a portal
+ * rather than a flat menu.
+ */
+export const SIDEBAR_NAV_GROUPS: readonly SidebarNavGroup[] = [
+  {
+    id: 'analytics',
+    label: 'Аналитика и рынок',
+    items: [
+      { id: 'overview', label: 'Обзор центра', icon: 'LayoutDashboard', hint: 'Заявки, комиссия, мониторинг' },
+      { id: 'analytics', label: 'Аналитика и SEO', icon: 'ChartLine', hint: 'Посещения, карта кликов, API' },
+      { id: 'market', label: 'Рынок ДФО', icon: 'Map', hint: 'Геоаналитика и стратегия' },
+    ],
+  },
+  {
+    id: 'planning',
+    label: 'Планирование',
+    items: [
+      { id: 'calculator', label: 'Калькулятор', icon: 'Calculator', hint: 'Кадровая потребность и смета' },
+      { id: 'presentations', label: 'Презентации', icon: 'Presentation', hint: 'Колоды для защиты' },
+      { id: 'dissertation', label: 'Диссертация', icon: 'BookOpen', hint: 'ВАК 5.2.3, область 4.15' },
+    ],
+  },
+  {
+    id: 'personal',
+    label: 'Личное пространство',
+    items: [
+      { id: 'account', label: 'Личный кабинет', icon: 'UserRound', indexable: false, hint: 'Профиль, заявки, соцсеть' },
+    ],
+  },
 ];
+
+/** Flat view of the same entries, for places that only need a plain list. */
+export const SIDEBAR_NAV: readonly SidebarNavItem[] = SIDEBAR_NAV_GROUPS.flatMap(
+  (group) => group.items
+);
 
 /** Canonical registry of sub-sections (?tab=<section>&sub=<sub>) exposed inside sections. */
 export const SECTION_SUBTABS: Partial<Record<SiteTabId, readonly SubTabManifestEntry[]>> = {

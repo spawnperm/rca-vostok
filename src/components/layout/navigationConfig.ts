@@ -2,8 +2,10 @@ import { lazy, type ComponentType } from 'react';
 import {
   SECTION_SUBTABS,
   SIDEBAR_NAV,
+  SIDEBAR_NAV_GROUPS,
   TOP_NAV,
   isTopNavActive,
+  type SidebarNavGroup,
   type SidebarNavItem,
   type SubTabManifestEntry,
   type TopNavItem,
@@ -13,8 +15,10 @@ import type { SiteTabId } from '../../utils/seo';
 export {
   SECTION_SUBTABS,
   SIDEBAR_NAV,
+  SIDEBAR_NAV_GROUPS,
   TOP_NAV,
   isTopNavActive,
+  type SidebarNavGroup,
   type SidebarNavItem,
   type SubTabManifestEntry,
   type TopNavItem,
