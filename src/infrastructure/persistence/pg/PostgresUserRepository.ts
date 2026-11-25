@@ -50,7 +50,7 @@ export class PostgresUserRepository implements UserRepository {
 
   async findById(id: string): Promise<User | null> {
     const result = await this.pool.query<UserRow>(
-      'SELECT * FROM users WHERE id = $1',
+      'SELECT * FROM rca_users WHERE id = $1',
       [id]
     );
     return result.rows.length > 0 ? toAggregate(result.rows[0]) : null;
@@ -58,7 +58,7 @@ export class PostgresUserRepository implements UserRepository {
 
   async findByEmail(email: string): Promise<User | null> {
     const result = await this.pool.query<UserRow>(
-      'SELECT * FROM users WHERE email = $1',
+      'SELECT * FROM rca_users WHERE email = $1',
       [email.trim().toLowerCase()]
     );
     return result.rows.length > 0 ? toAggregate(result.rows[0]) : null;
@@ -66,7 +66,7 @@ export class PostgresUserRepository implements UserRepository {
 
   async save(user: User): Promise<void> {
     await this.pool.query(
-      `INSERT INTO users (
+      `INSERT INTO rca_users (
          id, email, full_name, region, organisation, phone, telegram, avatar_url, role,
          password_hash, password_salt, is_active, attestation_expires_at,
          created_at, last_login_at
@@ -107,14 +107,14 @@ export class PostgresUserRepository implements UserRepository {
 
   async listAll(): Promise<User[]> {
     const result = await this.pool.query<UserRow>(
-      'SELECT * FROM users ORDER BY created_at ASC'
+      'SELECT * FROM rca_users ORDER BY created_at ASC'
     );
     return result.rows.map(toAggregate);
   }
 
   async count(): Promise<number> {
     const result = await this.pool.query<{ count: string }>(
-      'SELECT COUNT(*)::text AS count FROM users'
+      'SELECT COUNT(*)::text AS count FROM rca_users'
     );
     return Number(result.rows[0]?.count ?? 0);
   }

@@ -557,7 +557,7 @@ CREATE INDEX IF NOT EXISTS idx_mm_posts_tenant_channel ON mm_posts (tenant_id, c
 
 -- ── this platform's own tables ──
 
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE IF NOT EXISTS rca_users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL,
   full_name TEXT NOT NULL,
@@ -569,11 +569,11 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_login_at TIMESTAMPTZ
 );
-CREATE UNIQUE INDEX IF NOT EXISTS users_email_key ON users (email);
+CREATE UNIQUE INDEX IF NOT EXISTS rca_users_email_key ON rca_users (email);
 
 CREATE TABLE IF NOT EXISTS user_sessions (
   token_hash TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL
 );
@@ -581,7 +581,7 @@ CREATE INDEX IF NOT EXISTS user_sessions_user_idx ON user_sessions (user_id);
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   token_hash TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES rca_users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   used_at TIMESTAMPTZ
@@ -589,7 +589,7 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 
 CREATE TABLE IF NOT EXISTS certification_inquiries (
   id TEXT PRIMARY KEY,
-  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  user_id TEXT REFERENCES rca_users(id) ON DELETE SET NULL,
   full_name TEXT NOT NULL,
   email TEXT NOT NULL,
   phone TEXT,
@@ -656,8 +656,8 @@ CREATE TABLE IF NOT EXISTS post_comments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS social_profiles (
-  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS rca_social_profiles (
+  user_id TEXT PRIMARY KEY REFERENCES rca_users(id) ON DELETE CASCADE,
   display_name TEXT NOT NULL,
   headline TEXT,
   bio TEXT,
