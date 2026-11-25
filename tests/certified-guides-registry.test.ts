@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { INITIAL_DFO_CERTIFIED_GUIDES } from '../src/domain/certification/GuideLeaderboard.ts';
 import {
   computeValidUntilDate,

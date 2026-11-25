@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { GLOSSARY_TERMS } from '../src/data/researchData.ts';
 import { ENRICHED_ATTESTATION_FAQ } from '../src/utils/accountKnowledgeBase.ts';
 import { buildFaqExportPayload } from '../src/utils/faqPdfExport.ts';

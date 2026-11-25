@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { CERTIFIED_TOURIST_ROUTES } from '../src/data/researchData.ts';
 import {
   DFO_REGION_CAMERA_PRESETS,

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { CERTIFIED_SUCCESS_STORIES, GLOSSARY_TERMS } from '../src/data/researchData.ts';
 import { tokenizeTextWithGlossary } from '../src/utils/glossaryHighlighter.ts';
 import {

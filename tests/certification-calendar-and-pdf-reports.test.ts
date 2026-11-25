@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { HORIZON_STAGES } from '../src/data/researchData.ts';
 import { DemandForecastService } from '../src/domain/certification/DemandForecastService.ts';
 import {

@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import { promisify } from 'node:util';
 import {
   SECTION_SUBTABS,

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import type { ExperienceLogEntry } from '../src/domain/experience/ExperienceEntry.ts';
 import type { SelfCheckEvaluation } from '../src/utils/qualificationSelfCheck.ts';
 import {

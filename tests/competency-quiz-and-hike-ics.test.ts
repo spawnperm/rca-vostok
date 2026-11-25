@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { GLOSSARY_TERMS } from '../src/data/researchData.ts';
 import { tokenizeTextWithGlossary } from '../src/utils/glossaryHighlighter.ts';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import { Post } from '../src/domain/social/Post.ts';
 import { ValidationError } from '../src/domain/shared/DomainError.ts';
 

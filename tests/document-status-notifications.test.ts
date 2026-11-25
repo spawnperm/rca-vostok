@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'vitest';
 import type { SessionUser } from '../src/utils/identityApi.ts';
 import type { InquiryRecord } from '../src/components/social/MyInquiriesSection.tsx';
 import { buildDocumentStatusNotifications } from '../src/utils/documentStatusNotifications.ts';

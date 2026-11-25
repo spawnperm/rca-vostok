@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { createPool, runMigrations } from '../src/infrastructure/persistence/pg/PostgresPool.ts';
 import { AnalyticsAggregationService } from '../src/domain/analytics/AnalyticsAggregationService.ts';
