@@ -7,6 +7,10 @@ WORKDIR /app
 
 # Dependency manifests first: this layer is reused until package*.json changes.
 COPY package*.json .npmrc ./
+# Workspace manifests first: `npm ci` links packages/* into node_modules only if
+# they are present at install time. Copying them afterwards leaves
+# @nexus-plugins/* unresolvable at runtime.
+COPY packages ./packages
 # `npm ci` requires package-lock.json, which is committed. The previous
 # conditional fell back to `npm install` when the lockfile was missing, so image
 # builds could pull newer dependency versions than CI had tested.
@@ -15,7 +19,6 @@ RUN npm ci --no-audit --no-fund
 # Build the Vite bundle (also runs the copy-unbundled-src-assets plugin).
 COPY tsconfig.json vite.config.ts index.html ./
 COPY src ./src
-COPY packages ./packages
 COPY public ./public
 RUN npm run build
 
@@ -30,6 +33,7 @@ WORKDIR /app
 # server.ts is executed directly by Node, which strips TypeScript types
 # natively (Node >= 22.18). Only runtime dependencies are installed here.
 COPY package*.json .npmrc ./
+COPY packages ./packages
 RUN npm ci --omit=dev --no-audit --no-fund \
  && npm cache clean --force
 
