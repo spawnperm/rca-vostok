@@ -693,16 +693,21 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
   // mvr_ mounts these at /api/auth, /api/tenancy and /api/social. /api/auth is
   // already this project's (login, register, session, logout, reset), so only
   // the paths mvr_ adds are taken: /auth/me and /auth/demo-accounts. Its social
-  // router gets /api/social-mvr to avoid colliding with the existing feed API.
   app.use('/api', createAuthAndTenancyRouter());
-  // mvr_ social surface under /api/social-mvr.
+  // mvr_ social surface, merged into /api/social.
   //
-  // Its router declares paths as '/social/*', but Express strips the mount prefix
-  // before the sub-router sees the request, so '/api/social-mvr/cabinet' arrives
-  // as '/cabinet' and matches nothing. Prepending the segment back lets the
-  // migrated router work unchanged.
+  // Both routers report a social API and five method+path pairs overlap:
+  //   PATCH /profile, POST /posts, POST /posts/:id/comments,
+  //   POST /posts/:id/like, DELETE /posts/:id
+  // Two handlers cannot answer the same request, so the overlap is resolved by
+  // this project's routers staying first (they own the request shape the UI
+  // already sends) and the mvr_ router contributing only the paths it adds:
+  //   GET  /cabinet, POST /groups, POST /groups/:id/toggle,
+  //   POST /posts/:id/repost, POST /posts/:id/vote
+  // Its internal '/social' prefix is prepended back because Express strips the
+  // mount path before the sub-router runs.
   app.use(
-    '/api/social-mvr',
+    '/api/social',
     (req, _res, next) => {
       if (!req.url.startsWith('/social/')) {
         req.url = '/social' + req.url;
@@ -711,7 +716,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
     },
     createSocialRouterMvr()
   );
-
 
   app.use('/api', (_req, res) => {
     res.status(404).json({
