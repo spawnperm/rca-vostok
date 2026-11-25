@@ -91,6 +91,8 @@ import { createMattermostRouter } from './src/application/routes/mattermostRoute
 import { createNocobaseRouter } from './src/application/routes/nocobaseRouter.ts';
 import { createOfficeRouter } from './src/application/routes/officeRouter.ts';
 import { createPlatformRouter } from './src/application/routes/platformRouter.ts';
+import { createAuthAndTenancyRouter } from './src/application/routes/authRouter.ts';
+import { createSocialRouter as createSocialRouterMvr } from './src/application/routes/socialRouter.ts';
 import { createChatRouter } from './src/infrastructure/http/ChatRouter.ts';
 import { createMediaRouter } from './src/infrastructure/http/MediaRouter.ts';
 import { createSystemRouter } from './src/infrastructure/http/SystemRouter.ts';
@@ -682,8 +684,34 @@ export async function createApp(options: CreateAppOptions = {}): Promise<AppRunt
   app.use('/api', createMarketplaceRouter());
   app.use('/api', createNocobaseRouter());
   app.use('/api', createDirectusRouter());
-  app.use('/api', createMattermostRouter());
+  // Mattermost-compatible API lives under /api/v4, exactly as mvr_ mounts it.
+  app.use('/api/v4', createMattermostRouter());
   app.use('/api', createPlatformRouter());
+
+  // Auth, tenancy and the mvr_ social surface.
+  //
+  // mvr_ mounts these at /api/auth, /api/tenancy and /api/social. /api/auth is
+  // already this project's (login, register, session, logout, reset), so only
+  // the paths mvr_ adds are taken: /auth/me and /auth/demo-accounts. Its social
+  // router gets /api/social-mvr to avoid colliding with the existing feed API.
+  app.use('/api', createAuthAndTenancyRouter());
+  // mvr_ social surface under /api/social-mvr.
+  //
+  // Its router declares paths as '/social/*', but Express strips the mount prefix
+  // before the sub-router sees the request, so '/api/social-mvr/cabinet' arrives
+  // as '/cabinet' and matches nothing. Prepending the segment back lets the
+  // migrated router work unchanged.
+  app.use(
+    '/api/social-mvr',
+    (req, _res, next) => {
+      if (!req.url.startsWith('/social/')) {
+        req.url = '/social' + req.url;
+      }
+      next();
+    },
+    createSocialRouterMvr()
+  );
+
 
   app.use('/api', (_req, res) => {
     res.status(404).json({
